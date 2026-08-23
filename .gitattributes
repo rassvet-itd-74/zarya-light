@@ -1,0 +1,14 @@
+# Normalize line endings so Cyrillic-bearing docs round-trip identically on
+# Windows and CI. PowerShell 5.1 defaults to ANSI and will corrupt these files
+# if written without -Encoding utf8 — see CLAUDE.md.
+* text=auto eol=lf
+
+*.md    text eol=lf
+*.ts    text eol=lf
+*.json  text eol=lf
+*.mjs   text eol=lf
+
+# Generated / vendored
+package-lock.json  -diff linguist-generated
+contracts/Zarya.json -diff linguist-generated
+src/chain/abi/Zarya.abi.json -diff linguist-generated

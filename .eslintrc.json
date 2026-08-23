@@ -1,0 +1,70 @@
+{
+  "env": {
+    "browser": true,
+    "es6": true,
+    "node": true
+  },
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/eslint-recommended",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:import/recommended",
+    "plugin:import/electron",
+    "plugin:import/typescript"
+  ],
+  "parser": "@typescript-eslint/parser",
+  "rules": {
+    // Vite resolves asset query suffixes (?inline, ?url, ?raw) at build time,
+    // which the Node resolver cannot follow. TypeScript still type-checks them
+    // through the vite/client declarations referenced in forge.env.d.ts.
+    "import/no-unresolved": ["error", { "ignore": ["\\?(inline|url|raw|worker)$"] }]
+  },
+  "overrides": [
+    {
+      // Hexagonal dependency direction: the domain core declares ports and is
+      // never allowed to import what implements them. Inert until src/domain/
+      // exists. See .claude/skills/zarya-hexagonal/ — if an import here fails,
+      // the fix is a port, not an exception.
+      "files": ["src/domain/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["electron", "electron/*", "electron-*"],
+                "message": "Domain core must not depend on Electron. Declare a port and implement it in src/adapters/electron/."
+              },
+              {
+                "group": [
+                  "ethers", "ethers/*", "viem", "viem/*", "web3", "web3-*",
+                  "@ethersproject/*"
+                ],
+                "message": "Domain core must not depend on a chain library. Declare a port and implement it in src/adapters/chain/."
+              },
+              {
+                "group": ["pdf-lib", "pdfjs-dist", "pdfjs-dist/*", "hummus", "pdfkit"],
+                "message": "Domain core must not depend on a PDF library — it must not be able to read a form field at all. Declare a port and implement it in src/adapters/forms/."
+              },
+              {
+                "group": [
+                  "better-sqlite3", "sqlite3", "knex", "drizzle-orm",
+                  "drizzle-orm/*", "typeorm", "prisma", "@prisma/*"
+                ],
+                "message": "Domain core must not depend on storage. Declare a port and implement it in src/adapters/store/."
+              },
+              {
+                "group": ["node:*", "fs", "fs/*", "path", "crypto", "os", "child_process"],
+                "message": "Domain core must be free of I/O and platform APIs. Needs randomness, time, or files? Declare a port (IdGenerator, Clock, FileSink)."
+              },
+              {
+                "group": ["**/adapters/**", "**/app/**", "**/*.json"],
+                "message": "Dependencies point inward. The domain must not import adapters, application services, or the ABI."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
