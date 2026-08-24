@@ -293,7 +293,7 @@ for (const name of skillDirs) {
 
 // ------------------------------------------------------------- cross-links
 
-const LINK = /`(__ai\/[A-Za-z0-9_./-]+|src\/chain\/abi\/[A-Za-z0-9_.]+|contracts\/[A-Za-z0-9_.]+)`/g;
+const LINK = /`(__ai\/[A-Za-z0-9_./-]+|src\/chain\/abi\/[A-Za-z0-9_.]+)`/g;
 
 // A path containing a placeholder token describes a naming pattern, not a file.
 const isPlaceholder = (p) => /YYYY|MM-DD|<[^>]+>|\*|\.\.\./.test(p);

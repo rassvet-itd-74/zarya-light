@@ -20,11 +20,11 @@ Test pure domain logic aggressively — it needs no chain and no runner beyond t
 - state transitions
 - dependency DAG and cycle detection
 - executor candidate classification
-- custom-error classification across all 16 errors
+- custom-error classification across the ABI's 16 errors and the four the ABI omits
 
 ## Contract
 
-Requires Solidity source, which this repository lacks. See `zarya-solidity-governance` for the invariants and the required cases.
+The source is in `temporal_docs/` but this is not the repository the contract is built in. See `zarya-solidity-governance` for the invariants and the required cases.
 
 ## Integration
 

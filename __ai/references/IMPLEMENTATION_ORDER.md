@@ -1,27 +1,16 @@
 # Implementation order
 
-Use only when the repository does not already have a more advanced implementation. If a later phase is already built, start from current state rather than following this order mechanically.
+Use only when the repository does not already have a more advanced implementation. If a later phase is already built, start from current state.
 
 ## Current repository state
 
-The app is an unmodified `electron-forge` Vite + TypeScript scaffold: `src/main.ts`, `src/preload.ts` (empty), `src/renderer.ts`. No chain code, no form code, no persistence, no tests, no test runner, and no PDF library. The ABI is at `src/chain/abi/Zarya.abi.json`.
+The app is an unmodified `electron-forge` Vite + TypeScript scaffold: `src/main.ts`, `src/preload.ts` (empty), `src/renderer.ts`, plus the two brand assets. No chain code, no form code, no persistence, no tests, no test runner, and no PDF library. The ABI is at `src/chain/abi/Zarya.abi.json`.
 
-**Phase 0 is complete.** The Solidity source arrived on 2026-08-24 and closed every open question; the contract surface is in `CONTRACT.md` and the behaviors that surprised us are in `CONTRACT_DEFECTS.md`.
+**Phase 0 is complete.** The Solidity source arrived on 2026-08-24 and closed every open question; the contract surface is in `CONTRACT.md` and the behaviors that surprised us are in `CONTRACT_DEFECTS.md`. Both halves of the product are specified — the contract by its source, the document format by us — so nothing below is blocked on external input.
 
-Both halves of the product are specified: the contract by its source, the document format by us. Nothing below is blocked on external input.
+What remains in `CONTRACT_DEFECTS.md` is absorbed by ordinary implementation and needs no decision up front: terminal classification for quorum-failed votings plus their local suppression (Phase 7, and Phase 5 for the storage column); region ordinals and the extended error registry (Phase 2); threshold configuration as one three-value operation (Phase 3); and recovering a voting's organ from creation events, which makes the event projection load-bearing earlier than it would otherwise be (Phase 2).
 
-## Nothing blocks the phases below
-
-The critical contract defect — organ votings that could never pass — was fixed on 2026-08-24, along with `castVote` organ scoping, the zero-vote division, and the `votingId == 0` guard. All eight voting types now work, so the full pipeline is worth building.
-
-What remains in `CONTRACT_DEFECTS.md` is absorbed by ordinary implementation and needs no decision up front:
-
-- Terminal classification for quorum-failed votings, plus the local suppression they require — Phase 7, and Phase 5 for the storage column.
-- Region ordinals and the extended error registry — Phase 2.
-- Threshold configuration as one three-value operation, in basis points — Phase 3.
-- Recovering a voting's organ from creation events, since there is no getter and `castVote` preflight needs it — Phase 2, and it makes the event projection load-bearing earlier than it would otherwise be.
-
-The contract was redeployed on 2026-08-24 to carry the fixes, and `DEPLOYMENT.md` has the new address. Two incompatible deployments therefore exist, differing in `castVote`'s arity. Phase 2's identity check should verify the *interface*, not just that the address has code — a `castVote` arity probe is the cheapest discriminator, and getting it wrong surfaces as a failed vote rather than a startup error.
+Two incompatible deployments exist, differing in `castVote`'s arity. Phase 2's identity check should verify the *interface*, not just that the address has code — a `castVote` arity probe is the cheapest discriminator, and getting it wrong surfaces as a failed vote rather than a startup error.
 
 ## Phase 1 — the hexagon, the skeleton, and a test runner
 
@@ -29,20 +18,20 @@ Establish the shape before there is code to misplace. `src/domain/`, `src/app/`,
 
 Main/preload/renderer split; worker or service boundary; typed IPC; configuration and secret abstraction. Set `contextIsolation`, `nodeIntegration`, and `sandbox` explicitly. Make DevTools dev-only. No blockchain writes yet.
 
-Add a test runner — every later phase assumes one exists, and the domain is testable with fakes from this phase onward.
+Add a test runner — every later phase assumes one exists.
 
-Declare `Clock` and `IdGenerator` early even though little uses them yet. Both are cheap now and awkward to introduce once call sites have hard-coded `Date.now()` and inline id generation.
+Declare `Clock` and `IdGenerator` early even though little uses them yet. Both are cheap now and awkward to introduce once call sites have hard-coded wall-clock time and inline id generation.
 
 ## Phase 2 — chain read adapter and preflight
 
-Ahead of the form layer because template pre-fill depends on these reads: a template cannot carry authoritative context until the app can read that context.
+Ahead of the form layer because template pre-fill depends on these reads.
 
 - Provider and chainId validation; contract code check.
 - Organ resolution via `getPartyOrgan`, carrying the structured triple with `region` as an **enum ordinal**, validated against `getPartyOrganIdentifier` on every resolution.
 - Reads: `isVotingActive`, `isVotingFinalized`, `hasVoted`, `isMember`, `getVotingResults`.
 - `VotingCreated` event indexing with a persisted block cursor — the only source of `endTime`, and the same cursor the matrix coordinate index projects from.
 - `OrganResolver` both directions, including the `bytes32` → label reverse table.
-- Error decoding across the ABI's 16 errors **plus** `NoThemeSet`, `NoStatementSet`, `InvalidCategory`, and `Panic(0x11/0x12/0x32)`, none of which the ABI describes.
+- Error decoding across the ABI's 16 errors **plus** `NoThemeSet`, `NoStatementSet`, `InvalidCategory`, and `Panic(0x11/0x12/0x32)`.
 - A hand-written fragment for `ValueAdded`, which fires at the Zarya address but is absent from the ABI.
 - Chairman-aware preflight: `isMember` against the Chairperson organ for UX, simulation for the decision.
 - Tests against a local node or fixtures, keyed on a region whose ordinal and subject code differ.
@@ -57,8 +46,6 @@ Ahead of the form layer because template pre-fill depends on these reads: a temp
 
 ## Phase 4 — PDF form schema, issuance, and ingestion
 
-The app owns this format, so it can be built now — nothing here waits on an external spec.
-
 - Define the field-name schema and `schemaVersion` in one module all three directions import.
 - Issuance: template generation from chain context, logo drawn, empty `zarya.receipt.*` fields present, `operationRef` persisted before the file is emitted, reproducible output.
 - Ingestion: parse `zarya.input.*` only; recover app-authored context from storage; structural refusal for XFA, encryption, flattening, a populated receipt marker, unknown version or field.
@@ -67,9 +54,9 @@ The app owns this format, so it can be built now — nothing here waits on an ex
 
 Pick a library that never executes PDF JavaScript and never fetches remote resources. Generation and parsing may use different ones.
 
-Receipt stamping arrives with the transaction queue in Phase 6, since it needs a confirmed transaction to stamp — but define the `zarya.receipt.*` fields here so templates carry them from the start. Retrofitting them later invalidates every already-issued form.
+Receipt stamping arrives with the transaction queue in Phase 6, since it needs a confirmed transaction — but define the `zarya.receipt.*` fields here so templates carry them from the start. Retrofitting them later invalidates every already-issued form.
 
-The **matrix reference report** also belongs here: it needs only Phase 2 reads plus a PDF library, and it is the document a voter reads before filling anything. Shipping it early makes the form templates usable. It carries no form fields, so it adds nothing to the ingestion surface.
+The **matrix reference report** also belongs here: it needs only Phase 2 reads plus a PDF library, and it is the document a voter reads before filling anything. It carries no form fields, so it adds nothing to the ingestion surface.
 
 ## Phase 5 — persistence
 
@@ -81,11 +68,11 @@ Issuance depends on this to record an operation before emitting a file, so a min
 
 Signer abstraction; send/wait/receipt flow; nonce-safe sequential writes; crash-state reconciliation across the five crash windows. Optional signed outbox only after the basic lifecycle is stable.
 
-Receipt stamping hangs off confirmation here — never off broadcast. A reverted transaction is stamped too. Regeneration from stored form bytes plus the transaction record must work without a chain write.
+Receipt stamping hangs off confirmation, never off broadcast. A reverted transaction is stamped too. Regeneration from stored form bytes plus the transaction record must work without a chain write.
 
 ## Phase 7 — executive reconciler
 
-Discovery via the `VotingCreated` cursor; chain-time deadline checks; enqueue `executeVoting(votingId)` only. Startup, periodic, manual `Run now`, and reconnect all call one `reconcile()`. Outcome classification follows whatever Phase 0 item 2 established.
+Discovery via the `VotingCreated` cursor; chain-time deadline checks; enqueue `executeVoting(votingId)` only. Startup, periodic, manual `Run now`, and reconnect all call one `reconcile()`.
 
 ## Phase 8 — batch engine
 
@@ -95,7 +82,7 @@ Batch as a first-class persisted object; validate the whole batch before the fir
 
 Form template buttons; form import and review including tamper disclosure; audit trail; privileged operation preview; executive status and `Run now`; error detail without secret exposure.
 
-Note that per-organ and per-voting eligibility thresholds **cannot be displayed** — no getter exists. Do not design UI that assumes they can.
+Per-organ and per-voting eligibility thresholds **cannot be displayed** — no getter exists. Do not design UI that assumes they can.
 
 ## Phase 10 — hardening
 

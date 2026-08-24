@@ -23,10 +23,9 @@ Report findings in severity order. Focus on defects, not style.
 - Does any code still call `castVote` with three arguments, or carry an organ on a vote intent or form? The organ argument was removed; the contract reads it from the voting.
 - Is a threshold change submitted as one operation setting all three values? Setting quorum alone silently does nothing.
 - Is an approval figure ever rendered without dividing by its own base? `5000` is 50%, not 5000%.
-- Is `InsufficientVotes` classified as terminal, and is the voting suppressed from future discovery? A retryable classification here loops forever.
+- **Is `InsufficientVotes` classified as terminal, and is the voting suppressed from future discovery?** A retryable classification hammers a settled political outcome forever. See "Quorum failure is permanent" in `CONTRACT_DEFECTS.md`.
 - Is `region` an enum ordinal everywhere, including in anything a form supplies? A subject code silently addresses a different region.
 - Does the error registry cover the four errors and three panics that are not in the ABI?
-- **Is `InsufficientVotes` treated as retryable?** If so, that is a defect. The voting never finalizes, so a retry loop hammers a settled political outcome forever. See "Quorum failure is permanent" in `CONTRACT_DEFECTS.md`.
 - Is the approval boundary tested at, one above, and one below the threshold? Is zero-vote behavior handled?
 - Is an organ built from the structured triple via `getPartyOrgan`, not from a hashed label? Is the region encoding correct?
 

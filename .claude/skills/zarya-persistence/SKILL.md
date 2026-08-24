@@ -36,17 +36,13 @@ UNIQUE (chainId, contractAddress, votingId)   -- execution job
 
 Do not rely on application `if` checks for race-sensitive uniqueness.
 
-## Two projections, one cursor
+## One cursor, two projections
 
-The event cursor feeds both the executor's voting discovery and the matrix coordinate index. Persist the cursor once and let both projections read it — never maintain a second cursor or a second sweep.
+`VotingCreated` is the only source of a voting's `endTime` — no getter exposes it. The persisted block cursor is therefore load-bearing, not an optimization: losing it means losing every deadline the executor depends on. Make it restartable, and reconcile indexed votings against `isVotingFinalized` rather than trusting local terminal state.
 
-The matrix index is derived state and safe to rebuild from the cursor at any time. The organ label reverse table is different: it maps `getPartyOrgan(triple) → bytes32` through `pure` helpers, so it can never go stale and should be cached permanently rather than rebuilt per report.
+It feeds both the executor's voting discovery and the matrix coordinate index. Persist it once and let both projections read it — never maintain a second cursor or a second sweep.
 
-## The discovery cursor
-
-`VotingCreated` is the only source of a voting's `endTime` — no getter exposes it. The persisted block cursor is therefore load-bearing, not an optimization: losing it means losing every deadline the executor depends on.
-
-Make it restartable, and reconcile indexed votings against `isVotingFinalized` rather than trusting local terminal state.
+The matrix index is derived state and safe to rebuild from the cursor at any time. The organ label reverse table is different: it maps a triple to `bytes32` through `pure` helpers, so it can never go stale and should be cached permanently rather than rebuilt per report.
 
 ## Reconciliation
 

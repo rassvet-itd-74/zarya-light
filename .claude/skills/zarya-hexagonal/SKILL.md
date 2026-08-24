@@ -7,18 +7,16 @@ description: Apply hexagonal (ports and adapters) architecture to Zarya — keep
 
 One rule underneath everything: **dependencies point inward.** The domain core defines what it needs; adapters supply it. The core never knows what supplies it.
 
-The concrete port inventory and directory layout for this app are in `__ai/references/ARCHITECTURE.md`. This skill is the discipline for working within them.
+The concrete port inventory and directory layout are in `__ai/references/ARCHITECTURE.md`. This skill is the discipline for working within them.
 
-## Why this shape, for this project specifically
+## Why this shape, here
 
-Not architecture for its own sake. Four properties of this repository make it pay immediately:
+- **No libraries are chosen yet** — no chain library, no PDF library, no database. Ports let the domain be written and tested now, and defer those decisions.
+- **Nothing is testable today.** A pure domain with in-memory fakes becomes testable the moment a runner exists, without a chain, a PDF, or Electron.
+- **The contract has defects the client must absorb** (`__ai/references/CONTRACT_DEFECTS.md`), and they will be fixed contract-side eventually. Outcome classification, region encoding, and the error registry are adapter concerns; when the contract changes, so do they, and the domain does not.
+- **The untrusted-form rule becomes structural.** The domain has no PDF type, so it *cannot* read a form field even by mistake.
 
-1. **No libraries are chosen yet** — no chain library, no PDF library, no database. Ports let the domain be written and tested now, and defer those decisions to the day they are actually needed.
-2. **Nothing is testable today** — no test runner, nothing to run it against. A pure domain with in-memory fakes becomes testable the moment a runner exists, without a chain, a PDF, or Electron.
-3. **The contract has defects the client must absorb** (`__ai/references/CONTRACT_DEFECTS.md`), and they will be fixed contract-side eventually. Terminal-outcome classification, region encoding, and the error registry are adapter and classifier concerns; when the contract changes, so do they, and the domain does not. In a layered design each would be a rewrite reaching into business logic.
-4. **The untrusted-form rule becomes structural.** The domain has no PDF type, so it *cannot* read a form field even by mistake. A rule enforced by the type system beats a rule enforced by discipline.
-
-That fourth point generalises: prefer making an invariant impossible to violate over documenting that it must not be violated.
+That last point generalises into the principle worth carrying: prefer making an invariant impossible to violate over documenting that it must not be.
 
 ## What belongs in the core
 
@@ -51,7 +49,7 @@ interface VotingReader {
 
 Not `EthersVotingAdapter`, not `SqliteStore`. The implementation carries the technology name; the port carries the purpose. If you cannot name a port without naming a library, the boundary is in the wrong place.
 
-Ports are declared in the domain and implemented outside it. That inversion is the whole point — the domain does not import its own suppliers.
+Ports are declared in the domain and implemented outside it. That inversion is the whole point.
 
 ## The `Clock` port earns special mention
 
@@ -63,15 +61,11 @@ interface Clock {
 }
 ```
 
-With a port, using wall-clock time in a deadline decision requires importing something the domain forbids, so the lint rule catches it. Without one, it is a one-character mistake that produces a subtly wrong executor.
-
-Same reasoning for `IdGenerator` — `operationRef` generation must be injectable, or issuance is untestable.
+With a port, using wall-clock time in a deadline decision requires importing something the domain forbids, so lint catches it. Without one, it is a one-character mistake producing a subtly wrong executor. Same reasoning for `IdGenerator` — `operationRef` generation must be injectable, or issuance is untestable.
 
 ## Enforcement
 
-Dependency direction is checked by lint, not by review. `.eslintrc.json` carries an override restricting imports inside `src/domain/**`: no `electron`, no chain or PDF or storage library, no `node:*`, no reaching into `adapters/` or `app/`.
-
-The override is already configured and inert until `src/domain/` exists. When you create that directory the guard applies immediately — do not weaken it to make an import work. A domain module that needs `node:crypto` needs a port instead.
+`.eslintrc.json` carries an override restricting imports inside `src/domain/**`: no `electron`, no chain or PDF or storage library, no `node:*`, no reaching into `adapters/` or `app/`. It is inert until `src/domain/` exists, then applies immediately — do not weaken it to make an import work. A domain module that needs `node:crypto` needs a port instead.
 
 Run `npm run lint` after any change that moves code across a boundary.
 
@@ -81,15 +75,11 @@ Run `npm run lint` after any change that moves code across a boundary.
 - The domain importing `src/chain/abi/Zarya.abi.json`. The ABI is an adapter detail.
 - A config module that the domain imports and that itself imports a library.
 - An adapter that validates business rules, or a domain that formats a user-facing string.
-- A port with one implementation and a shape mirroring that implementation exactly — that is a wrapper, not a boundary. Ask what the second implementation is; if the answer is "the test fake", that is a legitimate answer.
-- Ports invented ahead of a need. Add one when the domain has something to ask for.
+- A port with one implementation and a shape mirroring that implementation exactly — that is a wrapper, not a boundary. Ask what the second implementation is; "the test fake" is a legitimate answer.
+- Ports invented ahead of a need.
 
 ## Testing follows the shape
 
-Domain: unit tests with in-memory fakes, no runner plugins, no network, no temp files.
-
-Adapters: integration tests against the real thing — a local chain node, a temporary database, a real PDF round trip. This is where library behavior gets pinned.
-
-Use cases: wire real domain to fake adapters, and assert the orchestration.
+Domain: unit tests with in-memory fakes, no network, no temp files. Adapters: integration tests against the real thing — a local chain node, a temporary database, a real PDF round trip. Use cases: real domain wired to fake adapters, asserting the orchestration.
 
 If a domain test needs a fake with interesting behavior, the logic probably belongs in the domain rather than behind the port.

@@ -55,23 +55,15 @@ Optional: `## Decisions` for choices made and alternatives rejected, `## Follow-
 
 ## Promotion
 
-The worklog is narrative — what happened. It is not where rules live.
-
-When a slice produces a decision that binds future work, promote it:
-
-- a settled product or architecture choice goes to `__ai/references/DECISIONS.md`
-- a rule that must always hold goes to `__ai/references/INVARIANTS.md`
-- a contract fact goes to `__ai/references/CONTRACT.md`
-- an open question with the evidence that would close it goes to `__ai/references/DOCUMENTATION_STATUS.md`
-
-Then reference the worklog entry from nowhere — the reference stands alone. The entry keeps the reasoning; the reference carries the rule. A reader who needs the rule must not have to read the history to find it.
-
-## Relationship to the other records
+The worklog is narrative — what happened. It is not where rules live. When a slice produces something that binds future work, promote it:
 
 | Record | Answers | Mutable |
 | --- | --- | --- |
 | `__ai/worklog/` | What happened, and what was believed at the time | Append-only |
-| `references/DECISIONS.md` | What is settled now | Yes, deliberately |
-| `references/INVARIANTS.md` | What must always hold | Yes, deliberately |
-| `references/DOCUMENTATION_STATUS.md` | What is still unknown | Yes, as things resolve |
+| `__ai/references/DECISIONS.md` | What is settled now — product and architecture choices | Yes, deliberately |
+| `__ai/references/INVARIANTS.md` | What must always hold | Yes, deliberately |
+| `__ai/references/CONTRACT.md` | Contract facts | Yes, as the contract changes |
+| `__ai/references/DOCUMENTATION_STATUS.md` | What is still unknown, and the evidence that would close it | Yes, as things resolve |
 | git history | What the bytes were | No |
+
+Then reference the worklog entry from nowhere — the reference stands alone. The entry keeps the reasoning; the reference carries the rule. A reader who needs the rule must not have to read the history to find it.

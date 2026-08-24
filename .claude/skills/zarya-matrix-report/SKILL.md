@@ -11,30 +11,24 @@ A printable reference showing what the matrix contains, so a voter filling a for
 
 This is the one PDF the app produces that is **not** an AcroForm. No fields, no `zarya.meta.schemaVersion`, no `operationRef`, no ingestion path.
 
-That matters for a specific reason: a report must never be mistaken for a submittable document. It already cannot be — ingestion rejects anything without a recognised `schemaVersion`, so no new guard is needed. Do not add form fields to a report to make it "more useful"; that would turn a reference sheet into something the pipeline has to reason about.
+A report must never be mistaken for a submittable document. It already cannot be — ingestion rejects anything without a recognised `schemaVersion`, so no new guard is needed. Do not add form fields to a report to make it "more useful"; that would turn a reference sheet into something the pipeline has to reason about.
 
-Reports are also disposable output. They are a rendering of chain state, regenerable at any time, and never a record of anything.
+Reports are disposable output: a rendering of chain state, regenerable at any time, never a record.
 
 ## The coordinate index
 
-The contract **cannot be asked what the matrix contains** — there is no dimension getter and no cell enumeration. Every matrix read is `(x, y)`-addressed, so you must already know the coordinate to read it.
+The contract **cannot be asked what the matrix contains** — no dimension getter, no cell enumeration. Every matrix read is `(x, y)`-addressed, so you must already know the coordinate to read it.
 
-The resolution is in `__ai/references/CONTRACT.md`: matrix state changes only through a successful voting, and every such voting emits an event carrying its coordinates. A projection over that event stream is therefore a **complete** index of existing cells, themes, and statements.
+The resolution, detailed in `__ai/references/CONTRACT.md`: matrix state changes only through a successful voting, and every such voting emits an event carrying its coordinates, so a projection over that stream is a **complete** index of existing cells, themes, and statements. It needs both event routes:
 
-Two event routes, and the index needs both:
+- **`ValueAdded` and `CategoryAdded`** fire at application time, so they need no gating and are the cheapest coordinate source. `ValueAdded` is absent from the ABI and needs a hand-written fragment. It carries no `isCategorical`, so read `getCategoricalCellOrgan` / `getNumericalCellOrgan` to learn which matrix a coordinate belongs to.
+- **Themes, statements, and decimals** emit nothing on application, so project their creation events **gated on `VotingFinalized(success = true)`**. Creation alone means a change was only *proposed*; an ungated index lists cells that were never created.
 
-- **`ValueAdded` and `CategoryAdded`** fire at application time, so they need no gating and are the cheapest coordinate source. `ValueAdded` is absent from the ABI — it is declared in an externally-linked library — but it does fire, at the Zarya address, and a hand-written fragment subscribes to it. It carries no `isCategorical`, so read `getCategoricalCellOrgan` / `getNumericalCellOrgan` to learn which matrix a coordinate belongs to.
-- **Themes, statements, and decimals** emit nothing on application, so project `ThemeVotingCreated`, `StatementVotingCreated`, and `DecimalsVotingCreated` **gated on `VotingFinalized(success = true)`** for the same `votingId`. Creation alone means a change was only *proposed*; an index built from creation events ungated lists cells that were never created.
-
-The theme and statement events carry the label text, so the axis inventory needs no chain read — but confirm against `getTheme` / `getStatement`, since a later voting at the same coordinate overwrites.
-
-**Reuse the executor's cursor.** `VotingDiscovery` already indexes this stream for deadline discovery. The matrix index is a second projection over it, not a second scan. Do not add an independent chain sweep.
+**Reuse the executor's cursor.** `VotingDiscovery` already indexes this stream. The matrix index is a second projection over it, not a second scan.
 
 ## An empty matrix is a valid report
 
-All eight voting types can pass as of the 2026-08-24 contract fixes, so populated cells are now reachable. But a young or sparsely used matrix will still have axes and no cells, and the report must handle that as a normal state rather than an error or a blank page.
-
-Two rules hold regardless of how full the matrix is:
+A young or sparsely used matrix will have axes and no cells, and the report must handle that as a normal state rather than an error or a blank page.
 
 - Do not list *proposed* coordinates from unfinalized votings to make the report look populated. A coordinate that does not exist is one a voter cannot use, and printing it invites a form that fails preflight.
 - Do not compute what a value "would have been" had a rejected voting succeeded.
@@ -43,17 +37,15 @@ Give the axis inventory real space rather than treating it as an appendix. It is
 
 ## Organ labels need a reverse table
 
-Cell getters return a `bytes32` organ. `getPartyOrganIdentifier` produces a label from the `(organType, region, number)` triple. There is no getter mapping one to the other.
+Cell getters return a `bytes32` organ; `getPartyOrganIdentifier` produces a label from the triple. There is no getter mapping one to the other. So build a reverse index locally: enumerate plausible triples, call the `pure` `getPartyOrgan` for each, key by `bytes32`. This costs no state reads and the table can be cached indefinitely.
 
-So build a reverse index locally: enumerate plausible triples, call the `pure` `getPartyOrgan` for each, and key the results by `bytes32`. Both helpers are `pure`, so this costs no state reads and the table can be cached indefinitely — the mapping cannot change.
+The enumeration space is smaller than it looks. `Region` has exactly 98 members (ordinals 0-97), and three of the eight organ types ignore region and number entirely, contributing **one entry each**. Two more use region but not number: 98 entries each. Only the two local types need a number range, and that range is the one genuinely open parameter. Bound it deliberately and say what the bound is; or resolve lazily, caching only organs actually encountered on a cell, which avoids the question.
 
-The enumeration space is smaller than it looks. `Region` has exactly 98 members (ordinals 0-97), and of the eight organ types, three — `Chairperson`, `CentralSoviet`, `Congress` — ignore region and number entirely, so they contribute **one entry each**. Two more use region but not number: 98 entries each. Only the two local types need a number range, and that range is the one genuinely open parameter. Bound it deliberately and say what the bound is; or resolve lazily, caching only organs actually encountered on a cell, which avoids the question.
-
-Build the table with **enum ordinals**, never subject codes — they differ for half the regions and Chelyabinsk is the one where they coincide, so a table seeded from codes will look right on the project's own region and be wrong elsewhere. See "Region ordinals are not subject codes" in `CONTRACT_DEFECTS.md`.
+Build the table with **enum ordinals**, never subject codes — a table seeded from codes looks right on the project's own region and is wrong elsewhere. See `CONTRACT_DEFECTS.md`.
 
 Treat an unresolved `bytes32` as "unknown organ" shown verbatim. Never guess a label, and never omit the cell because its organ did not resolve — a voter still needs its coordinates.
 
-This belongs behind `OrganResolver`, which needs both directions: triple → `bytes32` for calls, `bytes32` → label for display.
+This belongs behind `OrganResolver`, which needs both directions.
 
 ## Content
 
@@ -75,15 +67,13 @@ A printed matrix is stale the moment a voting executes. Someone will type coordi
 
 - Stamp the **block number and chain timestamp** the report was read at, prominently, on every page. Not the workstation clock.
 - Say plainly that the contents can change and that the app validates coordinates at submission.
-- Never present a report as authoritative. Chain state is authoritative; this is a convenience snapshot.
+- Never present a report as authoritative.
 
-The real safety net already exists: preflight validates a form's coordinates against current chain state — cell organ, allowed category, decimals — so a stale coordinate produces a clear preflight failure rather than a wrong transaction. Say so on the page, so a voter understands a rejection is expected behavior rather than a bug.
+The real safety net already exists: preflight validates a form's coordinates against current chain state, so a stale coordinate produces a clear preflight failure rather than a wrong transaction. Say so on the page, so a voter understands a rejection is expected behavior rather than a bug.
 
 ## Reads are wide, so batch them
 
-A full matrix report is many reads: two or three per cell plus axis labels. Batch or multicall where the provider supports it, and make partial failure visible — a report with a missing row must say the row failed to load, never silently omit it.
-
-If a read fails outright, fail the report with a clear message rather than printing a partial matrix that looks complete.
+A full report is many reads: two or three per cell plus axis labels. Batch or multicall where the provider supports it, and make partial failure visible — a report with a missing row must say the row failed to load, never silently omit it. If a read fails outright, fail the report rather than printing a partial matrix that looks complete.
 
 ## Layout
 
@@ -94,7 +84,7 @@ If a read fails outright, fail the report with a clear message rather than print
 
 ## Hexagonal placement
 
-Assembling the report model — which cells, in what order, with what fields — is a **domain** concern and testable with fake readers. Rendering it to PDF is an adapter behind a `MatrixReportWriter` port. The domain decides what the document says; the adapter decides how it looks.
+Assembling the report model — which cells, in what order, with what fields — is a **domain** concern and testable with fake readers. Rendering it to PDF is an adapter behind a `MatrixReportWriter` port.
 
 ## Tests
 

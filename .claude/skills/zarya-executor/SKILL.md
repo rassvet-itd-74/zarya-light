@@ -31,11 +31,9 @@ Settled from `Votings.sol:416-445`. `executeVoting` finalizes on exactly one pat
 | `VotingAlreadyFinalized` | `ALREADY_FINALIZED` | done — lost the race |
 | transport, RPC, submission | `RETRYABLE_ERROR` | yes |
 
-An `UNEXECUTABLE` voting is past `endTime` and unfinalized, so `isVotingActive` and `isVotingFinalized` are both false and **discovery will offer it again on every single pass**. Persist the terminal classification and filter it out at candidate selection. This is the one place where local state must override what chain state keeps presenting — everywhere else, chain wins.
+An `UNEXECUTABLE` voting is past `endTime` and unfinalized, so `isVotingActive` and `isVotingFinalized` are both false and **discovery will offer it again on every single pass**. Persist the terminal classification and filter it out at candidate selection. This is the one place where local state must override what chain state keeps presenting — everywhere else, chain wins. Getting it wrong produces an executor that burns gas retrying a guaranteed revert forever, and reports a settled political outcome as a technical failure.
 
-Getting this wrong produces an executor that burns gas retrying a guaranteed revert forever, and reports a settled political outcome as a technical failure.
-
-The zero-vote case used to arrive as `Panic(0x12)` from a division by zero and now arrives as `InsufficientVotes`. Both classify the same way, so keep decoding `Panic(0x11)`, `Panic(0x12)`, and `Panic(0x32)` — the deployed contract may predate the guard, and an error registry built only from the ABI's 16 entries shows them as unknown selectors.
+The zero-vote case used to arrive as `Panic(0x12)` and now arrives as `InsufficientVotes`. Both classify the same way, so keep decoding `Panic(0x11)`, `Panic(0x12)`, and `Panic(0x32)` — the deployed contract may predate the guard, and an error registry built only from the ABI's 16 entries shows them as unknown selectors.
 
 ## One reconciliation implementation
 
@@ -63,7 +61,7 @@ The table above is the full classification. Two rules on top of it:
 - `BLOCKED` — signer, network, contract, or configuration prevents execution. Distinct from `UNEXECUTABLE`, which is about the voting; `BLOCKED` is about us.
 - Never turn an unknown RPC state into a confirmed outcome. Absence of evidence is `PENDING`, to be reconciled.
 
-Reconciling an applied mutation can use `ValueAdded` — it does exist and does fire, contrary to earlier notes here. It is absent from the ABI only because `Matricies.addValue` is an `external` library function, and the `DELEGATECALL` means the log still lands at the Zarya address. Register a hand-written fragment for it. Themes, statements, and decimals emit no application event, so those still need `VotingFinalized(success=true)` plus a domain read. See `CONTRACT.md`, "Symbols the ABI does not carry".
+Reconciling an applied mutation can use `ValueAdded`, which fires at the Zarya address despite being absent from the ABI — register a hand-written fragment. Themes, statements, and decimals emit no application event, so those need `VotingFinalized(success=true)` plus a domain read. See `CONTRACT.md`, "Symbols the ABI does not carry".
 
 ## Races
 

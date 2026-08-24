@@ -17,13 +17,11 @@ chain state + user selection
 
 Hostile-input controls are in `__ai/references/INVARIANTS.md` under "Form trust boundary". Ingestion ends at a neutral parsed representation and must never call a chain library or construct calldata.
 
-The matrix reference report is a fourth PDF the app produces, but it is **not** a form — no fields, no schema version, no ingestion path — so it lives in `zarya-matrix-report` rather than here. Ingestion rejects it automatically for lacking a recognised `schemaVersion`; no extra guard is needed.
+The matrix reference report is a fourth PDF the app produces, but it is **not** a form — no fields, no schema version, no ingestion path — so it lives in `zarya-matrix-report`. Ingestion rejects it automatically for lacking a recognised `schemaVersion`.
 
 ## IMPORTANT: a form the app issued is still untrusted on return
 
 Owning the template does **not** make the returned file trustworthy. Anything in a PDF can be edited: field values, field names, the read-only flag, the document itself. A returned form is a *claim*, never a fact.
-
-The rule that makes this safe:
 
 > On ingest, read **only** the fields a human is meant to fill. Recover every app-authored value from the local database using `operationRef` — never from the returned PDF.
 
@@ -64,11 +62,11 @@ zarya.receipt.confirmedAt   chain block timestamp, not workstation time
 zarya.receipt.signer
 ```
 
-They sit in the app-authored namespace, so the existing rule already covers them: **ingestion never reads a `zarya.receipt.*` field for its value.** A user who types a plausible transaction hash there achieves nothing, because no code path consults it. No new mechanism is needed for that.
+They sit in the app-authored namespace, so the existing rule already covers them: **ingestion never reads a `zarya.receipt.*` field for its value.** A user who types a plausible transaction hash there achieves nothing.
 
 At receipt time the app **overwrites** every receipt field unconditionally from the transaction record. Never merge, never preserve what the user left there, never skip a field because it already looks filled.
 
-A non-empty `zarya.receipt.txHash` on an *incoming* form is the re-import marker. It means the file is either a receipt coming back around or a forgery attempt; both are rejected with a clear message rather than parsed.
+A non-empty `zarya.receipt.txHash` on an *incoming* form is the re-import marker — a receipt coming back around, or a forgery attempt; both rejected rather than parsed.
 
 Then flatten the receipt. Flattening bakes the field appearances into page content, so the stamp is permanent and the form cannot be refilled and resubmitted — and ingestion's flattened-form rejection catches it independently. Two mechanisms, neither relying on the other.
 
@@ -83,7 +81,7 @@ Generating a template is a write to the user's filesystem, not to the chain. It 
 
 - Derive pre-filled context from chain reads and the user's selection, then **persist the operation and its `operationRef` before handing over the file**. An issued form whose reference is not recorded is unbound in practice.
 - Pre-fill display values as text; do not encode structured data in a way the human is expected not to disturb.
-- Embed no JavaScript, no actions, no embedded files, and no external references in a generated template — the app's own output should pass its own ingestion checks.
+- Embed no JavaScript, no actions, no embedded files, and no external references — the app's own output should pass its own ingestion checks.
 - Generated templates are reproducible: same operation and schema version in, byte-comparable form out, so a fixture can pin them.
 
 Round-trip is the strongest available test: issue a template, fill it programmatically, ingest it, and assert the recovered intent matches the operation that produced it.
@@ -101,32 +99,18 @@ Parse only what the schema names. Specific PDF hazards that need explicit handli
 
 ## Receipt emission
 
-### Stamp on confirmation, not on broadcast
+**Stamp on confirmation, not on broadcast.** A broadcast transaction can still revert, be replaced, or be dropped, and a form stamped "sent" is a record that may become false after someone printed it. Emit the receipt when the transaction confirms and put the outcome in `zarya.receipt.status`. A broadcast-time artifact, if genuinely wanted, must say `PENDING` and be superseded.
 
-A broadcast transaction can still revert, be replaced, or be dropped. A form stamped "sent" at broadcast time is a record that may become false, printed and filed by someone who will not see the correction.
+**A confirmed transaction is not an accepted proposal.** `status = CONFIRMED` means the call succeeded. For `castVote` that means the vote was recorded; for `executeVoting` it does **not** mean the proposal passed — the governance result is the `success` flag on `VotingFinalized`. Keep the two as separate statements on the page. A quorum-failed execution does not confirm at all: it reverts permanently (see "Quorum failure is permanent" in `__ai/references/CONTRACT_DEFECTS.md`), and a reverted transaction is still stamped.
 
-Emit the receipt when the transaction **confirms**, and put the outcome in `zarya.receipt.status`. If a broadcast-time artifact is genuinely wanted, it must say `PENDING` plainly and be superseded by the confirmed version — never presented as final.
+**The watermark is not a security control.** Anyone can add a watermark, a hash, and a logo to any PDF. The chain is the only verification.
 
-### A confirmed transaction is not an accepted proposal
-
-`zarya.receipt.status = CONFIRMED` means the call succeeded, nothing more. For `castVote` that does mean the vote was recorded. For `executeVoting` it does **not** mean the proposal passed: the call succeeds on both outcomes, and the governance result is the `success` flag on `VotingFinalized`. Read it from there, never from transaction status. A quorum-failed execution does not confirm at all — it reverts, permanently (see "Quorum failure is permanent" in `__ai/references/CONTRACT_DEFECTS.md`), and a reverted transaction is still stamped.
-
-Keep the transaction outcome and the governance outcome as separate statements on the page. Never let a receipt imply a proposal succeeded because its transaction did.
-
-### The watermark is not a security control
-
-Anyone can add a watermark, a hash, and a logo to any PDF. A stamped receipt is a human-readable artifact for filing and printing; the chain is the only verification. Never accept a watermarked PDF as evidence of anything, in this app or in a process built around it.
-
-### Reproducible, not authoritative
-
-A receipt is a rendering of the returned form plus the transaction record, both already stored. If one is lost, regenerate it. Never treat the PDF as the only copy of an outcome, and never parse a receipt to recover data the database already holds.
+**Reproducible, not authoritative.** A receipt is a rendering of the returned form plus the transaction record, both already stored. If one is lost, regenerate it. Never parse a receipt to recover data the database already holds.
 
 ### Layout constraints
 
-- **Field rotation is quantized to 90° steps** (`/MK /R` accepts 0, 90, 180, 270). A diagonal across-the-page watermark is therefore not achievable with fields alone — a horizontal band is. If a diagonal stamp is required, it has to be drawn page content, which means the receipt step composes graphics rather than only setting field values.
-- **The logo cannot live in a text field.** Draw it at issuance so every template and receipt carries it. A pushbutton's icon (`/MK /I`) is the field-based alternative if keeping everything in fields matters more than simplicity.
-- `src/assets/logo.png` is 120×120. Scaled to a print-sized mark it lands near 76 DPI and will look soft on paper; a larger source or vector artwork is worth requesting before this ships to users who print.
-- `src/assets/favicon.ico` cannot be embedded in a PDF at all — PDF takes PNG and JPEG. It is the window, HTML, and installer icon only.
+- **Field rotation is quantized to 90° steps** (`/MK /R` accepts 0, 90, 180, 270). A diagonal across-the-page watermark is therefore not achievable with fields alone — a horizontal band is. A diagonal stamp would have to be drawn page content, which means composing graphics rather than only setting field values.
+- **The logo cannot live in a text field.** Draw it at issuance so every template and receipt carries it. A pushbutton's icon (`/MK /I`) is the field-based alternative. Asset formats and the DPI caveat are in `__ai/references/DEPLOYMENT.md`.
 
 ### Batch behavior
 
@@ -153,8 +137,6 @@ Generation and parsing may use different libraries if that keeps the parser narr
 - Organ labels parse to a structured triple, not a hashed string — see `zarya-intents`. Expect Cyrillic (`СЗД`, `ПРЛ`, `74.СОВ`) and handle it as UTF-8 throughout, including in generated field values.
 
 ## Fixtures
-
-All three directions.
 
 **Issuance and ingestion:** a generated template pinned byte-for-byte; a filled round-trip; and hostile inputs — missing field, unknown `schemaVersion`, unknown field name, malformed value, flattened form, XFA present, encrypted, embedded JavaScript, embedded file, external reference, corrupted xref, compression bomb, oversized field value, duplicate field names, incremental-update shadowing, appearance disagreeing with `/V`, `operationRef` absent, and `operationRef` pointing at an unknown or already-completed operation.
 

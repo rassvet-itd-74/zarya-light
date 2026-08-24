@@ -44,7 +44,7 @@ Preserve the label shown on the form for audit, but never derive the `bytes32` f
 
 For a bound form the triple comes from the operation record, not from the returned file.
 
-> The organ triple's `region` is the **enum ordinal**, not the subject code the whitepaper annotates. They differ for 50 of 98 regions and a wrong one silently addresses a different real region. If a form asks a human for a region, map the answer through a table — never pass the number through, and never store a subject code in the intent. See "Region ordinals are not subject codes" in `CONTRACT_DEFECTS.md`.
+> The organ triple's `region` is the **enum ordinal**, not the subject code the whitepaper annotates. They differ for 50 of 98 regions and a wrong one silently addresses a different real region. If a form asks a human for a region, map the answer through a table — never pass the number through, and never store a subject code in the intent. See `CONTRACT_DEFECTS.md`.
 
 Identifier grammar for parsing display labels: `[NN.[X.]]TYPE` — federal organs carry a bare suffix (`СЗД`, `ПРЛ`, `СОВ`), regional add a region prefix, local add region and number.
 
@@ -59,16 +59,14 @@ Keep separate: form parsing → intent schema validation → deterministic norma
 - Vote direction: explicit enum values mapped deterministically to boolean. Never sentiment.
 - Strings: length-bounded, normalized only by documented rules.
 - Quorum: an exact vote count. Never reinterpret as a percentage.
-- Approval percentage: preserve the contract's unit and base. Do not rewrite `51` into another unit.
+- Approval percentage: preserve the contract's unit and base — basis points. Never convert.
 - Fixed-point: make conversion explicit and test the rounding or rejection policy. Never silently round a governance value.
 
 ## Privileged intents
 
 `SetMinimumQuorum`, `SetMinimumApprovalPercentage`, and `TransferChairmanship` require their own `operationType` and their own template. They never originate from executor logic. Schema validation confirms shape only — authorization is the contract's job.
 
-There are now **three** threshold setters — quorum, approval percentage, and approval percentage base — and they are not independent. An organ whose base is zero ignores the other two entirely and falls back to `simpleMajority`. So model threshold configuration as **one intent carrying all three values**, not three intents. A form that sets only the quorum produces a transaction that succeeds and changes nothing. See "The approval base doubles as an enable flag" in `CONTRACT_DEFECTS.md`.
-
-Carry the values in the contract's own units — basis points by default — and never convert to percent in the intent.
+There are **three** threshold setters — quorum, approval percentage, and approval percentage base — and they are not independent. An organ whose base is zero ignores the other two entirely and falls back to `simpleMajority`. So model threshold configuration as **one intent carrying all three values**, not three intents. A form that sets only the quorum produces a transaction that succeeds and changes nothing. See "The approval base doubles as an enable flag" in `CONTRACT_DEFECTS.md`.
 
 ## `CastVote` authorization
 

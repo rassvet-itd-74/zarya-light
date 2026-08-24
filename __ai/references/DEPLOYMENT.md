@@ -17,18 +17,17 @@ Sepolia is the only permitted live network for this demo unless the user explici
 | --- | --- |
 | `Zarya` address | `0x6b31cC58a7DC5919f460068cF68D16281F360d25` |
 | ABI (bundled) | `src/chain/abi/Zarya.abi.json` |
-| Full build artifact | `contracts/Zarya.json` |
 | Solidity source | `temporal_docs/Zarya.sol`, `temporal_docs/libraries/*.sol` |
 
 Redeployed on 2026-08-24 to carry the contract fixes of that date. The previous deployment at `0x141eb271…` predates them and expects the **three-argument** `castVote`; do not point a current client at it.
 
 Application code must read the address from configuration, not from this file and not from a literal in domain code. Verify the configured address has code, and — because two incompatible deployments now exist — verify the interface before writing. The cheapest discriminator is a `castVote` arity check: simulate the two-argument form and treat a decode failure as "wrong deployment", rather than discovering it on a real vote.
 
-`src/chain/abi/Zarya.abi.json` holds only the `abi` array (36 KB). The full artifact — `bytecode`, `deployedBytecode`, `metadata`, `methodIdentifiers` — stays in `contracts/Zarya.json`, outside the bundled tree. Import the trimmed file; deploy bytecode has no business in a renderer bundle.
+`src/chain/abi/Zarya.abi.json` holds only the `abi` array. The full build artifact — bytecode, metadata, method identifiers — is not kept in the repository; deploy bytecode has no business in a renderer bundle. Regenerate it from the source repository if it is needed again.
 
 ## Linked libraries
 
-`contracts/Zarya.json`'s `metadata.settings.libraries` records the library addresses the deployed bytecode was linked against:
+The deployed bytecode was linked against:
 
 ```text
 Matricies    0xf26048871e3db76ae39a2be973152776906c3908
@@ -37,9 +36,7 @@ PartyOrgans  0x3ae769f099a191cac9b5783ce46e7568b55ccdb6
 Regions      0x0ed66a9051c5ccff71a825e3588a98d65fb2ddbb
 ```
 
-This matters for one reason beyond block-explorer verification: `Matricies` has `external` functions, so calls into it are `DELEGATECALL`s and Solidity leaves its events and errors out of Zarya's ABI. The logs still surface at the **Zarya** address, because a `DELEGATECALL` keeps the caller's context — which is why `ValueAdded` is subscribable despite being absent from the ABI. See "Symbols the ABI does not carry" in `CONTRACT.md`.
-
-The same metadata lists `src/Zarya.sol` and the four libraries as the compilation sources, which is the evidence that `temporal_docs/` holds the source this artifact was built from.
+Recorded from the build artifact's `metadata.settings.libraries` before that artifact was dropped. It matters beyond block-explorer verification: `Matricies` has `external` functions, so its events and errors are absent from Zarya's ABI while its logs still surface at the **Zarya** address. See "Symbols the ABI does not carry" in `CONTRACT.md`.
 
 ## Brand assets
 
@@ -59,4 +56,4 @@ The same metadata lists `src/Zarya.sol` and the four libraries as the compilatio
 
 ## Chairman identity
 
-The contract exposes no `getChairman()` getter, but Chairman identity **is** readable: the Chairman is stored as a member of the Chairperson organ, so `isMember(getPartyOrgan(Chairperson, 0, 0), candidate)` answers it. The configured `CHAIRMAN` value (`temporal_docs/README.md:231`) is which key we hold, not who the Chairman is — verify it against chain rather than trusting it. See `CONTRACT.md`.
+The contract exposes no `getChairman()` getter, but Chairman identity **is** readable: the Chairman is stored as a member of the Chairperson organ, so `isMember(getPartyOrgan(Chairperson, 0, 0), candidate)` answers it. The configured `CHAIRMAN` value (`temporal_docs/README.md:231`) is which key we hold, not who the Chairman is — verify it against chain rather than trusting it.

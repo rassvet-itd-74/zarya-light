@@ -87,6 +87,8 @@ Boundaries the architecture enforces structurally rather than by convention:
 - **Secrets** live behind `Signer`. No adapter returns key material, and no port exposes it.
 - The **worker** owns long-running and failure-prone work — chain calls, form generation and parsing, the transaction queue, reconciliation. It may crash and restart without losing correctness, because state is persisted and reconciled rather than held in memory.
 
+The rules behind these are in `INVARIANTS.md`.
+
 ## Pipelines
 
 Three flows share infrastructure and must not share authorization semantics.
@@ -116,11 +118,9 @@ discover voting -> check deadline and finalized -> enqueue execution
 
 **Receipt stamping** hangs off confirmation, never broadcast, and is regenerable from stored data without a chain write.
 
-**Matrix report** — a read-only reference PDF with no form fields, so it cannot re-enter the form pipeline. No signer, no chain write.
+**Matrix report** — a read-only reference PDF with no form fields, so it cannot re-enter the form pipeline. No signer, no chain write. The coordinate index is a second projection over the cursor `VotingDiscovery` already maintains, not an independent sweep.
 
 ```text
 MatrixIndex projection + per-cell reads + organ reverse table
   -> report model (domain) -> MatrixReportWriter -> FileSink
 ```
-
-The coordinate index is a second projection over the cursor `VotingDiscovery` already maintains, not an independent chain sweep.

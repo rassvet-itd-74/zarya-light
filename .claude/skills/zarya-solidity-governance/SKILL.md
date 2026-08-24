@@ -39,13 +39,11 @@ What is still worth changing, highest value first:
 1. **Quorum failure reverts instead of finalizing.** `finalized` is never set, so the voting is permanently unexecutable and permanently rediscovered. Finalizing with `success = false` on a quorum miss — including the zero-vote case — would make the state machine uniform and let the client stop maintaining a local suppression list. This is now the top item.
 2. **The approval base doubles as an enable flag.** `_getEligibilityParams` returns `simpleMajority` wholesale when the base is zero, so a quorum set without a base is silently discarded. Either default only the base rather than the whole struct, or add an explicit `configured` flag. As written, a Chairman can believe they have set a quorum and be wrong with no way to check.
 3. **No getter for a voting's `governingOrgan`.** `castVote` depends on it and the client cannot read it, so vote eligibility has to be reconstructed from events. A one-line getter removes a whole class of client complexity.
-4. **No eligibility getter**, per the note above.
+4. **No eligibility getter.** `_votingEligibilityParametersByOrgan` is `internal` and `getVotingResults` returns counts only, so the client cannot display the thresholds a voting will be judged against, and cannot read back whether a configuration write took effect. With the base doubling as an enable flag, that second gap is sharp: a Chairman has no way to confirm an organ is configured. Weigh against gas.
 
 Lower priority: theme and statement creation is permissionless while also being the only fully open vote — worth confirming that is intended; `duration` is unbounded; `CannotRemoveChairman` is checked at creation rather than execution; `get*ValueAtTimestamp` returns the queried timestamp rather than the checkpoint's.
 
 When fixing 1, note it changes client behavior: the local suppression list becomes unnecessary, and `UNEXECUTABLE` collapses into `FINALIZED_REJECTED`. Say so in the change, so the client work is scheduled with it.
-
-Also worth weighing against gas: **no eligibility getter**. `_votingEligibilityParametersByOrgan` is `internal` and `getVotingResults` returns counts only, so the client cannot display the thresholds a voting will be judged against, and cannot read back whether a configuration write took effect. With the base now doubling as an enable flag, that second gap is sharper than it was: a Chairman has no way to confirm an organ is configured.
 
 ## Invariants — preserve, or change deliberately with tests
 

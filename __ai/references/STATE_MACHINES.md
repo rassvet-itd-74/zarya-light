@@ -94,7 +94,12 @@ RETRYABLE_ERROR
 BLOCKED
 ```
 
-`UNEXECUTABLE` is not an error state and not a retry state. It is reached from `READY` or `PENDING` on `InsufficientVotes` — zero votes or quorum unmet — which reverts without setting `finalized`. Such a voting stays unfinalized on chain forever, so **discovery will keep offering it as a candidate on every pass**. This is the one place where local state must suppress what chain state keeps presenting — record it and stop attempting it. See "Quorum failure is permanent" in `CONTRACT_DEFECTS.md`.
+Two rejections, two states, neither of them `RETRYABLE_ERROR`:
+
+- **Zero votes, or quorum not met** — `executeVoting` reverts `InsufficientVotes` and never sets `finalized`. `UNEXECUTABLE`, terminal, never retried.
+- **Quorum met, approval failed** — the contract finalizes with `success = false` and emits `VotingFinalized`. `FINALIZED_REJECTED`, the ordinary terminal rejection.
+
+`UNEXECUTABLE` is not an error state and not a retry state. Such a voting stays unfinalized on chain forever, so **discovery will keep offering it as a candidate on every pass**. This is the one place where local state must suppress what chain state keeps presenting — record it and stop attempting it. Reserve `RETRYABLE_ERROR` for transport and submission transients. See "Quorum failure is permanent" in `CONTRACT_DEFECTS.md`.
 
 ## Executor health
 
@@ -114,14 +119,3 @@ Health is not the same as job state.
 - A form-driven `castVote` can become `ALREADY_COMPLETED` if the member already voted, even if this local file was never processed.
 - A returned form whose app-authored fields diverge from its record is `VALID` only after the divergence is disclosed. Tampering is a disclosure event, not a parse failure, because the file's copies are never read for value.
 - Restart may move stale local states forward or backward only after reconciliation evidence.
-
-### Two different rejections, two different states
-
-Settled from source. A voting can fail in two ways and they are not the same state:
-
-- **Zero votes, or quorum not met** — `executeVoting` reverts `InsufficientVotes` and never sets `finalized`. `UNEXECUTABLE`, terminal, never retried.
-- **Quorum met, approval failed** — the contract finalizes with `success = false` and emits `VotingFinalized`. `FINALIZED_REJECTED`, the ordinary terminal rejection.
-
-Neither is `RETRYABLE_ERROR`, and neither is a technical failure to report as one. Reserve `RETRYABLE_ERROR` for transport and submission transients.
-
-Should the contract ever finalize on a quorum miss, `UNEXECUTABLE` collapses into `FINALIZED_REJECTED` and the local suppression list becomes unnecessary. That is the top open item in `zarya-solidity-governance`; the two changes ship together.

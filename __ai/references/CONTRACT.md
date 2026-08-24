@@ -2,9 +2,9 @@
 
 **Derived from `temporal_docs/Zarya.sol` and its libraries, cross-checked against `src/chain/abi/Zarya.abi.json`** — 1 constructor, 43 functions, 12 events, 16 custom errors in the ABI. Source and ABI agree exactly on the external surface, names and argument counts alike; `npm run ai:validate` re-checks that on every run.
 
-Source outranks the ABI now that it is present, because it answers what the ABI cannot: authorization, comparison operators, and whether a failed check reverts or records. Behaviors that the product documentation does not anticipate are in `CONTRACT_DEFECTS.md` — **read it before designing the executor, organ resolution, or any UI that reports an outcome.** For stale documentation lines, `DOCUMENTATION_STATUS.md`. For network and address, `DEPLOYMENT.md`.
+Behaviors the product documentation does not anticipate are in `CONTRACT_DEFECTS.md` — **read it before designing the executor, organ resolution, or any UI that reports an outcome.** Stale prose lines: `DOCUMENTATION_STATUS.md`. Network and address: `DEPLOYMENT.md`.
 
-A round of contract fixes landed on 2026-08-24: `castVote` lost its organ argument, `setMinimumApprovalPercentageBase` was added, zero-vote execution and `votingId == 0` were guarded, and eligibility moved to basis points. `CONTRACT_DEFECTS.md` records what changed and what did not.
+A round of contract fixes landed on 2026-08-24: `castVote` lost its organ argument, `setMinimumApprovalPercentageBase` was added, zero-vote execution and `votingId == 0` were guarded, and eligibility moved to basis points. Anything generated against the three-argument `castVote` now sends malformed calldata.
 
 ## Organ encoding
 
@@ -15,9 +15,7 @@ getPartyOrgan(uint8 organType, uint8 region, uint256 number) pure returns (bytes
 getPartyOrganIdentifier(uint8 organType, uint8 region, uint256 number) pure returns (string)
 ```
 
-Both are `pure`, so they cost no state read. Use `getPartyOrgan` for calls and `getPartyOrganIdentifier` for display.
-
-**Do not hash a Cyrillic identifier string yourself.** The intent model carries the structured triple, not the label.
+Both are `pure`, so they cost no state read. Use `getPartyOrgan` for calls and `getPartyOrganIdentifier` for display. **Do not hash a Cyrillic identifier string yourself.** The intent model carries the structured triple, not the label.
 
 | Organ | Identifier | `PartyOrganType` | Uses region | Uses number |
 | --- | --- | --- | --- | --- |
@@ -32,17 +30,11 @@ Both are `pure`, so they cost no state read. Use `getPartyOrgan` for calls and `
 
 The last three ignore `region` and `number` entirely (`PartyOrgans.sol:75-80`), so `getPartyOrgan(Chairperson, r, n)` returns the same `bytes32` for every `r` and `n`. They are single global organs. Do not treat a differing region as a differing Chairperson organ.
 
-`NN` is the region's **subject code** in the identifier string, but the `region` argument is the **enum ordinal**, and the two differ for 50 of 98 regions. Passing a subject code silently addresses a different real region — see "Region ordinals are not subject codes" in `CONTRACT_DEFECTS.md`. It is the single easiest way to write to the wrong organ.
+`NN` is the region's **subject code** in the identifier string, but the `region` argument is the **enum ordinal**, and the two differ for 50 of 98 regions. Passing a subject code silently addresses a different real region — see "A region has two representations" in `CONTRACT_DEFECTS.md`.
 
-### Chairman identity is readable after all
+### Chairman identity is readable
 
-There is no `getChairman()`, but the Chairman is stored as a member of the Chairperson organ (`Zarya.sol:53-54`, `559-562`), so:
-
-```solidity
-isMember(getPartyOrgan(PartyOrganType.Chairperson, 0, 0), candidate)
-```
-
-is a Chairman check. Preflight for the privileged setters may check identity directly; it does not have to simulate and catch `NotChairman`. Simulation is still the honest answer for whether the *call* will succeed, since state can change between preflight and mining.
+There is no `getChairman()`, but the Chairman is stored as a member of the Chairperson organ (`Zarya.sol:53-54`, `559-562`), so `isMember(getPartyOrgan(PartyOrganType.Chairperson, 0, 0), candidate)` is a Chairman check. Preflight for the privileged setters may check identity directly rather than simulating and catching `NotChairman` — but simulation is still the honest answer for whether the *call* will succeed, since state can change before mining.
 
 ## Access control
 
@@ -56,7 +48,7 @@ Read from the modifiers and bodies in `Zarya.sol`. Preflight must match this exa
 | member of the organ, Chairman **not** exempt | `createCategoryVoting`, `createDecimalsVoting`, `createCategoricalValueVoting`, `createNumericalValueVoting` |
 | Chairman only | `initializeOrgans`, `setMinimumQuorum`, `setMinimumApprovalPercentage`, `setMinimumApprovalPercentageBase`, `transferChairmanship` |
 
-Two things this table makes visible. The Chairman is **not** a universal override — it is exempt for membership votings and `castVote` but not for the four matrix-configuration votings. And `castVote` scopes properly to the voting's own organ, which it reads from stored state rather than accepting from the caller:
+The Chairman is **not** a universal override — exempt for membership votings and `castVote`, not for the four matrix-configuration votings. And `castVote` scopes to the voting's own organ, read from stored state rather than accepted from the caller:
 
 ```solidity
 PartyOrgan governingOrgan = _votings[votingId].governingOrgan;
@@ -65,7 +57,7 @@ if (governingOrgan != PartyOrgans.ZERO_PARTY_ORGAN) {
 }
 ```
 
-**Theme and statement votings have no organ**, so that check is skipped and anyone may vote on them. This is intentional — they are open votes on the matrix axes — but note the consequence: with `simpleMajority`'s quorum of 1, a single address can create a theme voting, vote for it, and execute it alone. Do not describe these operations as member-only in UI, and do not let a form schema imply an organ is required for them.
+**Theme and statement votings have no organ**, so that check is skipped and anyone may vote on them. Intentional — they are open votes on the matrix axes — but note the consequence: with `simpleMajority`'s quorum of 1, a single address can create a theme voting, vote for it, and execute it alone. Do not describe these operations as member-only in UI.
 
 A failed member-or-Chairman check reverts `NotActiveMember(organ, caller)`. A failed Chairman-only check reverts `NotChairman(caller)`.
 
@@ -91,8 +83,6 @@ executeVoting(uint256 votingId) returns (bool)
 
 Ids start at `1` (`++nextVotingId`) and `0` is rejected by every guarded entry point. Theme and statement creators take `isCategorical` rather than an organ — they are matrix-axis operations and snapshot `simpleMajority`.
 
-`castVote` took a third `bytes32 organ` argument until 2026-08-24. Anything generated against that form now sends malformed calldata.
-
 `duration` is unvalidated: `endTime = block.timestamp + duration`, no floor or ceiling. Bound it client-side.
 
 ### `executeVoting` semantics
@@ -106,11 +96,11 @@ Exact behavior from `Votings.sol:416-445`, in order:
 | `totalVotes == 0` **or** `totalVotes < quorum` | revert `InsufficientVotes` — **`finalized` stays false, so this is permanent** |
 | quorum met | `finalized = true`, emit `VotingFinalized(success)`; mutation applied only if `success` |
 
-`success` is `(forVotes * approvalPercentageBase) / totalVotes > approvalPercentage` — a **strict** `>`, and integer division truncates before the comparison. At the default base of 10 000 the truncation error is 0.01%; at a base of 100 it would be 1%, enough to fail a vote that should pass.
+`success` is `(forVotes * approvalPercentageBase) / totalVotes > approvalPercentage` — a **strict** `>`, and integer division truncates before the comparison.
 
 Execution is possible only *strictly after* `endTime`: `isActive` uses `block.timestamp <= endTime`, and execution requires `!isActive`.
 
-The two revert paths never finalize, so such votings remain unfinalized and unexecutable forever. They will keep appearing in any discovery projection. Defect 2.
+The two revert paths never finalize, so such votings remain unfinalized and unexecutable forever, and keep appearing in any discovery projection. See "Quorum failure is permanent" in `CONTRACT_DEFECTS.md`.
 
 ## Eligibility parameters
 
@@ -141,7 +131,7 @@ return params;
 
 So an unconfigured organ inherits `simpleMajority` and all eight voting types can pass. But the base **doubles as an enable flag**: it returns `simpleMajority` in its entirety, so a quorum or approval set without also setting the base is silently discarded. See "The approval base doubles as an enable flag" in `CONTRACT_DEFECTS.md` before building any configuration UI.
 
-`simpleMajority` is basis points — `5000` of `10000` is 50%. Treat quorum as an exact vote count, not a percentage, and never render an approval figure without dividing by its own base. Preserve the contract's unit; do not normalize to percent.
+Values are **basis points** — `5000` of `10000` is 50%. Treat quorum as an exact vote count, never a percentage; never render an approval figure without dividing by its own base; never normalize to percent. At base 10 000 the division's truncation error is 0.01%, where base 100 would give 1% — enough to fail a vote that should pass.
 
 ## Reads
 
@@ -200,7 +190,7 @@ Design around these absences rather than inventing a read API.
 
 `Matricies.addValue`, `Matricies.setDecimals`, `setTheme`, and `setStatement` are **`external`** library functions, so they are deployed as a linked library and called by `DELEGATECALL`. Solidity does not fold an externally-linked library's events and errors into the calling contract's ABI. `Matricies.addCategory` is `internal` and therefore inlined, which is why its event and errors *are* present.
 
-Confirmed from the deployed artifact, not inferred: `contracts/Zarya.json`'s `metadata.settings.libraries` names the address `Matricies` was linked at. `DEPLOYMENT.md` records all four.
+This was confirmed from the deployed build artifact's `metadata.settings.libraries`, which named the address `Matricies` was linked at, not inferred from the `external` keyword. `DEPLOYMENT.md` records all four library addresses.
 
 The practical consequences:
 
@@ -211,8 +201,7 @@ error NoStatementSet(bool isCategorical, uint256 y)
 error InvalidCategory(uint64 category)
 ```
 
-- **`ValueAdded` exists and does fire.** Earlier notes recorded it as absent because it is not in the ABI. Because the library call is a `DELEGATECALL`, the log is emitted at the **Zarya address** and is subscribable — the client just needs a hand-written ABI fragment for it. It carries `x` and `y` indexed, so it is a direct coordinate source.
-  `ValueAdded` does **not** carry `isCategorical`, so it cannot say which of the two matrices changed. Disambiguate by reading `getCategoricalCellOrgan` / `getNumericalCellOrgan` at those coordinates — a non-zero organ identifies the matrix.
+- **`ValueAdded` exists and does fire.** Because the library call is a `DELEGATECALL`, the log is emitted at the **Zarya address** and is subscribable — the client just needs a hand-written ABI fragment. It carries `x` and `y` indexed, so it is a direct coordinate source. It does **not** carry `isCategorical`, so disambiguate by reading `getCategoricalCellOrgan` / `getNumericalCellOrgan` at those coordinates — a non-zero organ identifies the matrix.
 - **Three errors will arrive as undecodable selectors** unless registered manually. Add them to the error registry alongside `Panic(0x11)`, `Panic(0x12)`, and `Panic(0x32)`, which the ABI also does not describe.
 
 `setTheme` and `setStatement` emit nothing at all, so theme and statement changes are observable only through their creation events plus finalization.
@@ -239,12 +228,7 @@ CategoricalValueVotingCreated / NumericalValueVotingCreated
 
 Matrix state changes only through a successful voting, so a projection over the event stream is a **complete** coordinate index. Two routes, and the right answer uses both:
 
-**Applied changes** — `ValueAdded` and `CategoryAdded` fire only on application, so they need no gating:
-
-```solidity
-ValueAdded(x indexed, y indexed, value, author indexed)   // not in the ABI; see above
-CategoryAdded(x indexed, y indexed, category)
-```
+**Applied changes** — `ValueAdded` and `CategoryAdded` fire only on application, so they need no gating.
 
 **Everything else** — decimals, themes, statements emit no application event, so project their creation events gated on `VotingFinalized(success = true)` for the same `votingId`:
 
@@ -257,8 +241,6 @@ StatementVotingCreated(votingId, isCategorical, x, y, statement)
 The theme and statement events carry the label text itself, so the axis inventory needs no chain read — though `getTheme` / `getStatement` should confirm it, since a later voting at the same coordinate overwrites.
 
 This is the **same cursor** the executor already maintains. The matrix index is a second projection over it, never an independent sweep.
-
-All eight voting types can now pass, so expect this projection to find populated cells as well as axes. Until the contract fixes landed, only themes and statements were reachable — a matrix populated before then will show that history.
 
 ## Custom errors
 
@@ -289,18 +271,4 @@ The ABI's 16, plus the four the library split hides and the panics. Decode them 
 
 `Panic(0x12)` from `executeVoting` is no longer reachable — the zero-vote division was guarded on 2026-08-24. Keep decoding it anyway; the deployed contract may predate the fix.
 
-## Invariants worth testing
-
-1. A voting snapshots eligibility at creation; a later Chairman change does not rewrite it.
-2. An unconfigured organ resolves to `simpleMajority`; a fully configured one to its own values.
-3. **A quorum set without a base is ignored** — the organ still uses `simpleMajority`. Setting the base afterwards activates the previously written quorum.
-4. Chairman-only setters reject ordinary members; the four matrix-configuration votings reject the Chairman when not a member.
-5. One address cannot vote twice in one voting.
-6. Execution cannot be repeated, and a quorum-failed voting cannot be executed at all — ever.
-7. `executeVoting` has no caller-supplied policy arguments.
-8. Exact approval boundary: at, one above, one below, in basis points.
-9. Zero votes reverts `InsufficientVotes` at any quorum, including zero.
-10. Matrix state changes only through a successful voting path; cell organ binding is permanent.
-11. Chairman removal protection and `transferChairmanship` restriction hold.
-12. A region's enum ordinal and its subject code resolve to different organs wherever the two numbers differ.
-13. `castVote` rejects a non-member of the voting's own organ, and accepts anyone on a theme or statement voting.
+Contract-side test cases are in `zarya-solidity-governance`; client-side ones in `zarya-testing`.
