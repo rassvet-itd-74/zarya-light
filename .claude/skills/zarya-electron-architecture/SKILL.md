@@ -11,12 +11,16 @@ The renderer is UI, not a trusted execution environment. The main process owns O
 
 ## Current state
 
-`src/main.ts` is the unmodified scaffold. Two things need fixing when this area is first touched:
+Phase 1 built this layer (2026-08-24). What exists, and the pattern to follow when extending it:
 
-- `openDevTools()` runs unconditionally, including in packaged builds. Make it dev-only.
-- `webPreferences` sets only `preload`. Set `contextIsolation: true`, `nodeIntegration: false`, and `sandbox: true` explicitly, so a later edit cannot silently weaken them.
+- `adapters/electron/windowOptions.ts` — `buildWindowPlan()` is **pure** and returns both the options and whether to open DevTools. `contextIsolation`, `nodeIntegration`, `sandbox`, `webSecurity`, `webviewTag`, and `devTools` are all set explicitly and asserted in a test, so weakening one fails a check rather than shipping.
+- `adapters/electron/contentSecurityPolicy.ts` — a pure policy builder, injected as a `<meta>` tag by `vite.renderer.config.ts`. `script-src 'self'` in development too; Vite's dev server does not need `unsafe-inline` or `unsafe-eval`, which was verified by running under it.
+- `adapters/electron/ipcContract.ts` — channel names, DTO types, and the exposed key list, imported by main, preload, and renderer alike.
+- `adapters/electron/ipcHandlers.ts` — handler bodies exported separately from `registerIpcHandlers`, so they are testable without an `ipcMain`. Errors are sanitized on the way out: only messages we authored reach the renderer, the original goes to a main-process reporter.
+- `adapters/electron/preloadApi.ts` — `createZaryaApi(ipc)` builds the bridged object; `src/preload.ts` is three lines wiring `ipcRenderer` into it. A test asserts the exposed key set exactly.
+- `adapters/electron/workerSupervisor.ts` + `workerHost.ts` — the supervisor takes its spawn function as a parameter and imports no Electron; only `workerHost.ts` knows about `utilityProcess`.
 
-`src/preload.ts` is empty — the typed surface below is the thing to build there.
+`src/main.ts` is a composition root. Keep it that way: anything with a decision in it belongs in a pure module next door.
 
 ## IPC design
 
@@ -47,6 +51,8 @@ Receipts are written by the worker when a transaction confirms, so they appear w
 ## Worker supervision
 
 A worker crash sets executor health to `STOPPED` or `DEGRADED`. Restarting must trigger reconciliation immediately — never rebuild correctness from in-memory timers. Keep long-running loops cancellable on shutdown, and avoid spawning a duplicate worker when a window is recreated.
+
+`WorkerSupervisor` already provides this: `start()` is idempotent, `onRestart` fires on every successful start **including the first** (so startup and restart share one reconciliation path — wire `reconcile()` there in Phase 7), `stop()` cancels a pending backoff before killing, and events from a worker the supervisor no longer tracks are ignored. Worker health (`STARTING`/`HEALTHY`/`DEGRADED`/`STOPPED`) is process liveness, *not* executor health — a healthy worker can report a degraded executor, and a rejected voting is a governance outcome rather than a fault.
 
 ## UI separation
 

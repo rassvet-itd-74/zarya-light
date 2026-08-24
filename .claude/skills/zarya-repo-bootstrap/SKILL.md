@@ -9,20 +9,28 @@ Build an evidence-based implementation map before editing. Do not scaffold a par
 
 ## Current state — read this before searching
 
-The app is an unmodified `electron-forge` Vite + TypeScript scaffold:
+Phase 1 of `IMPLEMENTATION_ORDER.md` is built (2026-08-24): the hexagon, the Electron boundary, a supervised worker, and Vitest.
 
 ```text
-src/main.ts        scaffold; DevTools always on, webPreferences minimal
-src/preload.ts     empty
-src/renderer.ts    scaffold
+src/domain/        primitives.ts; network/networkPolicy.ts; ports/{Clock,IdGenerator}
+src/app/           getAppStatus.ts
+src/adapters/
+  config/          appConfig.ts — PublicConfig + self-redacting SecretConfig
+  platform/        cryptoIdGenerator.ts
+  electron/        ipcContract, ipcHandlers, preloadApi, windowOptions,
+                   contentSecurityPolicy, workerSupervisor, workerHost,
+                   workerProtocol
+src/main.ts        composition root only
+src/preload.ts     contextBridge: getAppStatus, onWorkerHealth — nothing else
+src/worker.ts      utilityProcess entry; answers ping, hosts Phases 2/6/7
 src/assets/        logo.png, favicon.ico
 src/chain/abi/     Zarya.abi.json — the contract's external surface
 temporal_docs/     Zarya.sol plus four libraries, and supplied product prose
 ```
 
-There is **no** chain code, form code, PDF library, persistence, test runner, or test suite. Do not spend time searching for them.
+There is **no** chain code, form code, PDF library, or persistence yet. Do not spend time searching for them.
 
-Checks that exist: `npm run typecheck`, `npm run lint`, `npm run ai:validate`.
+Checks that exist: `npm run typecheck`, `npm run lint`, `npm test`, `npm run ai:validate`.
 
 ## Procedure
 

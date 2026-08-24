@@ -12,7 +12,7 @@ The concrete port inventory and directory layout are in `__ai/references/ARCHITE
 ## Why this shape, here
 
 - **No libraries are chosen yet** — no chain library, no PDF library, no database. Ports let the domain be written and tested now, and defer those decisions.
-- **Nothing is testable today.** A pure domain with in-memory fakes becomes testable the moment a runner exists, without a chain, a PDF, or Electron.
+- **A pure domain is testable with no infrastructure at all.** Vitest arrived with Phase 1 and the domain's tests need no chain, no PDF, and no Electron. The same trick works one layer out: keeping the impure wiring separate made the window options, the CSP, and the IPC handlers testable too.
 - **The contract has defects the client must absorb** (`__ai/references/CONTRACT_DEFECTS.md`), and they will be fixed contract-side eventually. Outcome classification, region encoding, and the error registry are adapter concerns; when the contract changes, so do they, and the domain does not.
 - **The untrusted-form rule becomes structural.** The domain has no PDF type, so it *cannot* read a form field even by mistake.
 

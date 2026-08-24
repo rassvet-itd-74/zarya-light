@@ -4,23 +4,28 @@ Use only when the repository does not already have a more advanced implementatio
 
 ## Current repository state
 
-The app is an unmodified `electron-forge` Vite + TypeScript scaffold: `src/main.ts`, `src/preload.ts` (empty), `src/renderer.ts`, plus the two brand assets. No chain code, no form code, no persistence, no tests, no test runner, and no PDF library. The ABI is at `src/chain/abi/Zarya.abi.json`.
+**Phases 0 and 1 are complete** as of 2026-08-24.
 
-**Phase 0 is complete.** The Solidity source arrived on 2026-08-24 and closed every open question; the contract surface is in `CONTRACT.md` and the behaviors that surprised us are in `CONTRACT_DEFECTS.md`. Both halves of the product are specified — the contract by its source, the document format by us — so nothing below is blocked on external input.
+Phase 0: the Solidity source arrived and closed every open question; the contract surface is in `CONTRACT.md` and the behaviors that surprised us are in `CONTRACT_DEFECTS.md`. Both halves of the product are specified — the contract by its source, the document format by us — so nothing below is blocked on external input.
+
+Phase 1: the hexagon exists and is enforced. `src/domain/` holds `primitives.ts`, the `Clock` and `IdGenerator` ports, and `network/networkPolicy.ts`; `src/app/` holds `getAppStatus`; `src/adapters/` holds `config/`, `platform/`, and `electron/`. `src/worker.ts` runs as a supervised `utilityProcess`, `src/preload.ts` exposes a two-method `contextBridge` surface, and the window sets `contextIsolation`/`nodeIntegration`/`sandbox` explicitly with DevTools disabled outside development. Vitest is the runner (`npm test`), with 90 tests across the domain, config, IPC, preload, CSP, and supervisor.
+
+Still absent: chain code, form code, persistence, and a PDF library. The ABI remains at `src/chain/abi/Zarya.abi.json`.
 
 What remains in `CONTRACT_DEFECTS.md` is absorbed by ordinary implementation and needs no decision up front: terminal classification for quorum-failed votings plus their local suppression (Phase 7, and Phase 5 for the storage column); region ordinals and the extended error registry (Phase 2); threshold configuration as one three-value operation (Phase 3); and recovering a voting's organ from creation events, which makes the event projection load-bearing earlier than it would otherwise be (Phase 2).
 
 Two incompatible deployments exist, differing in `castVote`'s arity. Phase 2's identity check should verify the *interface*, not just that the address has code — a `castVote` arity probe is the cheapest discriminator, and getting it wrong surfaces as a failed vote rather than a startup error.
 
-## Phase 1 — the hexagon, the skeleton, and a test runner
+## Phase 1 — the hexagon, the skeleton, and a test runner — **done 2026-08-24**
 
-Establish the shape before there is code to misplace. `src/domain/`, `src/app/`, `src/adapters/` per `ARCHITECTURE.md`. The moment `src/domain/` exists the ESLint import guard applies, so the dependency direction is enforced from the first file rather than retrofitted.
+Established the shape before there was code to misplace. The ESLint import guard has been observed firing on all four of its categories, so the dependency direction is enforced rather than merely configured.
 
-Main/preload/renderer split; worker or service boundary; typed IPC; configuration and secret abstraction. Set `contextIsolation`, `nodeIntegration`, and `sandbox` explicitly. Make DevTools dev-only. No blockchain writes yet.
+Two things worth carrying forward from how it was built:
 
-Add a test runner — every later phase assumes one exists.
+- **`Clock` is declared with no implementation.** The chain adapter supplies it in Phase 2. Its only current implementation is a test fake, which is the point — a deadline decision made from workstation time now requires importing something the domain forbids.
+- **Configuration is split into `PublicConfig` and `SecretConfig`** rather than one type with a comment. The public half crosses IPC; the secret half redacts itself under `util.inspect`, `JSON.stringify`, and interpolation. Private key material is not in it yet — that arrives with the `Signer` port in Phase 6 — but the redaction it will need is already in place and tested.
 
-Declare `Clock` and `IdGenerator` early even though little uses them yet. Both are cheap now and awkward to introduce once call sites have hard-coded wall-clock time and inline id generation.
+Deferred out of Phase 1 with reasons, not by oversight: the `Signer` port and any secret store (Phase 6), and a runtime Electron harness that proves the renderer cannot reach Node (Phase 10 — the current tests assert the configuration, not the sandbox's behavior).
 
 ## Phase 2 — chain read adapter and preflight
 

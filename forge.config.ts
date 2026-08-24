@@ -41,6 +41,15 @@ const config: ForgeConfig = {
           config: 'vite.preload.config.ts',
           target: 'preload',
         },
+        {
+          // The background worker, forked by the main process via
+          // utilityProcess. Built with the `main` target because it is a Node
+          // process, not a preload script: CommonJS output with dependencies
+          // left external.
+          entry: 'src/worker.ts',
+          config: 'vite.worker.config.ts',
+          target: 'main',
+        },
       ],
       renderer: [
         {

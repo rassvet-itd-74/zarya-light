@@ -31,6 +31,8 @@ Hexagonal — ports and adapters. Dependencies point inward; the domain core def
 
 ```text
 src/domain/          no imports from electron, chain, PDF, storage, or node:*
+  primitives.ts      branded UnixSeconds, ChainId, EvmAddress, OperationRef
+  network/           the Sepolia-only rule as a pure predicate
   intents/
   organs/
   batches/
@@ -38,16 +40,23 @@ src/domain/          no imports from electron, chain, PDF, storage, or node:*
   ports/             interfaces the domain owns
 src/app/             use cases that orchestrate ports
 src/adapters/
-  chain/             chain library, ABI, error decoding
+  chain/             chain library, error decoding
   forms/             PDF library; issue, parse, receipt, and the shared field schema
   store/             database, migrations
-  electron/          IPC handlers, dialogs, window and worker lifecycle
-src/main.ts  src/preload.ts  src/renderer.ts
+  electron/          IPC contract and handlers, preload surface, dialogs,
+                     window options, CSP, worker supervision and protocol
+  config/            environment → PublicConfig + SecretConfig
+  platform/          IdGenerator over node:crypto
+src/main.ts  src/preload.ts  src/renderer.ts  src/worker.ts
 ```
+
+`src/main.ts` is a composition root and decides nothing. Anything with a rule in it lives in the domain, a use case, or an adapter, where it is testable without launching Electron — which is why window options, the CSP, and the IPC handler bodies are pure functions with their Electron wiring kept separate.
+
+The ABI stays at `src/chain/abi/Zarya.abi.json` rather than moving under `adapters/chain/`: `__ai/scripts/validate-ai-package.mjs` and `DEPLOYMENT.md` both name that path. Moving it is Phase 2's business, together with the chain adapter that reads it.
 
 The field-name schema lives in `adapters/forms/` and is shared by all three form directions. It is an adapter detail: the domain receives typed intents and never sees a field name.
 
-`src/domain/**` import restrictions are enforced by an ESLint override in `.eslintrc.json`, inert until the directory exists.
+`src/domain/**` import restrictions are enforced by an ESLint override in `.eslintrc.json`. The directory exists, so the guard is live — observed rejecting Electron, `node:*`, the ABI, and an adapter import.
 
 ## Ports
 
@@ -63,7 +72,7 @@ Driven ports — the domain declares these, adapters implement them.
 | `VotingDiscovery` | `VotingCreated` indexing with a resumable cursor | chain |
 | `ChainWriter` | submit, await confirmation, return a decoded outcome | chain |
 | `NetworkGuard` | chainId and contract-code identity checks | chain |
-| `Clock` | **chain block time**, never workstation time | chain |
+| `Clock` | **chain block time**, never workstation time | chain — *declared, not yet implemented* |
 | `TemplateWriter` | generate a pre-filled AcroForm | forms |
 | `FormParser` | returned PDF → neutral parsed fields, or a structural rejection | forms |
 | `ReceiptStamper` | fill `zarya.receipt.*` and flatten | forms |
@@ -74,7 +83,7 @@ Driven ports — the domain declares these, adapters implement them.
 | `CursorStore` | discovery block cursor | store |
 | `Signer` | sign; never exposes key material | secrets |
 | `FileSink` | write a file to a user-chosen or configured location | electron |
-| `IdGenerator` | `operationRef` creation | platform |
+| `IdGenerator` | `operationRef` creation | platform — *implemented* |
 
 Driving adapters call application services: IPC handlers, the executor's periodic trigger, the manual `Run now` action, and tests. All executor triggers converge on one `reconcile()` use case.
 
@@ -82,7 +91,7 @@ Driving adapters call application services: IPC handlers, the executor's periodi
 
 Boundaries the architecture enforces structurally rather than by convention:
 
-- The **renderer** is untrusted UI. It reaches the app only through a narrow typed preload surface, never raw IPC, a filesystem path it can act on, a signer, or a database handle.
+- The **renderer** is untrusted UI. It reaches the app only through a narrow typed preload surface, never raw IPC, a filesystem path it can act on, a signer, or a database handle. Its CSP forbids inline, remote, and `eval`'d script, in development as well as production — the renderer will eventually display text extracted from untrusted forms, and a policy only active in packaged builds is a policy nobody exercises. It is delivered as a `<meta>` tag injected by the renderer's Vite config, because the packaged app loads over `file://`, where a `webRequest` response header is not dependably applied.
 - The **domain** cannot read a PDF, because it has no PDF type. The untrusted-form rule is therefore not a discipline the domain has to remember.
 - **Secrets** live behind `Signer`. No adapter returns key material, and no port exposes it.
 - The **worker** owns long-running and failure-prone work — chain calls, form generation and parsing, the transaction queue, reconciliation. It may crash and restart without losing correctness, because state is persisted and reconciled rather than held in memory.

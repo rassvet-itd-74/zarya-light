@@ -12,6 +12,8 @@
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx .",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "ai:validate": "node __ai/scripts/validate-ai-package.mjs"
   },
   "keywords": [],
@@ -38,7 +40,8 @@
     "eslint": "^8.57.1",
     "eslint-plugin-import": "^2.32.0",
     "typescript": "~5.9.3",
-    "vite": "^5.4.21"
+    "vite": "^5.4.21",
+    "vitest": "^3.2.7"
   },
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1"

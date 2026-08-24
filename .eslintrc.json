@@ -14,10 +14,16 @@
   ],
   "parser": "@typescript-eslint/parser",
   "rules": {
-    // Vite resolves asset query suffixes (?inline, ?url, ?raw) at build time,
-    // which the Node resolver cannot follow. TypeScript still type-checks them
-    // through the vite/client declarations referenced in forge.env.d.ts.
-    "import/no-unresolved": ["error", { "ignore": ["\\?(inline|url|raw|worker)$"] }]
+    // Two things this plugin's legacy Node resolver cannot follow, both of
+    // which TypeScript resolves correctly on its own:
+    //   - Vite asset query suffixes (?inline, ?url, ?raw), resolved at build
+    //     time and type-checked through the vite/client declarations in
+    //     forge.env.d.ts;
+    //   - package "exports" subpaths such as vitest/config.
+    "import/no-unresolved": [
+      "error",
+      { "ignore": ["\\?(inline|url|raw|worker)$", "^vitest/config$"] }
+    ]
   },
   "overrides": [
     {

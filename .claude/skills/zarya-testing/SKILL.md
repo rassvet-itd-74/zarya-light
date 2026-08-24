@@ -5,7 +5,11 @@ description: Design and implement tests for the Zarya Electron, PDF form, and Se
 
 # Zarya testing strategy
 
-> **No test runner is installed.** `package.json` has `typecheck` and `lint` only. Adding a runner is part of the first slice that needs tests — pick one that fits Vite and Electron rather than introducing a second toolchain.
+> **Vitest** is the runner: `npm test` (`vitest run`) and `npm run test:watch`. It shares the repo's existing Vite toolchain rather than adding a second one. Config in `vitest.config.ts`: `node` environment, `src/**/*.test.ts`. A renderer project with a DOM environment gets added when a renderer test first needs one.
+>
+> Tests colocate with their subject and import from `'vitest'` explicitly rather than relying on globals. Tests under `src/domain/` obey the same import restrictions as the code — a domain test that needs an adapter is a sign the code is in the wrong place.
+>
+> Prefer extracting a **pure function** over mocking Electron. `buildWindowPlan`, `contentSecurityPolicy`, the IPC handler bodies, and `createZaryaApi` are all testable without an Electron runtime because the impure wiring was kept separate. `WorkerSupervisor` takes its spawn function as a parameter for the same reason; drive it with `vi.useFakeTimers()`.
 
 Read `__ai/references/CONTRACT_DEFECTS.md` before testing governance semantics. Several of the contract's actual behaviors differ from what the product documentation implies, and a test written against the documentation would encode a requirement the contract does not meet.
 

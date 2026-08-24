@@ -9,11 +9,10 @@ For non-trivial work, read `__ai/ROUTER.md`. It names which references a task ne
 ```bash
 npm run typecheck     # tsc --noEmit
 npm run lint          # eslint
+npm test              # vitest run
 npm run ai:validate   # __ai/ + .claude/skills/ structure, links, doc-vs-ABI and source-vs-ABI drift
 npm start             # electron-forge start
 ```
-
-There is no test runner yet. Adding one is part of the first slice that needs tests.
 
 ## Source of truth
 

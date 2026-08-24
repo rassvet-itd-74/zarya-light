@@ -169,6 +169,46 @@ if (sourceSeen === solPaths.length && abiFunctions.size) {
   }
 }
 
+// ------------------------------------------------------- client-side symbols
+
+/**
+ * Names the application's own TypeScript declares. Since Phase 1 the docs cite
+ * our functions as well as the contract's, and an allow-list of them would rot:
+ * scanning source keeps the citation check *strict* both ways — a doc naming a
+ * function we renamed fails, exactly as it does for a contract symbol.
+ */
+const srcSymbols = new Set();
+
+async function collectSourceSymbols(dir) {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return; // no src/ yet
+  }
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await collectSourceSymbols(full);
+      continue;
+    }
+    if (!entry.name.endsWith('.ts')) continue;
+
+    const text = await readFile(full, 'utf8');
+    for (const pattern of [
+      /\b(?:function|class|interface|enum)\s+([A-Za-z_]\w*)/g,
+      /\btype\s+([A-Za-z_]\w*)\s*[=<]/g,
+      /\b(?:const|let)\s+([A-Za-z_]\w*)\s*[:=]/g,
+      // object-literal and class methods: `getAppStatus(...)`, `newOperationRef()`
+      /^\s{2,}(?:readonly\s+|async\s+|private\s+|public\s+)*([A-Za-z_]\w*)\s*[(:]/gm,
+    ]) {
+      for (const [, name] of text.matchAll(pattern)) srcSymbols.add(name);
+    }
+  }
+}
+
+await collectSourceSymbols(join(repoRoot, 'src'));
+
 // -------------------------------------------------------------------- files
 
 /** Collect every markdown file we own, plus this script. */
@@ -312,22 +352,28 @@ for (const [file, text] of bodies) {
 
 // --------------------------------------------------- doc/ABI conformance
 
-// Every backticked identifier that looks like a contract call must exist in
-// the ABI. This is what turns documentation drift into a failing check.
-// Identifiers the docs mention that are deliberately not ABI members. Adding a
-// new client-side function name to the docs means adding it here — a small cost
-// that keeps the ABI check strict enough to catch a real rename.
+// Every backticked identifier that looks like a call must exist in the ABI, the
+// Solidity source, or the app's own source. This is what turns documentation
+// drift into a failing check.
+//
+// What remains below is only what exists in *none* of the three: Solidity
+// internals, symbols discussed precisely because they do not exist, platform
+// built-ins, and names for code not written yet. A function the app actually
+// declares does not belong here — `srcSymbols` covers it, and covering it there
+// keeps a rename detectable.
 const KNOWN_NON_ABI = new Set([
   // contract-adjacent: internal state and Solidity built-ins
   '_votingEligibilityParametersByOrgan', 'eligibilityParameters',
   'Panic', 'DELEGATECALL',
   // discussed precisely because they do not exist — getVotingOrgan is proposed
   'getChairman', 'getVoting', 'getVotingOrgan',
-  // client-side and platform functions
-  'reconcile', 'send', 'openDevTools', 'setTimeout', 'sendTransaction',
-  'supports', 'parse', 'getBatch', 'submitBatch', 'getExecutorStatus',
+  // platform built-ins
+  'send', 'openDevTools', 'setTimeout', 'sendTransaction', 'parse',
+  // planned client-side surface, not written yet — each should move out of this
+  // list when its code lands, not stay here
+  'reconcile', 'supports', 'getBatch', 'submitBatch', 'getExecutorStatus',
   'runExecutorNow', 'onExecutorStatus', 'listFormTypes', 'issueForm',
-  'importForms',
+  'importForms', 'printMatrixReport', 'getReceipt', 'regenerateReceipt',
 ]);
 
 // Solidity keywords, modifiers, and value types that precede a paren but are
@@ -362,10 +408,10 @@ function citedSymbols(text) {
   return found;
 }
 
-// Valid citations are ABI members, or symbols the Solidity source declares —
-// which is a strict superset, because externally-linked library events and
-// errors never reach the ABI.
-const knownSymbols = new Set([...abiSymbols, ...sourceSymbols]);
+// Valid citations are ABI members, symbols the Solidity source declares (a
+// strict superset, because externally-linked library events and errors never
+// reach the ABI), or names the app's own source declares.
+const knownSymbols = new Set([...abiSymbols, ...sourceSymbols, ...srcSymbols]);
 
 for (const [file, text] of bodies) {
   if (!/references|CLAUDE\.md|SKILL\.md/.test(rel(file))) continue;
@@ -373,8 +419,8 @@ for (const [file, text] of bodies) {
     if (KNOWN_NON_ABI.has(symbol) || SOL_NOISE.has(symbol) || isSolType(symbol)) continue;
     if (knownSymbols.size && !knownSymbols.has(symbol)) {
       fail(
-        `${rel(file)}: cites '${symbol}()' which is in neither the ABI nor the Solidity source ` +
-          '— stale doc or renamed symbol',
+        `${rel(file)}: cites '${symbol}()' which is in none of the ABI, the Solidity source, ` +
+          'or src/ — stale doc or renamed symbol',
       );
     }
   }
@@ -451,5 +497,6 @@ if (problems.length) {
 const docLines = [...bodies.values()].reduce((n, t) => n + t.split(/\r?\n/).length, 0);
 console.log(
   `AI package OK — ${skillDirs.length} skills, ${bodies.size} documents ` +
-    `(${worklogCount} worklog), ${docLines} lines, ${abiSymbols.size} ABI symbols cross-checked.`,
+    `(${worklogCount} worklog), ${docLines} lines, ${abiSymbols.size} ABI and ` +
+    `${srcSymbols.size} source symbols cross-checked.`,
 );
