@@ -36,6 +36,12 @@ UNIQUE (chainId, contractAddress, votingId)   -- execution job
 
 Do not rely on application `if` checks for race-sensitive uniqueness.
 
+## Two projections, one cursor
+
+The event cursor feeds both the executor's voting discovery and the matrix coordinate index. Persist the cursor once and let both projections read it — never maintain a second cursor or a second sweep.
+
+The matrix index is derived state and safe to rebuild from the cursor at any time. The organ label reverse table is different: it maps `getPartyOrgan(triple) → bytes32` through `pure` helpers, so it can never go stale and should be cached permanently rather than rebuilt per report.
+
 ## The discovery cursor
 
 `VotingCreated` is the only source of a voting's `endTime` — no getter exposes it. The persisted block cursor is therefore load-bearing, not an optimization: losing it means losing every deadline the executor depends on.
@@ -55,7 +61,9 @@ On startup and every relevant trigger:
 
 Never `if (db.done) return` without chain evidence where a false local state could cause a duplicate irreversible write.
 
-Examples: if chain says the signer has voted, a local `CastVote` becomes `ALREADY_COMPLETED` even after a crash. If a voting is finalized, mark the executor job terminal regardless of a stale local `READY` or `PENDING` — but read the outcome rather than assuming it, since rejection semantics are unverified (`__ai/references/DOCUMENTATION_STATUS.md` #1).
+Examples: if chain says the signer has voted, a local `CastVote` becomes `ALREADY_COMPLETED` even after a crash. If a voting is finalized, mark the executor job terminal regardless of a stale local `READY` or `PENDING` — reading the outcome from `VotingFinalized(success)` rather than assuming it.
+
+**One exception to chain-wins, and it needs its own column.** A voting that failed quorum reverts without finalizing, so it is unexecutable forever while still looking like a live candidate: past `endTime`, not active, not finalized. Chain state will offer it on every reconciliation pass. Persist the terminal classification and filter it at candidate selection, or the executor retries a guaranteed revert indefinitely. This is the only place where local state legitimately overrides what chain state presents — see "Quorum failure is permanent" in `__ai/references/CONTRACT_DEFECTS.md`, and the `UNEXECUTABLE` state in `STATE_MACHINES.md`.
 
 ## Transactions and audit
 

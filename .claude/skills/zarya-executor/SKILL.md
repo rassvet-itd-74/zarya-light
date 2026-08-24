@@ -7,7 +7,7 @@ description: Implement Zarya's automatic post-deadline voting executor and its m
 
 The executor performs only mechanical actions justified by current on-chain state. It never invents political intent and never changes governance policy.
 
-Read `__ai/references/STATE_MACHINES.md` and `__ai/references/DOCUMENTATION_STATUS.md`. Privilege rules are in `__ai/references/INVARIANTS.md`.
+Read `__ai/references/STATE_MACHINES.md` and `__ai/references/CONTRACT_DEFECTS.md`. Privilege rules are in `__ai/references/INVARIANTS.md`.
 
 ## Execution contract
 
@@ -15,17 +15,27 @@ Read `__ai/references/STATE_MACHINES.md` and `__ai/references/DOCUMENTATION_STAT
 executeVoting(uint256 votingId) returns (bool)
 ```
 
-One argument, confirmed by the ABI. Quorum and approval are already snapshotted into the voting. Therefore the executor's input is a voting identity, never a threshold; it must not read today's organ configuration to judge an older voting; and it must never call the threshold setters.
+One argument, confirmed by source and ABI. Quorum and approval are already snapshotted into the voting. Therefore the executor's input is a voting identity, never a threshold; it must not read today's organ configuration to judge an older voting; and it must never call the threshold setters.
 
-## Resolve rejection semantics before designing retries
+Discovery derives ids from events, so `0` never arises there — but domain validation should still refuse it rather than spending a call. The contract now rejects it too.
 
-**This is the one thing that must not be assumed.** `InsufficientVotes(uint256,uint256)` is a custom error, which suggests a failed voting *reverts* and is never finalized. But `executeVoting` returns `bool` and `VotingFinalized` carries a `success` flag, which suggests it finalizes as rejected.
+## Some votings can never be executed — this is the core design constraint
 
-If it reverts and you treat the revert as retryable, the executor retries a settled political outcome forever and reports it as a technical failure.
+Settled from `Votings.sol:416-445`. `executeVoting` finalizes on exactly one path, and the quorum path leaves the voting unfinalized **forever**:
 
-Until `DOCUMENTATION_STATUS.md` #1 is closed: classify `InsufficientVotes` as terminal-pending-verification, keep it distinct from transport failure, and do not implement a retry path that assumes the revert is transient.
+| Outcome | State | Retry? |
+| --- | --- | --- |
+| quorum met, mutation applied | `FINALIZED_ACCEPTED` | done |
+| quorum met, approval failed | `FINALIZED_REJECTED` | done — the contract finalized it |
+| `InsufficientVotes` — zero votes, or quorum unmet | `UNEXECUTABLE` | **never** |
+| `VotingAlreadyFinalized` | `ALREADY_FINALIZED` | done — lost the race |
+| transport, RPC, submission | `RETRYABLE_ERROR` | yes |
 
-Note also that the approval formula divides by `totalVotes`, so an expired voting with zero votes may panic. An executor that discovers overdue votings will eventually hit that case — see #3.
+An `UNEXECUTABLE` voting is past `endTime` and unfinalized, so `isVotingActive` and `isVotingFinalized` are both false and **discovery will offer it again on every single pass**. Persist the terminal classification and filter it out at candidate selection. This is the one place where local state must override what chain state keeps presenting — everywhere else, chain wins.
+
+Getting this wrong produces an executor that burns gas retrying a guaranteed revert forever, and reports a settled political outcome as a technical failure.
+
+The zero-vote case used to arrive as `Panic(0x12)` from a division by zero and now arrives as `InsufficientVotes`. Both classify the same way, so keep decoding `Panic(0x11)`, `Panic(0x12)`, and `Panic(0x32)` — the deployed contract may predate the guard, and an error registry built only from the ABI's 16 entries shows them as unknown selectors.
 
 ## One reconciliation implementation
 
@@ -48,17 +58,12 @@ A periodic interval may wake the reconciler, but correctness must survive missed
 
 ## Outcomes
 
-Distinguish only what the contract lets you prove:
+The table above is the full classification. Two rules on top of it:
 
-- finalized and applied — confirmed by `VotingFinalized(success=true)` plus a domain read
-- `ALREADY_FINALIZED` — `VotingAlreadyFinalized`; another client won the race
-- `RETRYABLE_ERROR` — transport, RPC, or submission transients only
-- `BLOCKED` — signer, network, contract, or configuration prevents execution
-- terminal-pending-verification — `InsufficientVotes`, per above
+- `BLOCKED` — signer, network, contract, or configuration prevents execution. Distinct from `UNEXECUTABLE`, which is about the voting; `BLOCKED` is about us.
+- Never turn an unknown RPC state into a confirmed outcome. Absence of evidence is `PENDING`, to be reconciled.
 
-Do not infer "politically rejected" from a revert until the contract semantics are established.
-
-Reconciling an applied mutation requires a domain read: the `ValueAdded` event the whitepaper describes does not exist in the ABI.
+Reconciling an applied mutation can use `ValueAdded` — it does exist and does fire, contrary to earlier notes here. It is absent from the ABI only because `Matricies.addValue` is an `external` library function, and the `DELEGATECALL` means the log still lands at the Zarya address. Register a hand-written fragment for it. Themes, statements, and decimals emit no application event, so those still need `VotingFinalized(success=true)` plus a domain read. See `CONTRACT.md`, "Symbols the ABI does not carry".
 
 ## Races
 

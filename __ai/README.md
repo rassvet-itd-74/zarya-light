@@ -8,7 +8,7 @@ Project knowledge for the Zarya DAIO Electron client: routing policy, stable ref
 
 ```text
 CLAUDE.md                     always-loaded hard rules (repository root)
-.claude/skills/zarya-*/       15 task skills
+.claude/skills/zarya-*/       16 task skills
 __ai/ROUTER.md                which skills and references a task needs
 __ai/references/              stable project facts
 __ai/worklog/                 append-only record of each slice of work
@@ -22,8 +22,9 @@ The app is built hexagonally — domain core, ports it owns, adapters that imple
 
 | File | Contents |
 | --- | --- |
-| `CONTRACT.md` | The contract surface, derived from the ABI. Signatures, organ encoding, error taxonomy, and what is **not** exposed |
-| `DOCUMENTATION_STATUS.md` | Where docs and ABI disagree; the four questions still open and what would close each |
+| `CONTRACT.md` | The contract surface, derived from the Solidity source. Signatures, access control, organ encoding, error taxonomy, and what is **not** exposed |
+| `CONTRACT_DEFECTS.md` | Contract behaviors the product documentation does not anticipate, and what the client must do about each |
+| `DOCUMENTATION_STATUS.md` | Where `temporal_docs/` prose contradicts the code |
 | `DEPLOYMENT.md` | Network, address, artifact paths, signer roles |
 | `INVARIANTS.md` | Rules that hold everywhere — privilege separation, trust boundaries, secrets, recovery |
 | `DECISIONS.md` | Settled product and architecture choices |
@@ -52,11 +53,11 @@ Or invoke a skill directly: `/zarya-chain`, `/zarya-executor`, `/zarya-review`, 
 
 ## State of the ground truth
 
-The ABI (`src/chain/abi/Zarya.abi.json`, 42 functions, 12 events, 16 errors) settles the contract surface. `temporal_docs/` is the supplied product documentation and contains known-stale lines — `DOCUMENTATION_STATUS.md` records which.
+The Solidity source is present — `temporal_docs/Zarya.sol` plus four libraries — and settles contract behavior. The ABI (`src/chain/abi/Zarya.abi.json`, 43 functions, 12 events, 16 errors) matches its external surface exactly, names and argument counts alike, and `ai:validate` re-checks that. `temporal_docs/` prose contains known-stale lines; `DOCUMENTATION_STATUS.md` records which.
 
 Two things are worth knowing before planning any work:
 
-1. **Four contract questions remain open** and need Solidity source or a live Sepolia read: rejection semantics, Chairman cross-organ voting, zero-vote execution, and region encoding. The first materially changes executor design; the last is cheap to resolve and blocks all organ handling.
+1. **The contract was fixed on 2026-08-24, and not everything was.** Organ votings can now pass, `castVote` scopes to the voting's own organ, and the zero-vote division is guarded. Still open: a quorum-failed voting is permanently unexecutable, the approval base doubles as a silent enable flag, and region ordinals are not subject codes. `CONTRACT_DEFECTS.md` has both halves. **Read it before planning anything** — and note `castVote` lost an argument, which breaks any call site built against the old form.
 2. **The document format is ours.** Governance documents are PDF AcroForms the app issues and ingests, so the schema is a product decision in `zarya-pdf-forms` rather than something to reverse-engineer. Owning it does not make a returned form trustworthy — see the trust rule in `INVARIANTS.md`.
 
 ## Principles

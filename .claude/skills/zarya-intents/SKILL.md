@@ -7,7 +7,7 @@ description: Define and validate Zarya's allow-listed typed intent model mapping
 
 A strict semantic firewall between untrusted forms and chain integration.
 
-Read `__ai/references/CONTRACT.md` for exact signatures and `__ai/references/DOCUMENTATION_STATUS.md` for what is unverified. Trust rules: `__ai/references/INVARIANTS.md`.
+Read `__ai/references/CONTRACT.md` for exact signatures and access control, and `__ai/references/CONTRACT_DEFECTS.md` for behaviors the intent model must not paper over. Trust rules: `__ai/references/INVARIANTS.md`.
 
 ## Closed union
 
@@ -44,7 +44,7 @@ Preserve the label shown on the form for audit, but never derive the `bytes32` f
 
 For a bound form the triple comes from the operation record, not from the returned file.
 
-> The `Region` enum value probably differs from the subject code the whitepaper annotates (`74`, `77`). Resolve this before implementing organ mapping — `DOCUMENTATION_STATUS.md` #4.
+> The organ triple's `region` is the **enum ordinal**, not the subject code the whitepaper annotates. They differ for 50 of 98 regions and a wrong one silently addresses a different real region. If a form asks a human for a region, map the answer through a table — never pass the number through, and never store a subject code in the intent. See "Region ordinals are not subject codes" in `CONTRACT_DEFECTS.md`.
 
 Identifier grammar for parsing display labels: `[NN.[X.]]TYPE` — federal organs carry a bare suffix (`СЗД`, `ПРЛ`, `СОВ`), regional add a region prefix, local add region and number.
 
@@ -64,11 +64,17 @@ Keep separate: form parsing → intent schema validation → deterministic norma
 
 ## Privileged intents
 
-`SetMinimumQuorum`, `SetMinimumApprovalPercentage`, and `TransferChairmanship` require their own `operationType` and their own template. They never originate from executor logic. Schema validation confirms shape only — authorization is the contract's job, discovered by simulation since no `getChairman()` exists.
+`SetMinimumQuorum`, `SetMinimumApprovalPercentage`, and `TransferChairmanship` require their own `operationType` and their own template. They never originate from executor logic. Schema validation confirms shape only — authorization is the contract's job.
+
+There are now **three** threshold setters — quorum, approval percentage, and approval percentage base — and they are not independent. An organ whose base is zero ignores the other two entirely and falls back to `simpleMajority`. So model threshold configuration as **one intent carrying all three values**, not three intents. A form that sets only the quorum produces a transaction that succeeds and changes nothing. See "The approval base doubles as an enable flag" in `CONTRACT_DEFECTS.md`.
+
+Carry the values in the contract's own units — basis points by default — and never convert to percent in the intent.
 
 ## `CastVote` authorization
 
-Do not encode "signer must be a member of the target organ" as an intent-validation rule. The Chairman may be allowed to vote in any organ; that rule is unverified and is chain-dependent either way. Authorization belongs in preflight and Solidity.
+Do not encode "signer must be a member of the target organ" as an intent-validation rule. Authorization belongs in preflight and Solidity.
+
+**`CastVote` carries no organ at all.** The call is `castVote(votingId, support)`; the contract reads the organ from the voting itself. So the intent has no organ field, and a form must not ask for one — an organ on a vote form is a field that cannot be honoured and invites a user to believe they are choosing something. Membership is checked against the voting's own organ, the Chairman is exempt, and theme and statement votings accept anyone.
 
 ## Semantic identity
 

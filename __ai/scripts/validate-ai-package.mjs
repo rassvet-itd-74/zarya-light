@@ -10,9 +10,20 @@ const aiDir = resolve(scriptDir, '..');
 const repoRoot = resolve(aiDir, '..');
 const skillsRoot = join(repoRoot, '.claude', 'skills');
 const abiPath = join(repoRoot, 'src', 'chain', 'abi', 'Zarya.abi.json');
+const solRoot = join(repoRoot, 'temporal_docs');
+const solPaths = [
+  join(solRoot, 'Zarya.sol'),
+  join(solRoot, 'libraries', 'Votings.sol'),
+  join(solRoot, 'libraries', 'PartyOrgans.sol'),
+  join(solRoot, 'libraries', 'Matricies.sol'),
+  join(solRoot, 'libraries', 'Regions.sol'),
+];
 
 const problems = [];
 const fail = (msg) => problems.push(msg);
+
+/** repo-relative path with forward slashes, usable before `rel` is defined */
+const rel0 = (p) => p.replace(repoRoot, '').replace(/^[\\/]/, '').replace(/\\/g, '/');
 
 const REQUIRED = [
   'CLAUDE.md',
@@ -20,6 +31,7 @@ const REQUIRED = [
   '__ai/ROUTER.md',
   '__ai/references/ARCHITECTURE.md',
   '__ai/references/CONTRACT.md',
+  '__ai/references/CONTRACT_DEFECTS.md',
   '__ai/references/DECISIONS.md',
   '__ai/references/DEPLOYMENT.md',
   '__ai/references/DOCUMENTATION_STATUS.md',
@@ -57,15 +69,104 @@ for (const rel of REQUIRED) {
 // ---------------------------------------------------------------------- abi
 
 let abiSymbols = new Set();
+let abiFunctions = new Map();
 try {
   const abi = JSON.parse(await readFile(abiPath, 'utf8'));
   if (!Array.isArray(abi)) {
     fail('src/chain/abi/Zarya.abi.json must be a bare ABI array, not a build artifact');
   } else {
     abiSymbols = new Set(abi.map((e) => e.name).filter(Boolean));
+    abiFunctions = new Map(
+      abi
+        .filter((e) => e.type === 'function' && e.name)
+        .map((e) => [e.name, (e.inputs || []).length]),
+    );
   }
 } catch (err) {
   fail(`cannot read ABI: ${err.message}`);
+}
+
+// ------------------------------------------------------- solidity source
+
+// The source is the authority on behavior, and it carries symbols the ABI does
+// not: events and errors declared in externally-linked libraries never appear
+// in the calling contract's ABI. Docs must be able to cite those.
+let sourceSymbols = new Set();
+let sourceExternal = new Map();
+let sourceSeen = 0;
+
+/** Top-level parameter count of a Solidity parameter list. */
+function countParams(params) {
+  const s = params.trim();
+  if (!s) return 0;
+  let depth = 0;
+  let n = 1;
+  for (const ch of s) {
+    if (ch === '(' || ch === '[') depth++;
+    else if (ch === ')' || ch === ']') depth--;
+    else if (ch === ',' && depth === 0) n++;
+  }
+  return n;
+}
+
+for (const path of solPaths) {
+  let text;
+  try {
+    text = await readFile(path, 'utf8');
+  } catch {
+    fail(`missing Solidity source: ${rel0(path)} — CONTRACT.md and CONTRACT_DEFECTS.md are derived from it`);
+    continue;
+  }
+  sourceSeen++;
+
+  for (const [, name] of text.matchAll(/\b(?:event|error)\s+([A-Za-z_]\w*)\s*\(/g)) sourceSymbols.add(name);
+  for (const [, name] of text.matchAll(/\b(?:struct|enum)\s+([A-Za-z_]\w*)\s*\{/g)) sourceSymbols.add(name);
+  for (const [, name] of text.matchAll(/\bfunction\s+([A-Za-z_]\w*)\s*\(/g)) sourceSymbols.add(name);
+  for (const [, name] of text.matchAll(/\bmodifier\s+([A-Za-z_]\w*)\s*[({]/g)) sourceSymbols.add(name);
+  for (const [, name] of text.matchAll(/\blibrary\s+([A-Za-z_]\w*)/g)) sourceSymbols.add(name);
+
+  if (path.endsWith('Zarya.sol')) {
+    // External surface: functions declared external/public, plus the getters
+    // Solidity generates for public state variables. Arity is recorded too —
+    // a name-only comparison once missed castVote losing an argument.
+    for (const [, name, params, vis] of text.matchAll(
+      /\bfunction\s+([A-Za-z_]\w*)\s*\(([\s\S]*?)\)\s*\n?\s*(external|public|internal|private)\b/g,
+    )) {
+      if (vis === 'external' || vis === 'public') sourceExternal.set(name, countParams(params));
+    }
+    for (const [, name] of text.matchAll(/\bpublic\s+([A-Za-z_]\w*)\s*[;=]/g)) sourceExternal.set(name, 0);
+  }
+}
+
+// Source/ABI drift. If a newer source is dropped in without recompiling the
+// ABI, every downstream doc derived from it is silently wrong.
+if (sourceSeen === solPaths.length && abiFunctions.size) {
+  const missingFromAbi = [...sourceExternal.keys()].filter((n) => !abiFunctions.has(n)).sort();
+  const missingFromSource = [...abiFunctions.keys()].filter((n) => !sourceExternal.has(n)).sort();
+  if (missingFromAbi.length) {
+    fail(
+      `temporal_docs/Zarya.sol exposes ${missingFromAbi.map((n) => `${n}()`).join(', ')} ` +
+        'but the ABI does not — recompile src/chain/abi/Zarya.abi.json',
+    );
+  }
+  if (missingFromSource.length) {
+    fail(
+      `the ABI exposes ${missingFromSource.map((n) => `${n}()`).join(', ')} ` +
+        'but temporal_docs/Zarya.sol does not — the source copy is stale',
+    );
+  }
+  // Same name, different argument count. A name-only check let castVote go
+  // from three arguments to two unnoticed, which every generated call site
+  // would then have got wrong.
+  for (const [name, arity] of sourceExternal) {
+    const abiArity = abiFunctions.get(name);
+    if (abiArity !== undefined && abiArity !== arity) {
+      fail(
+        `${name}() takes ${arity} argument(s) in temporal_docs/Zarya.sol but ` +
+          `${abiArity} in the ABI — one of the two is stale`,
+      );
+    }
+  }
 }
 
 // -------------------------------------------------------------------- files
@@ -217,12 +318,11 @@ for (const [file, text] of bodies) {
 // new client-side function name to the docs means adding it here — a small cost
 // that keeps the ABI check strict enough to catch a real rename.
 const KNOWN_NON_ABI = new Set([
-  // contract-adjacent: structs, enums, internal state
-  'VotingEligibilityParameters', 'VoteResults', 'DecodedCheckpoint', 'Voting',
-  'Region', 'PartyOrganType', 'SuggestionType',
+  // contract-adjacent: internal state and Solidity built-ins
   '_votingEligibilityParametersByOrgan', 'eligibilityParameters',
-  // documented by temporal_docs but absent from the ABI — discussed on purpose
-  'ValueAdded', 'getChairman', 'getVoting',
+  'Panic', 'DELEGATECALL',
+  // discussed precisely because they do not exist — getVotingOrgan is proposed
+  'getChairman', 'getVoting', 'getVotingOrgan',
   // client-side and platform functions
   'reconcile', 'send', 'openDevTools', 'setTimeout', 'sendTransaction',
   'supports', 'parse', 'getBatch', 'submitBatch', 'getExecutorStatus',
@@ -238,32 +338,44 @@ const SOL_NOISE = new Set([
   'nonpayable', 'indexed', 'memory', 'storage', 'calldata', 'immutable',
   'constant', 'require', 'revert', 'emit', 'error', 'event', 'address',
   'bool', 'string', 'interface', 'contract', 'library', 'using', 'abi',
-  'encodePacked', 'push', 'add', 'remove',
+  'encodePacked', 'push', 'add', 'remove', 'keccak256', 'wrap', 'unwrap',
 ]);
 const isSolType = (s) => /^(u?int\d*|bytes\d*)$/.test(s);
 
-/** Contract identifiers cited in a file: inline `foo(` plus solidity fences. */
+/**
+ * Contract identifiers cited in a file: inline `foo(` plus solidity fences.
+ * Capitalised names are included so an event or error rename is caught too —
+ * the error taxonomy is where drift would otherwise rot unnoticed.
+ */
 function citedSymbols(text) {
   const found = new Set();
 
-  // inline prose citations: `executeVoting(votingId)`
-  for (const [, s] of text.matchAll(/`([a-z][A-Za-z0-9]{3,})\(/g)) found.add(s);
+  // inline prose citations: `executeVoting(votingId)`, `InsufficientVotes(...)`
+  for (const [, s] of text.matchAll(/`([A-Za-z][A-Za-z0-9]{3,})\(/g)) found.add(s);
 
   // fenced solidity blocks — the primary drift surface
   for (const [, block] of text.matchAll(/```solidity\n([\s\S]*?)```/g)) {
-    for (const [, s] of block.matchAll(/(?:^|[\s(])([a-z][A-Za-z0-9]{3,})\s*\(/gm)) {
+    for (const [, s] of block.matchAll(/(?:^|[\s(])([A-Za-z][A-Za-z0-9]{3,})\s*\(/gm)) {
       if (!SOL_NOISE.has(s) && !isSolType(s)) found.add(s);
     }
   }
   return found;
 }
 
+// Valid citations are ABI members, or symbols the Solidity source declares —
+// which is a strict superset, because externally-linked library events and
+// errors never reach the ABI.
+const knownSymbols = new Set([...abiSymbols, ...sourceSymbols]);
+
 for (const [file, text] of bodies) {
   if (!/references|CLAUDE\.md|SKILL\.md/.test(rel(file))) continue;
   for (const symbol of citedSymbols(text)) {
-    if (KNOWN_NON_ABI.has(symbol) || SOL_NOISE.has(symbol)) continue;
-    if (abiSymbols.size && !abiSymbols.has(symbol)) {
-      fail(`${rel(file)}: cites '${symbol}()' which is not in the ABI — stale doc or renamed function`);
+    if (KNOWN_NON_ABI.has(symbol) || SOL_NOISE.has(symbol) || isSolType(symbol)) continue;
+    if (knownSymbols.size && !knownSymbols.has(symbol)) {
+      fail(
+        `${rel(file)}: cites '${symbol}()' which is in neither the ABI nor the Solidity source ` +
+          '— stale doc or renamed symbol',
+      );
     }
   }
 }
@@ -311,10 +423,21 @@ for (const [file, text] of bodies) {
 
 // ------------------------------------------------------------- single-source
 
-const ADDRESS = /0x141eb27110329c82de3c95045c96f6ebf15fdc4b/i;
-const holders = [...bodies].filter(([, t]) => ADDRESS.test(t)).map(([f]) => rel(f));
-if (holders.length > 1) {
-  fail(`deployment address appears in ${holders.length} files (${holders.join(', ')}) — it belongs only in __ai/references/DEPLOYMENT.md`);
+// Addresses live in DEPLOYMENT.md and nowhere else, so a redeploy is a
+// one-file change. Checked by shape rather than by literal — pinning the
+// current address here would make this check rot on the next deployment.
+const ADDRESS = /\b0x[0-9a-fA-F]{40}\b/g;
+const DEPLOYMENT_DOC = 'DEPLOYMENT.md';
+
+for (const [file, text] of bodies) {
+  if (rel(file).endsWith(DEPLOYMENT_DOC)) continue;
+  const found = [...new Set(text.match(ADDRESS) || [])];
+  if (found.length) {
+    fail(
+      `${rel(file)}: contains address ${found.join(', ')} — addresses belong only in ` +
+        `__ai/references/${DEPLOYMENT_DOC}, so a redeploy touches one file`,
+    );
+  }
 }
 
 // -------------------------------------------------------------------- report

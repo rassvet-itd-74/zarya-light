@@ -28,6 +28,7 @@ Suggested surface — adapt to the code that exists:
 interface ZaryaDesktopApi {
   listFormTypes(): Promise<FormTypeView[]>;
   issueForm(req: IssueFormRequest): Promise<IssuedFormView>;
+  printMatrixReport(): Promise<ReportView>;
   importForms(): Promise<ImportResult>;
   getBatch(id: string): Promise<BatchView>;
   submitBatch(id: string): Promise<void>;
@@ -49,9 +50,9 @@ A worker crash sets executor health to `STOPPED` or `DEGRADED`. Restarting must 
 
 ## UI separation
 
-Three separate concerns, three surfaces. Form buttons issue templates — one per supported operation, no signer, no chain write. The batch panel shows returned forms and intentional actions, including any tamper disclosure. The executive panel shows mechanical execution health; `Run now` requests reconciliation, not direct execution of a chosen voting.
+Three separate concerns, three surfaces. Form buttons issue templates — one per supported operation, no signer, no chain write — alongside the matrix report button, which belongs with them because it is what a voter reads *before* choosing a form. The batch panel shows returned forms and intentional actions, including any tamper disclosure. The executive panel shows mechanical execution health; `Run now` requests reconciliation, not direct execution of a chosen voting.
 
-Issuance and ingestion both do real work off the UI thread and belong in the worker, not in a renderer handler.
+Issuance, ingestion, and report generation all do real work off the UI thread and belong in the worker, not in a renderer handler. The matrix report is the widest read in the app — many calls across many cells — so it must report progress and stay cancellable rather than blocking the window.
 
 ## Tests
 

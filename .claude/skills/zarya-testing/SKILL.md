@@ -7,7 +7,7 @@ description: Design and implement tests for the Zarya Electron, PDF form, and Se
 
 > **No test runner is installed.** `package.json` has `typecheck` and `lint` only. Adding a runner is part of the first slice that needs tests — pick one that fits Vite and Electron rather than introducing a second toolchain.
 
-Read `__ai/references/DOCUMENTATION_STATUS.md` before testing governance semantics: several expected behaviors are unverified, so a test asserting them would encode a guess as a requirement.
+Read `__ai/references/CONTRACT_DEFECTS.md` before testing governance semantics. Several of the contract's actual behaviors differ from what the product documentation implies, and a test written against the documentation would encode a requirement the contract does not meet.
 
 ## Unit
 
@@ -41,13 +41,19 @@ Against a deterministic local node, once chain code exists:
 
 Use real temporary storage for migration and crash-recovery tests.
 
-## Assert what is proven, flag what is not
+## Pin the contract's real behavior, including the parts that look wrong
 
-Where behavior is unverified, write the test so it *documents the uncertainty* rather than asserting a guess:
+These are settled from source (`__ai/references/CONTRACT_DEFECTS.md`). Assert them as they are — a test that encodes the *intended* design instead will pass against a contract that does not exist.
 
-- **Rejection semantics** — a test that pins `FINALIZED_REJECTED` would encode an unverified assumption. Instead assert what must hold either way: `InsufficientVotes` is never classified retryable, and the executor does not loop on it.
-- **Chairman cross-organ** — assert that preflight does not reject the vote, not that the contract accepts it.
-- **Zero-vote** — assert the executor handles both a revert and a finalization without corrupting job state.
+- **Two rejection paths, two states.** Zero votes or quorum unmet reverts without finalizing → `UNEXECUTABLE`, and the voting must be suppressed from later discovery passes. Approval failure finalizes → `FINALIZED_REJECTED`. Neither is ever `RETRYABLE_ERROR`. The regression that matters: run reconciliation twice over a quorum-failed voting and assert the second pass does not attempt it.
+- **A quorum set without a base does nothing.** Configure quorum `10`, leave the base unset, create a voting, and assert its snapshot is `simpleMajority`'s quorum of `1` — not `10`. Then set the base and assert a *new* voting picks up `10`. This is the trap most likely to be coded wrong.
+- **Basis points, not percent.** Assert `simpleMajority()` reports `{1, 5000, 10000}` and that nothing renders `5000` as a percentage. A test that hardcodes `50` will pass today and break on any organ with a different base.
+- **`castVote` takes two arguments.** Assert no call site passes an organ, and that vote intents and form schemas carry none. Then assert preflight rejects a non-member of the **voting's own** organ, accepts the Chairman anywhere, and accepts *any* address on a theme or statement voting — while the Chairman is *rejected* on a matrix-configuration voting where they are not a member. That asymmetry is easy to flatten by accident.
+- **A voting whose organ is not yet projected** yields "eligibility undetermined", not "open to anyone". Assuming no organ would wrongly tell a non-member they may vote.
+- **Region ordinals.** Assert against a region whose ordinal and subject code differ. A test using Chelyabinsk (74 both ways) passes under either reading and proves nothing.
+- **The error registry** decodes `NoThemeSet`, `NoStatementSet`, `InvalidCategory`, and `Panic(0x11/0x12/0x32)` — none of which are in the ABI, so a fixture built from the ABI alone will not cover them. `Panic(0x12)` is no longer reachable from `executeVoting` but may still come from a contract that predates the fix.
+
+Where something genuinely cannot be proven — anything requiring the deployed bytecode rather than the source — assert the invariant that holds either way and say so in the test name.
 
 ## Recovery
 

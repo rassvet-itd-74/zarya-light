@@ -15,7 +15,7 @@ Not architecture for its own sake. Four properties of this repository make it pa
 
 1. **No libraries are chosen yet** — no chain library, no PDF library, no database. Ports let the domain be written and tested now, and defer those decisions to the day they are actually needed.
 2. **Nothing is testable today** — no test runner, nothing to run it against. A pure domain with in-memory fakes becomes testable the moment a runner exists, without a chain, a PDF, or Electron.
-3. **Four contract questions are unresolved** (`__ai/references/DOCUMENTATION_STATUS.md`). When rejection semantics are settled, that is an adapter and classifier change. In a layered design it would be a rewrite reaching into business logic.
+3. **The contract has defects the client must absorb** (`__ai/references/CONTRACT_DEFECTS.md`), and they will be fixed contract-side eventually. Terminal-outcome classification, region encoding, and the error registry are adapter and classifier concerns; when the contract changes, so do they, and the domain does not. In a layered design each would be a rewrite reaching into business logic.
 4. **The untrusted-form rule becomes structural.** The domain has no PDF type, so it *cannot* read a form field even by mistake. A rule enforced by the type system beats a rule enforced by discipline.
 
 That fourth point generalises: prefer making an invariant impossible to violate over documenting that it must not be violated.

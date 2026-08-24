@@ -50,7 +50,7 @@ This is also the hook point for stamping the form receipt — **on confirmation,
 Decode against the full custom-error taxonomy in `__ai/references/CONTRACT.md`. Two cases must not be misfiled:
 
 - `AlreadyVoted` and `VotingAlreadyFinalized` are idempotent completion.
-- `InsufficientVotes` is not retryable — see `__ai/references/DOCUMENTATION_STATUS.md` #1.
+- `InsufficientVotes` is terminal, never retryable: zero votes or quorum unmet leaves the voting unfinalized, and every future attempt reverts identically. See "Quorum failure is permanent" in `__ai/references/CONTRACT_DEFECTS.md`.
 
 ## Outbox (optional hardening)
 

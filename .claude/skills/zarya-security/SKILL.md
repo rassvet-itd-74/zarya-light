@@ -32,7 +32,7 @@ Treat these as requiring explicit justification in the change description:
 
 Each needs: an explicit form intent, a clear preview and audit trail, the member signing path rather than the executor path, contract-enforced authorization, and a test proving an ordinary signer cannot perform it.
 
-Since the contract exposes no `getChairman()`, "verify the signer is Chairman" means simulate and catch `NotChairman` — not a client-side identity comparison that can be wrong or stale.
+There is no `getChairman()`, but Chairman identity is readable via `isMember` against the Chairperson organ. Use that for UX and still simulate before writing — the answer can change between preflight and mining, and the contract is the authorization boundary either way. Never substitute a comparison against a configured address for either.
 
 ## Executor key blast radius
 

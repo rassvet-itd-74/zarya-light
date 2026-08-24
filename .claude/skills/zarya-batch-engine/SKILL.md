@@ -5,7 +5,7 @@ description: Implement Zarya bulk form batching, validation summaries, deduplica
 
 # Zarya batch engine
 
-Read `__ai/references/USE_CASES.md` sections B and D for acceptance criteria and `__ai/references/STATE_MACHINES.md` for batch and item states. Form parsing is `zarya-pdf-forms`.
+Read the "Form intake" and "Bulk execution" sections of `__ai/references/USE_CASES.md` for acceptance criteria, and `__ai/references/STATE_MACHINES.md` for batch and item states. Form parsing is `zarya-pdf-forms`.
 
 ## A batch is a persisted object
 

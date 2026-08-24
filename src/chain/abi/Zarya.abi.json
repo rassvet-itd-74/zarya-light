@@ -23,11 +23,6 @@
         "name": "support",
         "type": "bool",
         "internalType": "bool"
-      },
-      {
-        "name": "organ",
-        "type": "bytes32",
-        "internalType": "PartyOrgan"
       }
     ],
     "outputs": [],
@@ -1216,6 +1211,24 @@
   {
     "type": "function",
     "name": "setMinimumApprovalPercentage",
+    "inputs": [
+      {
+        "name": "organ",
+        "type": "bytes32",
+        "internalType": "PartyOrgan"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setMinimumApprovalPercentageBase",
     "inputs": [
       {
         "name": "organ",

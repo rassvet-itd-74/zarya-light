@@ -1,103 +1,73 @@
 # Documentation status
 
-Tracks where `temporal_docs/` and the ABI disagree, and which questions remain genuinely open. Exists to stop agents from silently merging contradictory prose into invented contract behavior.
+Tracks where `temporal_docs/` prose and the contract disagree. Exists to stop agents from silently merging contradictory documentation into invented contract behavior.
 
-**Sources:** `src/chain/abi/Zarya.abi.json` (authoritative on the contract surface), `temporal_docs/README.md`, `temporal_docs/whitepaper.md`. No Solidity source or test suite is present in this repository.
+**Sources:** `temporal_docs/Zarya.sol` plus `temporal_docs/libraries/{Votings,PartyOrgans,Matricies,Regions}.sol` (authoritative), `src/chain/abi/Zarya.abi.json` (agrees with the source on the external surface), `temporal_docs/README.md`, `temporal_docs/whitepaper.md` (prose, partly stale).
 
-## What an ABI can and cannot settle
+**All previously open questions are now closed.** The Solidity source arrived on 2026-08-24 and answered every one of them. Several answers were the unfavorable branch, and those are recorded as defects in `CONTRACT_DEFECTS.md` rather than here — this file is only for prose that contradicts the code.
 
-An ABI proves which functions, events, and errors exist and their exact types. It says **nothing** about authorization logic, comparison operators, or whether a failed check reverts or records a result. Those need source, tests, or a live read.
+There is still no test suite in the repository, so behavior is read from source rather than proven by execution. The deployed bytecode remains the final authority; where a claim is cheap to confirm against Sepolia, `CONTRACT_DEFECTS.md` names the confirmation.
 
-Everything under "Resolved" is settled by types. Everything under "Open" needs one of the other three.
+## Resolved by source
 
-## Resolved
+### 1. Rejection semantics — both, depending on which check fails
 
-### `executeVoting` takes one argument
+Previously the highest-severity open question, and the answer is split (`Votings.sol:417-440`):
 
-```solidity
-executeVoting(uint256 votingId) returns (bool)
-```
+- **Quorum failure reverts** `InsufficientVotes` and leaves `finalized == false`. The voting is permanently unexecutable and will keep reappearing in discovery.
+- **Approval failure finalizes** with `success = false`, emits `VotingFinalized`, and is terminal in the ordinary way.
 
-`temporal_docs/whitepaper.md:531` still lists `executeVoting(votingId, minimumQuorum, minimumApprovalPercentage)`. **That line is stale.** `whitepaper.md:753` and `README.md:128` both use the one-argument form, and the ABI confirms it.
+So `FINALIZED_REJECTED` is reachable, but only through the approval path. The dangerous reading was also correct — for the other path. Retry design must distinguish them. Defect 2.
 
-The executor supplies no policy. Eligibility comes from the voting's own snapshot.
+### 2. Chairman cross-organ `castVote` — permitted
 
-### Eligibility is snapshotted at creation
+`README.md:120` was right and `whitepaper.md:454`'s "только члены соответствующего органа" is wrong for the Chairman specifically. `castVote` resolves to `_onlyMemberOrChairman`, which falls back to Chairperson membership.
 
-`whitepaper.md:425` — values are fixed at creation from `_votingEligibilityParametersByOrgan[organ]`; `whitepaper.md:447` — `Voting.eligibilityParameters`. Consistent with the ABI: `simpleMajority` is `public` and appears as a getter, while the per-organ mapping is `internal` and correctly has none.
+For ordinary members the whitepaper is now correct: as of 2026-08-24 the vote is scoped to the voting's own organ, read from stored state. Before that fix any member of any organ could vote on anything.
 
-### Chairman-only threshold setters exist
+### 3. Zero-vote execution — was a panic, now a clean revert
 
-`setMinimumQuorum(bytes32,uint256)` and `setMinimumApprovalPercentage(bytes32,uint256)` are both present, and `NotChairman(address)` exists to enforce them.
+`README.md:152` is right that an organ with no configured quorum accepts any number of participants — including zero, which the old quorum guard waved through into a division by `totalVotes == 0`, raising `Panic(0x12)`.
 
-### The approval formula is a strict `>`
+Guarded as of 2026-08-24: `totalVotes == 0` now reverts `InsufficientVotes`. The voting still never finalizes, so it remains permanently unexecutable — see "Quorum failure is permanent" in `CONTRACT_DEFECTS.md`.
 
-`whitepaper.md:762`:
+### 4. Region enum value versus subject code — the ordinal, and the trap is worse than expected
 
-```text
-(forVotes * approvalPercentageBase) / totalVotes > approvalPercentage
-```
+`Regions.sol` declares 98 members with subject codes in trailing comments, and `Regions.toString` maps ordinal → code for display. The ABI takes the **ordinal**. The two numbers differ for 50 of 98 regions, and passing a code instead of an ordinal usually addresses a different real region rather than reverting.
 
-Earlier notes flagged a conflict with prose describing a "minimum threshold" of 51%, which would imply `>=`. The formula is unambiguous. This is no longer a contradiction — but the boundary still needs a test, because a strict `>` means an organ configured at `50` passes on 51% and an organ at `51` needs 52%. Do not normalize the operator either direction from prose.
+`CHELYABINSKAYA_OBLAST` is ordinal 74 *and* code "74", so the project's own region works either way and masks the bug in testing. Defect 3.
 
-## Open
+### 5. `ValueAdded` — exists and fires; it is only missing from the ABI
 
-### 1. Rejection semantics — does a failed voting finalize, or revert?
+`whitepaper.md:555` is correct. The event is declared at `Matricies.sol:45` and emitted by `addValue`. Earlier notes in this repository recorded it as nonexistent because it is absent from the ABI — **that inference was wrong.**
 
-**The most consequential open question, and previously mis-stated as settled.**
+`addValue` is an `external` library function, so `Matricies` is deployed separately and Solidity does not fold its events into Zarya's ABI. The call is a `DELEGATECALL`, so the log is still emitted at the Zarya address and is subscribable with a hand-written fragment. The same mechanism hides three errors. See "Symbols the ABI does not carry" in `CONTRACT.md`.
 
-The ABI supports both readings:
-- `InsufficientVotes(uint256,uint256)` is a **custom error**, implying `executeVoting` *reverts* when quorum or approval is not met — in which case the voting is never finalized and stays executable forever.
-- `executeVoting` returns `bool`, and `VotingFinalized(votingId, bool success, ...)` carries a success flag — implying it *finalizes* with `success = false`.
+Do write a listener for it. The earlier instruction not to was based on the faulty inference.
 
-`whitepaper.md:758-763` calls items 3 and 4 "проверки" (checks), which in Solidity usually means reverts. It does not say what happens on failure.
+### 6. `executeVoting` takes one argument
 
-**Why this matters:** if a failed vote reverts, the executor sees a revert on a voting that will never succeed, and any retry policy will retry it forever while reporting a political outcome as a technical error. If it finalizes with `success = false`, the state machine's terminal `FINALIZED_REJECTED` is correct.
+`whitepaper.md:531` still lists `executeVoting(votingId, minimumQuorum, minimumApprovalPercentage)`. **That line is stale.** `whitepaper.md:753`, `README.md:128`, the ABI, and `Zarya.sol:279` all agree on the one-argument form.
 
-`STATE_MACHINES.md` previously asserted the second reading as fact with no evidence. It now points here.
+### 7. Eligibility is snapshotted at creation
 
-**Closed by:** the `executeVoting` body in Solidity, or a Sepolia call against a voting known to have failed quorum.
+`whitepaper.md:425` and `447` match `Votings.sol` exactly: every `create*Voting` copies the organ's three parameters into `Voting.eligibilityParameters` at creation. A later Chairman change does not reach an existing voting.
 
-**Until then:** do not implement a retry policy that assumes a revert is transient. Treat `InsufficientVotes` as terminal-pending-verification and surface it distinctly from RPC failure.
+### 8. The approval formula is a strict `>`
 
-### 2. Chairman cross-organ `castVote`
+`whitepaper.md:762` matches `Votings.sol:430`. Integer division truncates before the comparison, so an organ configured at `50` passes on 51% and one at `51` needs 52%. Do not normalize the operator in either direction from prose.
 
-`temporal_docs/README.md:120` is explicit: the Chairman (`ПРЛ`) may participate in voting of **any** organ. But `whitepaper.md:454` describes `castVote` as "только члены соответствующего органа" (members of the relevant organ only) and does not restate the exception.
+Since 2026-08-24 the base is `10 000` rather than `100`, so the boundary is expressed in basis points — an organ configured at `5000` passes on 50.01%. The prose's talk of a "51%" threshold is a percentage figure, not a parameter value; do not write `51` into the contract.
 
-The ABI cannot resolve this — authorization lives in the function body. `NotActiveMember(bytes32,address)` proves a membership check exists; it does not reveal whether a Chairman branch bypasses it.
+## Prose that remains misleading
 
-**Closed by:** the `castVote` authorization path in Solidity, or a live Sepolia call from the Chairman address against an organ it does not belong to.
+Not contradictions of a specific line so much as an overall impression the documentation gives that the code does not support. Worth naming, because a reader who trusts the prose will design the wrong client.
 
-**Until then:** client preflight must **not** reject a Chairman cross-organ vote. Simulate the call and let the contract decide. Equally, do not assume the override exists.
-
-### 3. Zero-vote execution
-
-`README.md:152` — if no quorum is configured for an organ, a voting passes with any number of participants. But the approval formula divides by `totalVotes`, so `totalVotes == 0` is a division by zero.
-
-Either the contract guards it, or `executeVoting` panics on an unvoted expired voting. An executor that discovers expired votings will eventually hit exactly this case.
-
-**Closed by:** the `executeVoting` body, or a Sepolia call against an expired voting with zero votes.
-
-### 4. Region enum value versus subject code
-
-`whitepaper.md:467` annotates the enum with subject codes:
-
-```solidity
-enum Region { FEDERAL, CHELYABINSKAYA_OBLAST, MOSCOW_77, DONETSK_PEOPLES_REPUBLIC, ... }
-//            = 00      = 74                   = 77        = 80
-```
-
-Solidity enums are sequential from zero, so `CHELYABINSKAYA_OBLAST` is almost certainly `1`, not `74`. `getPartyOrgan(organType, region, number)` takes `uint8 region` — passing `74` where `1` is meant produces a different, valid-looking `bytes32`, and every call using it fails with `InvalidOrgan` or, worse, silently addresses the wrong organ.
-
-**Closed by:** the `Regions.sol` enum declaration, or comparing `getPartyOrganIdentifier(organType, candidate, number)` output against the expected label — the identifier getter is `pure`, so this is a free read and the cheapest way to settle it.
-
-**Do this first** in any organ-resolution work. Every organ-addressed call depends on it.
-
-### 5. `ValueAdded` event does not exist
-
-`whitepaper.md:555` states that a `ValueAdded` event is emitted for off-chain indexing after a value voting executes. **The ABI has no such event.** The 12 events are the creation events, `VoteCasted`, `VotingCreated`, `VotingFinalized`, and `CategoryAdded`.
-
-Off-chain indexing of matrix values must derive changes from `VotingFinalized(success=true)` plus the voting's `suggestionType`, or poll `getCategoricalLatestValue` / `getNumericalLatestValue`. Do not write a listener for an event that will never fire.
+- **The Chairman is described as a universal participant.** True for `castVote` and membership votings; false for the four matrix-configuration votings, where the Chairman needs actual membership.
+- **`castVote` is documented with an organ argument.** It no longer takes one — the organ comes from the voting. Any prose or example showing three arguments is stale as of 2026-08-24.
+- **Thresholds read as three independent settings.** They are not: an organ whose base is zero ignores the other two entirely.
+- **Percentage figures in the prose are percentages, not parameters.** The contract works in basis points, so "51%" is `5100`, not `51`.
+- **`whitepaper.md:467`'s enum annotation** is accurate as documentation of subject codes and actively misleading as documentation of argument values.
 
 ## Document format — specified by us, not by `temporal_docs`
 
@@ -105,4 +75,4 @@ Off-chain indexing of matrix values must derive changes from `VotingFinalized(su
 
 The field-name schema lives in `.claude/skills/zarya-pdf-forms/SKILL.md` and is versioned by `zarya.meta.schemaVersion`. Changing it is a product decision recorded there, not a documentation mismatch to resolve here.
 
-This closes what was previously the largest gap in this file. It does not make returned forms trustworthy — see the trust rule in `INVARIANTS.md` under "Form trust boundary".
+This does not make returned forms trustworthy — see the trust rule in `INVARIANTS.md` under "Form trust boundary".

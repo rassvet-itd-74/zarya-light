@@ -9,7 +9,7 @@ For non-trivial work, read `__ai/ROUTER.md`. It names which references a task ne
 ```bash
 npm run typecheck     # tsc --noEmit
 npm run lint          # eslint
-npm run ai:validate   # __ai/ + .claude/skills/ structure, links, and doc-vs-ABI drift
+npm run ai:validate   # __ai/ + .claude/skills/ structure, links, doc-vs-ABI and source-vs-ABI drift
 npm start             # electron-forge start
 ```
 
@@ -17,11 +17,11 @@ There is no test runner yet. Adding one is part of the first slice that needs te
 
 ## Source of truth
 
-`src/chain/abi/Zarya.abi.json` decides what the contract exposes. `__ai/references/CONTRACT.md` records what that ABI says — it is derived, not independent. `temporal_docs/` is supplied product documentation and contains known-stale lines; `__ai/references/DOCUMENTATION_STATUS.md` lists which, plus four questions the ABI cannot answer.
+`temporal_docs/Zarya.sol` and its libraries are the Solidity source and decide what the contract *does*. `src/chain/abi/Zarya.abi.json` decides what it *exposes* — and is incomplete, because events and errors declared in externally-linked libraries do not appear in it. `__ai/references/CONTRACT.md` records both; it is derived, not independent.
 
-When docs and ABI disagree, the ABI wins and the mismatch gets reported, not quietly reconciled.
+When prose and code disagree, the code wins and the mismatch gets reported, not quietly reconciled. `__ai/references/DOCUMENTATION_STATUS.md` lists the known-stale documentation lines.
 
-Keep two questions apart. **What exists now:** the ABI, then Solidity source and tests if ever present, then `temporal_docs/`, then `__ai/`. **What the product should become:** the user's explicit current requirement — if it differs from current behavior, say so and change code deliberately rather than pretending the ABI already matches.
+Keep two questions apart. **What exists now:** Solidity source, then the ABI, then `temporal_docs/` prose, then `__ai/`. Deployed bytecode outranks all of them, so a claim read from source is read from source — say so. **What the product should become:** the user's explicit current requirement — if it differs from current behavior, say so and change code deliberately rather than pretending the contract already matches.
 
 ## Hard rules
 
@@ -40,9 +40,15 @@ Detail behind each: `__ai/references/INVARIANTS.md`. Structure: `__ai/references
 
 ## Gotchas
 
-- **Region encoding is unresolved.** `getPartyOrgan` takes a `Region` enum value, which is probably not the subject code (`74`) the docs annotate. Settle it before any organ-addressed call — `getPartyOrganIdentifier` is `pure`, so probing is free.
-- **No `getChairman()` exists.** Chairman-only preflight simulates and catches `NotChairman`; it cannot check identity first.
-- **No eligibility getter exists.** UI cannot display the thresholds a voting will be judged against.
+- **`InsufficientVotes` is terminal, not retryable.** Zero votes or quorum unmet reverts without finalizing, so the voting is unexecutable forever and discovery keeps re-offering it. The executor must record and suppress it.
+- **`region` is the enum ordinal, never the subject code.** They differ for 50 of 98 regions and a wrong one silently addresses a *different real region*. Chelyabinsk is ordinal 74 *and* code "74", so the project's own region hides the bug in testing.
+- **The approval base doubles as an enable flag.** An organ whose `approvalPercentageBase` is zero falls back to `simpleMajority` entirely, so a quorum set without a base is silently discarded. Configure all three together. Values are **basis points**, not percent.
+- **`castVote` takes two arguments** — `(votingId, support)`. The organ comes from the voting, which has no getter, so vote preflight must recover it from creation events.
+- **No eligibility getter exists.** UI cannot display a voting's thresholds, and a configuration write cannot be read back.
+- **The matrix cannot be enumerated, and organ labels have no reverse getter.** Coordinates come from an event projection over the executor's cursor; `bytes32` → label needs a locally cached table built from the `pure` helpers.
+- **The ABI is not the whole error surface.** `NoThemeSet`, `NoStatementSet`, `InvalidCategory`, and `Panic(0x11/0x12/0x32)` are all reachable and none are in it.
+
+Full list with evidence and consequences: `__ai/references/CONTRACT_DEFECTS.md`, which also records the four defects fixed on 2026-08-24. Read it before writing chain, executor, or preflight code.
 - **PowerShell 5.1 defaults to ANSI** and corrupts the Cyrillic organ identifiers in these docs. Pass `-Encoding utf8` to `Set-Content`/`Out-File`, or use the editing tools instead of shell redirection.
 
 ## Reporting

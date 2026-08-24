@@ -10,7 +10,7 @@ background: false
 
 Review the current diff. Determine the scope yourself with `git diff` / `git status` — this runs in a forked context without the conversation history.
 
-Read `__ai/references/CONTRACT.md` for the actual contract surface and `__ai/references/DOCUMENTATION_STATUS.md` for what is still unverified. Load other references only for the domains the diff touches.
+Read `__ai/references/CONTRACT.md` for the actual contract surface and `__ai/references/CONTRACT_DEFECTS.md` for the behaviors code most often gets wrong. Load other references only for the domains the diff touches.
 
 Report findings in severity order. Focus on defects, not style.
 
@@ -19,9 +19,14 @@ Report findings in severity order. Focus on defects, not style.
 - Does any background path create proposals, cast votes, change quorum or approval, or transfer chairmanship?
 - Does `executeVoting` stay mechanical and policy-free, with one argument?
 - Are eligibility parameters read from the voting's snapshot rather than current organ configuration?
-- Are the threshold setters treated as Chairman-only, and is that enforced by simulation rather than a `getChairman()` call that does not exist?
-- Does client preflight reject a Chairman cross-organ vote? It must not — that rule is unverified.
-- **Is `InsufficientVotes` treated as retryable?** If so, that is a defect: it may mean the voting never finalizes, and a retry loop would hammer a settled political outcome. See `DOCUMENTATION_STATUS.md` #1.
+- Are the threshold setters treated as Chairman-only, and is the check `isMember` against the Chairperson organ rather than a comparison against a configured address?
+- Does any code still call `castVote` with three arguments, or carry an organ on a vote intent or form? The organ argument was removed; the contract reads it from the voting.
+- Is a threshold change submitted as one operation setting all three values? Setting quorum alone silently does nothing.
+- Is an approval figure ever rendered without dividing by its own base? `5000` is 50%, not 5000%.
+- Is `InsufficientVotes` classified as terminal, and is the voting suppressed from future discovery? A retryable classification here loops forever.
+- Is `region` an enum ordinal everywhere, including in anything a form supplies? A subject code silently addresses a different region.
+- Does the error registry cover the four errors and three panics that are not in the ABI?
+- **Is `InsufficientVotes` treated as retryable?** If so, that is a defect. The voting never finalizes, so a retry loop hammers a settled political outcome forever. See "Quorum failure is permanent" in `CONTRACT_DEFECTS.md`.
 - Is the approval boundary tested at, one above, and one below the threshold? Is zero-vote behavior handled?
 - Is an organ built from the structured triple via `getPartyOrgan`, not from a hashed label? Is the region encoding correct?
 

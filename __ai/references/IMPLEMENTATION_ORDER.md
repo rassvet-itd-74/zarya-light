@@ -6,20 +6,22 @@ Use only when the repository does not already have a more advanced implementatio
 
 The app is an unmodified `electron-forge` Vite + TypeScript scaffold: `src/main.ts`, `src/preload.ts` (empty), `src/renderer.ts`. No chain code, no form code, no persistence, no tests, no test runner, and no PDF library. The ABI is at `src/chain/abi/Zarya.abi.json`.
 
-Phase 0 is largely complete — the contract surface is recorded in `CONTRACT.md`. What remains of it is the residual list below.
+**Phase 0 is complete.** The Solidity source arrived on 2026-08-24 and closed every open question; the contract surface is in `CONTRACT.md` and the behaviors that surprised us are in `CONTRACT_DEFECTS.md`.
 
-Both halves of the product are now specified: the contract by its ABI, the document format by us. Nothing below is blocked on external input.
+Both halves of the product are specified: the contract by its source, the document format by us. Nothing below is blocked on external input.
 
-## Phase 0 residue — resolve before writing chain code
+## Nothing blocks the phases below
 
-Four questions the ABI could not answer. All four are in `DOCUMENTATION_STATUS.md` with the evidence that would close each.
+The critical contract defect — organ votings that could never pass — was fixed on 2026-08-24, along with `castVote` organ scoping, the zero-vote division, and the `votingId == 0` guard. All eight voting types now work, so the full pipeline is worth building.
 
-1. **Region enum value versus subject code** — do this first and cheaply: `getPartyOrganIdentifier` is `pure`, so probing candidate values against the expected label costs one read. Every organ-addressed call depends on the answer.
-2. **Rejection semantics** — does a failed voting revert or finalize? Determines the entire executor retry design.
-3. **Chairman cross-organ `castVote`** — determines whether preflight may reject a non-member vote.
-4. **Zero-vote execution** — the approval formula divides by `totalVotes`.
+What remains in `CONTRACT_DEFECTS.md` is absorbed by ordinary implementation and needs no decision up front:
 
-Items 2–4 need Solidity source or a live Sepolia read. Do not guess; a wrong assumption here produces an executor that misclassifies political outcomes as technical failures.
+- Terminal classification for quorum-failed votings, plus the local suppression they require — Phase 7, and Phase 5 for the storage column.
+- Region ordinals and the extended error registry — Phase 2.
+- Threshold configuration as one three-value operation, in basis points — Phase 3.
+- Recovering a voting's organ from creation events, since there is no getter and `castVote` preflight needs it — Phase 2, and it makes the event projection load-bearing earlier than it would otherwise be.
+
+The contract was redeployed on 2026-08-24 to carry the fixes, and `DEPLOYMENT.md` has the new address. Two incompatible deployments therefore exist, differing in `castVote`'s arity. Phase 2's identity check should verify the *interface*, not just that the address has code — a `castVote` arity probe is the cheapest discriminator, and getting it wrong surfaces as a failed vote rather than a startup error.
 
 ## Phase 1 — the hexagon, the skeleton, and a test runner
 
@@ -36,12 +38,14 @@ Declare `Clock` and `IdGenerator` early even though little uses them yet. Both a
 Ahead of the form layer because template pre-fill depends on these reads: a template cannot carry authoritative context until the app can read that context.
 
 - Provider and chainId validation; contract code check.
-- Organ resolution via `getPartyOrgan`, carrying the structured triple.
+- Organ resolution via `getPartyOrgan`, carrying the structured triple with `region` as an **enum ordinal**, validated against `getPartyOrganIdentifier` on every resolution.
 - Reads: `isVotingActive`, `isVotingFinalized`, `hasVoted`, `isMember`, `getVotingResults`.
-- `VotingCreated` event indexing with a persisted block cursor — the only source of `endTime`.
-- Custom error decoding across all 16 errors.
-- Chairman-aware preflight that simulates rather than pre-checking identity.
-- Tests against a local node or fixtures.
+- `VotingCreated` event indexing with a persisted block cursor — the only source of `endTime`, and the same cursor the matrix coordinate index projects from.
+- `OrganResolver` both directions, including the `bytes32` → label reverse table.
+- Error decoding across the ABI's 16 errors **plus** `NoThemeSet`, `NoStatementSet`, `InvalidCategory`, and `Panic(0x11/0x12/0x32)`, none of which the ABI describes.
+- A hand-written fragment for `ValueAdded`, which fires at the Zarya address but is absent from the ABI.
+- Chairman-aware preflight: `isMember` against the Chairperson organ for UX, simulation for the decision.
+- Tests against a local node or fixtures, keyed on a region whose ordinal and subject code differ.
 
 ## Phase 3 — intent model
 
@@ -64,6 +68,8 @@ The app owns this format, so it can be built now — nothing here waits on an ex
 Pick a library that never executes PDF JavaScript and never fetches remote resources. Generation and parsing may use different ones.
 
 Receipt stamping arrives with the transaction queue in Phase 6, since it needs a confirmed transaction to stamp — but define the `zarya.receipt.*` fields here so templates carry them from the start. Retrofitting them later invalidates every already-issued form.
+
+The **matrix reference report** also belongs here: it needs only Phase 2 reads plus a PDF library, and it is the document a voter reads before filling anything. Shipping it early makes the form templates usable. It carries no form fields, so it adds nothing to the ingestion surface.
 
 ## Phase 5 — persistence
 

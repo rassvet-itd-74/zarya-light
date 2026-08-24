@@ -17,6 +17,8 @@ chain state + user selection
 
 Hostile-input controls are in `__ai/references/INVARIANTS.md` under "Form trust boundary". Ingestion ends at a neutral parsed representation and must never call a chain library or construct calldata.
 
+The matrix reference report is a fourth PDF the app produces, but it is **not** a form — no fields, no schema version, no ingestion path — so it lives in `zarya-matrix-report` rather than here. Ingestion rejects it automatically for lacking a recognised `schemaVersion`; no extra guard is needed.
+
 ## IMPORTANT: a form the app issued is still untrusted on return
 
 Owning the template does **not** make the returned file trustworthy. Anything in a PDF can be edited: field values, field names, the read-only flag, the document itself. A returned form is a *claim*, never a fact.
@@ -107,7 +109,7 @@ Emit the receipt when the transaction **confirms**, and put the outcome in `zary
 
 ### A confirmed transaction is not an accepted proposal
 
-`zarya.receipt.status = CONFIRMED` means the call succeeded, nothing more. For `castVote` that does mean the vote was recorded. For `executeVoting` it does **not** mean the proposal passed — and since rejection semantics are still unresolved (`__ai/references/DOCUMENTATION_STATUS.md` #1), the governance outcome may not be readable at all.
+`zarya.receipt.status = CONFIRMED` means the call succeeded, nothing more. For `castVote` that does mean the vote was recorded. For `executeVoting` it does **not** mean the proposal passed: the call succeeds on both outcomes, and the governance result is the `success` flag on `VotingFinalized`. Read it from there, never from transaction status. A quorum-failed execution does not confirm at all — it reverts, permanently (see "Quorum failure is permanent" in `__ai/references/CONTRACT_DEFECTS.md`), and a reverted transaction is still stamped.
 
 Keep the transaction outcome and the governance outcome as separate statements on the page. Never let a receipt imply a proposal succeeded because its transaction did.
 

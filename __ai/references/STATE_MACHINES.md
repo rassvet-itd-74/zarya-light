@@ -82,16 +82,19 @@ A batch status is derived from item states where practical.
 ## Executive job state
 
 ```text
-WAITING       # voting exists but deadline not reached
-READY         # overdue + unfinalized
+WAITING             # voting exists but deadline not reached
+READY               # overdue + unfinalized
 SIGNING
 BROADCAST
 PENDING
 FINALIZED_ACCEPTED
-FINALIZED_REJECTED
+FINALIZED_REJECTED  # quorum met, approval failed — the contract finalized it
+UNEXECUTABLE        # terminal: the contract will never finalize this voting
 RETRYABLE_ERROR
 BLOCKED
 ```
+
+`UNEXECUTABLE` is not an error state and not a retry state. It is reached from `READY` or `PENDING` on `InsufficientVotes` — zero votes or quorum unmet — which reverts without setting `finalized`. Such a voting stays unfinalized on chain forever, so **discovery will keep offering it as a candidate on every pass**. This is the one place where local state must suppress what chain state keeps presenting — record it and stop attempting it. See "Quorum failure is permanent" in `CONTRACT_DEFECTS.md`.
 
 ## Executor health
 
@@ -112,8 +115,13 @@ Health is not the same as job state.
 - A returned form whose app-authored fields diverge from its record is `VALID` only after the divergence is disclosed. Tampering is a disclosure event, not a parse failure, because the file's copies are never read for value.
 - Restart may move stale local states forward or backward only after reconciliation evidence.
 
-### `FINALIZED_REJECTED` is unverified
+### Two different rejections, two different states
 
-The intended rule is that a politically rejected voting ends in `FINALIZED_REJECTED` rather than `RETRYABLE_ERROR`. **It is not known whether the contract behaves that way.** `InsufficientVotes` is a custom error, which suggests a failed voting reverts and is never finalized at all — in which case this state is unreachable and a retry policy would loop forever on a settled political outcome.
+Settled from source. A voting can fail in two ways and they are not the same state:
 
-See `DOCUMENTATION_STATUS.md` open item 1. Until it is closed, classify `InsufficientVotes` as terminal-pending-verification and keep it distinct from transport failure. Do not build a retry path that assumes the revert is transient.
+- **Zero votes, or quorum not met** — `executeVoting` reverts `InsufficientVotes` and never sets `finalized`. `UNEXECUTABLE`, terminal, never retried.
+- **Quorum met, approval failed** — the contract finalizes with `success = false` and emits `VotingFinalized`. `FINALIZED_REJECTED`, the ordinary terminal rejection.
+
+Neither is `RETRYABLE_ERROR`, and neither is a technical failure to report as one. Reserve `RETRYABLE_ERROR` for transport and submission transients.
+
+Should the contract ever finalize on a quorum miss, `UNEXECUTABLE` collapses into `FINALIZED_REJECTED` and the local suppression list becomes unnecessary. That is the top open item in `zarya-solidity-governance`; the two changes ship together.

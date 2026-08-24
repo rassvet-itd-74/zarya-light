@@ -11,7 +11,7 @@ Hexagonal — ports and adapters. Dependencies point inward; the domain core def
                     v
              application services
         IssueTemplate · ImportForms · SubmitBatch
-        ReconcileExecutions · RegenerateReceipt
+        ReconcileExecutions · RegenerateReceipt · PrintMatrixReport
                     v
    ┌──────────────────────────────────────┐
    │            domain core               │
@@ -57,8 +57,9 @@ Driven ports — the domain declares these, adapters implement them.
 | --- | --- | --- |
 | `VotingReader` | active, finalized, results, `hasVoted` | chain |
 | `MembershipReader` | `isMember` | chain |
-| `OrganResolver` | triple → `bytes32` via the contract's `pure` helper | chain |
+| `OrganResolver` | triple → `bytes32` for calls, and `bytes32` → label for display; both via `pure` helpers, cacheable forever | chain |
 | `MatrixReader` | cell organ, allowed categories, decimals, themes, statements, history | chain |
+| `MatrixIndex` | which coordinates exist, projected from the event stream | chain |
 | `VotingDiscovery` | `VotingCreated` indexing with a resumable cursor | chain |
 | `ChainWriter` | submit, await confirmation, return a decoded outcome | chain |
 | `NetworkGuard` | chainId and contract-code identity checks | chain |
@@ -66,6 +67,7 @@ Driven ports — the domain declares these, adapters implement them.
 | `TemplateWriter` | generate a pre-filled AcroForm | forms |
 | `FormParser` | returned PDF → neutral parsed fields, or a structural rejection | forms |
 | `ReceiptStamper` | fill `zarya.receipt.*` and flatten | forms |
+| `MatrixReportWriter` | render the coordinate reference PDF — no form fields | forms |
 | `OperationStore` | issued templates keyed by `operationRef`, with authoritative context | store |
 | `BatchStore` | batches, items, dependency edges | store |
 | `TransactionStore` | attempts, nonces, hashes, receipts, classified errors | store |
@@ -113,3 +115,12 @@ discover voting -> check deadline and finalized -> enqueue execution
 ```
 
 **Receipt stamping** hangs off confirmation, never broadcast, and is regenerable from stored data without a chain write.
+
+**Matrix report** — a read-only reference PDF with no form fields, so it cannot re-enter the form pipeline. No signer, no chain write.
+
+```text
+MatrixIndex projection + per-cell reads + organ reverse table
+  -> report model (domain) -> MatrixReportWriter -> FileSink
+```
+
+The coordinate index is a second projection over the cursor `VotingDiscovery` already maintains, not an independent chain sweep.
