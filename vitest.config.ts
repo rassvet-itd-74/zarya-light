@@ -8,5 +8,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    // Loads .env so the opt-in fork tests can see ZARYA_FORK_RPC_URL. They skip
+    // themselves when it is absent, so an offline run stays green.
+    setupFiles: ['./vitest.setup.ts'],
   },
 });

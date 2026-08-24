@@ -5,7 +5,7 @@ description: Read or modify Zarya Solidity governance lifecycle — voting creat
 
 # Zarya Solidity governance
 
-Source is present: `temporal_docs/Zarya.sol` plus `temporal_docs/libraries/{Votings,PartyOrgans,Matricies,Regions}.sol`. It matches the ABI's external surface exactly — `npm run ai:validate` re-checks that, so a source drop that no longer matches `src/chain/abi/Zarya.abi.json` fails the build.
+Source is present: `temporal_docs/Zarya.sol` plus `temporal_docs/libraries/{Votings,PartyOrgans,Matricies,Regions}.sol`. It matches the ABI's external surface exactly — `npm run ai:validate` re-checks that, so a source drop that no longer matches `src/adapters/chain/abi/Zarya.abi.json` fails the build.
 
 This is the right lens for reading behavior out of source. Answers already extracted are in `__ai/references/CONTRACT.md`; behaviors that contradict the product design are in `__ai/references/CONTRACT_DEFECTS.md`. **Read the defects file before proposing any contract change** — most of what looks worth fixing is already recorded there with severity and consequence.
 
@@ -60,7 +60,7 @@ When fixing 1, note it changes client behavior: the local suppression list becom
 
 ## When changing a signature
 
-Update the tests, update scripts, regenerate the ABI, refresh `src/chain/abi/Zarya.abi.json`, update the TypeScript adapters, update `__ai/references/CONTRACT.md`, and consider deployed-demo compatibility explicitly. `npm run ai:validate` fails if the docs cite a symbol the new ABI lacks, and separately if the source's external surface stops matching the ABI.
+Update the tests, update scripts, regenerate the ABI, refresh `src/adapters/chain/abi/Zarya.abi.json`, update the TypeScript adapters, update `__ai/references/CONTRACT.md`, and consider deployed-demo compatibility explicitly. `npm run ai:validate` fails if the docs cite a symbol the new ABI lacks, and separately if the source's external surface stops matching the ABI.
 
 ## Required tests
 

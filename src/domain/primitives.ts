@@ -27,8 +27,13 @@ export type ChainId = Brand<number, 'ChainId'>;
  * Case is preserved rather than normalized: EIP-55 checksum casing is
  * information, and verifying it needs keccak, which is a chain-adapter
  * capability. This type asserts shape only.
+ *
+ * The brand wraps a `0x`-prefixed template literal rather than a bare string, so
+ * an address hands directly to a chain library without a cast at the boundary.
+ * That is a TypeScript template type, not a library type — the domain stays
+ * free of both.
  */
-export type EvmAddress = Brand<string, 'EvmAddress'>;
+export type EvmAddress = Brand<`0x${string}`, 'EvmAddress'>;
 
 /**
  * The app's own reference for one governance operation. Printed on an issued

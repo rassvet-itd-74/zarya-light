@@ -16,7 +16,7 @@ npm start             # electron-forge start
 
 ## Source of truth
 
-`temporal_docs/Zarya.sol` and its libraries are the Solidity source and decide what the contract *does*. `src/chain/abi/Zarya.abi.json` decides what it *exposes* — and is incomplete, because events and errors declared in externally-linked libraries do not appear in it. `__ai/references/CONTRACT.md` records both; it is derived, not independent.
+`temporal_docs/Zarya.sol` and its libraries are the Solidity source and decide what the contract *does*. `src/adapters/chain/abi/Zarya.abi.json` decides what it *exposes* — and is incomplete, because events and errors declared in externally-linked libraries do not appear in it. `__ai/references/CONTRACT.md` records both; it is derived, not independent.
 
 When prose and code disagree, the code wins and the mismatch gets reported, not quietly reconciled. `__ai/references/DOCUMENTATION_STATUS.md` lists the known-stale documentation lines.
 

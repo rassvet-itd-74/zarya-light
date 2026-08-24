@@ -37,7 +37,7 @@ __ai/scripts/                 validator
 npm run ai:validate
 ```
 
-Checks structure, skill frontmatter, cross-reference resolution, UTF-8 integrity, worklog entry shape, stale terminology, and that every contract symbol the docs cite exists in `src/chain/abi/Zarya.abi.json`. Documentation drift fails the check instead of surfacing during implementation.
+Checks structure, skill frontmatter, cross-reference resolution, UTF-8 integrity, worklog entry shape, stale terminology, and that every contract symbol the docs cite exists in `src/adapters/chain/abi/Zarya.abi.json`. Documentation drift fails the check instead of surfacing during implementation.
 
 `npm run lint` additionally enforces the hexagonal dependency direction inside `src/domain/`.
 

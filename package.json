@@ -44,6 +44,7 @@
     "vitest": "^3.2.7"
   },
   "dependencies": {
-    "electron-squirrel-startup": "^1.0.1"
+    "electron-squirrel-startup": "^1.0.1",
+    "viem": "^2.55.19"
   }
 }

@@ -24,10 +24,14 @@ export const WORKER_SERVICE_NAME = 'zarya-worker';
 /** Sits next to `main.js` in the Vite build output. */
 const workerEntryPath = (): string => path.join(__dirname, 'worker.js');
 
-export function createUtilityProcessSpawner(): SpawnWorker {
+export function createUtilityProcessSpawner(appVersion: string): SpawnWorker {
   return (): WorkerHandle =>
     utilityProcess.fork(workerEntryPath(), [], {
       serviceName: WORKER_SERVICE_NAME,
+      // The worker inherits the environment and loads its own configuration, so
+      // the RPC URL never travels in a message. Only the app version, which the
+      // worker cannot ask Electron for, is passed explicitly.
+      env: { ...process.env, ZARYA_APP_VERSION: appVersion },
       // Worker stdout/stderr joins the main process log stream. Nothing secret
       // is written there: SecretConfig redacts itself.
       stdio: 'inherit',

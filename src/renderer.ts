@@ -35,7 +35,17 @@ const renderHealth = (health: WorkerHealth): void => {
   target.dataset.health = health;
 };
 
+const renderNetwork = (network: AppStatus['network']): void => {
+  const target = el('network');
+  target.textContent = network.detail;
+  target.dataset.status = network.status;
+  // Unusable-but-transient reads differently from unusable-and-settled: one is
+  // "retrying", the other is "fix your configuration".
+  target.dataset.severity = network.usable ? 'ok' : network.transient ? 'pending' : 'blocked';
+};
+
 const render = (status: AppStatus): void => {
+  renderNetwork(status.network);
   setRows(el('status'), [
     ['Version', status.appVersion],
     ['Network', `${status.networkName} (${status.chainId})`],

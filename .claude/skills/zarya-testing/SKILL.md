@@ -34,7 +34,7 @@ The source is in `temporal_docs/` but this is not the repository the contract is
 
 Against a deterministic local node, once chain code exists:
 
-- ABI adapter against `src/chain/abi/Zarya.abi.json`
+- ABI adapter against `src/adapters/chain/abi/Zarya.abi.json`
 - create, cast, and execute flows
 - privileged setter intents with correct and incorrect signers
 - Chairman-aware preflight — including that it does **not** block a cross-organ vote
@@ -78,6 +78,13 @@ Then prove the receipt cannot re-enter the pipeline: feed the stamped output bac
 ## Network policy
 
 CI and ordinary tests must never require Sepolia or live secrets. Sepolia smoke tests are opt-in, clearly named, and guarded by explicit configuration. Source the address from configuration, never duplicated across test files.
+
+**Chain tests run against a local anvil forking Sepolia** (`src/adapters/chain/testing/anvil.ts`): the real deployed contract with its real linked libraries and state, nothing compiled here, nothing broadcast — the live network is read once, at fork time. Named `*.fork.test.ts`, gated on `ZARYA_FORK_RPC_URL` from a gitignored `.env` that `vitest.setup.ts` loads, and they skip themselves when it is absent. Set `ZARYA_FORK_BLOCK` to pin the fork and make a run reproducible.
+
+Two harness rules learned the hard way:
+
+- **Never `spawn` a node with `shell: true` on Windows.** Killing the wrapper leaves the node running, which silently turns an outage test into a test against a live endpoint — it passes for the wrong reason. Kill the tree with `taskkill /T /F`, and confirm by polling until the RPC stops answering rather than trusting the exit event.
+- **Redact the fork URL from anything a failure prints.** It carries an API key.
 
 ## Evidence
 

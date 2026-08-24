@@ -24,7 +24,7 @@ src/main.ts        composition root only
 src/preload.ts     contextBridge: getAppStatus, onWorkerHealth — nothing else
 src/worker.ts      utilityProcess entry; answers ping, hosts Phases 2/6/7
 src/assets/        logo.png, favicon.ico
-src/chain/abi/     Zarya.abi.json — the contract's external surface
+  chain/abi/       Zarya.abi.json — the contract's external surface
 temporal_docs/     Zarya.sol plus four libraries, and supplied product prose
 ```
 

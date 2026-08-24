@@ -40,7 +40,7 @@ src/domain/          no imports from electron, chain, PDF, storage, or node:*
   ports/             interfaces the domain owns
 src/app/             use cases that orchestrate ports
 src/adapters/
-  chain/             chain library, error decoding
+  chain/             viem; abi/, network guard, clock, revert decoding
   forms/             PDF library; issue, parse, receipt, and the shared field schema
   store/             database, migrations
   electron/          IPC contract and handlers, preload surface, dialogs,
@@ -52,7 +52,7 @@ src/main.ts  src/preload.ts  src/renderer.ts  src/worker.ts
 
 `src/main.ts` is a composition root and decides nothing. Anything with a rule in it lives in the domain, a use case, or an adapter, where it is testable without launching Electron — which is why window options, the CSP, and the IPC handler bodies are pure functions with their Electron wiring kept separate.
 
-The ABI stays at `src/chain/abi/Zarya.abi.json` rather than moving under `adapters/chain/`: `__ai/scripts/validate-ai-package.mjs` and `DEPLOYMENT.md` both name that path. Moving it is Phase 2's business, together with the chain adapter that reads it.
+The ABI lives at `src/adapters/chain/abi/Zarya.abi.json`, where the adapter that reads it does. It moved there in Phase 2 from `src/chain/`, so worklog entries before 2026-08-24 name the old path.
 
 The field-name schema lives in `adapters/forms/` and is shared by all three form directions. It is an adapter detail: the domain receives typed intents and never sees a field name.
 
@@ -71,8 +71,8 @@ Driven ports — the domain declares these, adapters implement them.
 | `MatrixIndex` | which coordinates exist, projected from the event stream | chain |
 | `VotingDiscovery` | `VotingCreated` indexing with a resumable cursor | chain |
 | `ChainWriter` | submit, await confirmation, return a decoded outcome | chain |
-| `NetworkGuard` | chainId and contract-code identity checks | chain |
-| `Clock` | **chain block time**, never workstation time | chain — *declared, not yet implemented* |
+| `NetworkGuard` | chainId, contract code, eligibility fingerprint, and `castVote` arity — four distinct verdicts, plus `UNREACHABLE` for "could not tell" | chain — *implemented* |
+| `Clock` | **chain block time**, never workstation time | chain — *implemented* |
 | `TemplateWriter` | generate a pre-filled AcroForm | forms |
 | `FormParser` | returned PDF → neutral parsed fields, or a structural rejection | forms |
 | `ReceiptStamper` | fill `zarya.receipt.*` and flatten | forms |

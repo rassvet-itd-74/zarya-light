@@ -29,6 +29,18 @@ if (started) {
 
 const isDev = Boolean(MAIN_WINDOW_VITE_DEV_SERVER_URL);
 
+if (isDev) {
+  try {
+    // Development convenience only: a packaged app must never pick up a stray
+    // .env from whatever directory it happens to be launched in. Nothing is
+    // baked into the bundle — this reads the file at runtime, and .env is
+    // gitignored.
+    process.loadEnvFile('.env');
+  } catch {
+    // No .env is the normal case; configuration falls back to its defaults.
+  }
+}
+
 /**
  * Configuration is loaded before anything else and failure is fatal. A client
  * pointed at the wrong network or a malformed address must never reach a write
@@ -50,7 +62,7 @@ try {
 }
 
 const supervisor = new WorkerSupervisor({
-  spawn: createUtilityProcessSpawner(),
+  spawn: createUtilityProcessSpawner(config.publicConfig.appVersion),
   onRestart: (reason) => {
     // Phase 7 wires reconcile() here. Every trigger — startup, restart,
     // reconnect, and the UI's Run now — must converge on that one path.
@@ -80,6 +92,17 @@ const workerProbe: WorkerProbe = {
     } catch {
       // A worker that does not answer is a status, not a crash. `health()`
       // already reports DEGRADED.
+      return null;
+    }
+  },
+  network: async () => {
+    if (!supervisor.isRunning()) return null;
+    try {
+      const reply = await supervisor.request('checkNetwork');
+      return reply.kind === 'network' ? reply.status : null;
+    } catch {
+      // Same rule: unasked is not the same as failed. The renderer shows
+      // NOT_CHECKED rather than inventing a verdict.
       return null;
     }
   },

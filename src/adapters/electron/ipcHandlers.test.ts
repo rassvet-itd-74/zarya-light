@@ -19,7 +19,15 @@ const deps = (worker: Partial<WorkerProbe> = {}): GetAppStatusDeps => ({
   }).publicConfig,
   worker: {
     health: () => 'HEALTHY',
-    probe: async () => ({ protocolVersion: 1, uptimeSeconds: 42 }),
+    probe: async () => ({ protocolVersion: 2, uptimeSeconds: 42 }),
+    network: async () => ({
+      status: 'OK' as const,
+      detail: 'Connected to Sepolia at block 9000000.',
+      chainId: 11155111,
+      blockNumber: '9000000',
+      transient: false,
+      usable: true,
+    }),
     ...worker,
   },
 });
@@ -42,7 +50,8 @@ describe('handleGetAppStatus', () => {
     const status = await handleGetAppStatus(deps());
     expect(status.chainId).toBe(11155111);
     expect(status.networkName).toBe('Sepolia');
-    expect(status.worker).toEqual({ health: 'HEALTHY', protocolVersion: 1, uptimeSeconds: 42 });
+    expect(status.worker).toEqual({ health: 'HEALTHY', protocolVersion: 2, uptimeSeconds: 42 });
+    expect(status.network).toMatchObject({ status: 'OK', usable: true, chainId: 11155111 });
     // Whatever else changes, the response must survive structured cloning.
     expect(() => structuredClone(status)).not.toThrow();
   });
@@ -65,6 +74,16 @@ describe('handleGetAppStatus', () => {
       protocolVersion: null,
       uptimeSeconds: null,
     });
+  });
+
+  it('distinguishes an unchecked network from a failed one', async () => {
+    // The worker could not be asked. That must not render as a rejected
+    // network, or a transient outage looks like a misconfigured client.
+    const status = await handleGetAppStatus(deps({ network: async () => null }));
+
+    expect(status.network.status).toBe('NOT_CHECKED');
+    expect(status.network.usable).toBe(false);
+    expect(status.network.transient).toBe(true);
   });
 
   it('rejects a payload it was not supposed to receive', async () => {

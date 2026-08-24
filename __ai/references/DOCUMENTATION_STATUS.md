@@ -2,7 +2,7 @@
 
 Where `temporal_docs/` prose and the contract disagree. Exists to stop agents from silently merging contradictory documentation into invented contract behavior.
 
-**Sources:** `temporal_docs/Zarya.sol` plus `temporal_docs/libraries/{Votings,PartyOrgans,Matricies,Regions}.sol` (authoritative), `src/chain/abi/Zarya.abi.json` (agrees with the source on the external surface), `temporal_docs/README.md`, `temporal_docs/whitepaper.md` (prose, partly stale).
+**Sources:** `temporal_docs/Zarya.sol` plus `temporal_docs/libraries/{Votings,PartyOrgans,Matricies,Regions}.sol` (authoritative), `src/adapters/chain/abi/Zarya.abi.json` (agrees with the source on the external surface), `temporal_docs/README.md`, `temporal_docs/whitepaper.md` (prose, partly stale).
 
 **All previously open questions are closed.** The Solidity source arrived on 2026-08-24 and answered every one. Several answers were the unfavorable branch; those are recorded in `CONTRACT_DEFECTS.md` rather than here. There is still no test suite, so behavior is read from source rather than proven by execution, and the deployed bytecode remains the final authority.
 
@@ -18,6 +18,7 @@ Where `temporal_docs/` prose and the contract disagree. Exists to stop agents fr
 | `whitepaper.md:762` — approval is a strict `>` | Correct, matches `Votings.sol:430`. Integer division truncates before the comparison |
 | `whitepaper.md:555` — `ValueAdded` fires | Correct. Earlier notes in this repository recorded it as nonexistent because it is absent from the ABI; **that inference was wrong**, and a listener should be written. See "Symbols the ABI does not carry" in `CONTRACT.md` |
 | `whitepaper.md:467` — region enum annotation | Accurate as documentation of subject codes, actively misleading as documentation of argument values. The ABI takes the **ordinal**; the two differ for 50 of 98 regions |
+| `whitepaper.md:426` — `simpleMajority` is `(quorum=1, approvalPercentage=50, base=100)` | **Stale in its units.** `Zarya.sol:27-28` initialises it to `{1, 5000, 10000}` — basis points. `README.md:150` says "50%", which is the same value described correctly as a percentage. The client asserts the source's numbers as an identity fingerprint |
 
 ## Prose that remains misleading
 

@@ -7,7 +7,18 @@ description: Implement Zarya Sepolia contract adapters, ABI-backed reads, organ 
 
 Read `__ai/references/CONTRACT.md` first — the full surface from the Solidity source, including what is **not** exposed. Read `__ai/references/CONTRACT_DEFECTS.md` before writing organ resolution, preflight, or error classification; most of it lands directly on this adapter. Network and address: `__ai/references/DEPLOYMENT.md`.
 
-The ABI is at `src/chain/abi/Zarya.abi.json`. Do not hand-write signatures — generate types from the ABI or import it directly. But the ABI is not the whole surface: four errors and one event are declared in externally-linked libraries and are absent from it. Register those by hand.
+The ABI is at `src/adapters/chain/abi/Zarya.abi.json`. Do not hand-write signatures — generate types from the ABI or import it directly. But the ABI is not the whole surface: four errors and one event are declared in externally-linked libraries and are absent from it. Register those by hand.
+
+## What exists (Phase 2, slice 1)
+
+The library is **viem**. `publicClient.ts` builds the read-only client — there is no wallet client anywhere in this phase. `zaryaAbi.ts` imports the ABI as the single source and asserts at load that every function this code calls exists with the expected arity, which is how a drifted ABI fails loudly instead of at the first call. `chainClock.ts` implements `Clock`. `networkGuard.ts` observes; `domain/network/networkIdentity.ts` decides.
+
+Two patterns to follow when extending it:
+
+- **Importing the ABI as JSON widens it to `Abi`, and viem's `readContract` generics do not survive that.** Use `encodeFunctionData` → `client.call` → `decodeFunctionResult` instead. Same wire behavior, no generic fight.
+- **A revert and a transport failure arrive at the same catch site and mean opposite things.** `revertData.ts` separates them, and returns "not a revert" when unsure. Never let an RPC timeout become a verdict about the contract.
+
+Testing is against a local **anvil forking Sepolia** — the real deployment, nothing compiled locally, nothing broadcast. See `testing/anvil.ts`; opt-in via `ZARYA_FORK_RPC_URL`.
 
 ## Organ resolution comes first
 

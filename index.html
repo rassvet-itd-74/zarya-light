@@ -54,6 +54,21 @@
         font: inherit;
         padding: 0.35rem 0.9rem;
       }
+      #network {
+        margin: 0 0 1.5rem;
+        padding: 0.5rem 0.75rem;
+        border-left: 3px solid;
+        font-size: 0.875rem;
+      }
+      #network[data-severity='ok'] {
+        border-color: #1a7f37;
+      }
+      #network[data-severity='pending'] {
+        border-color: #9a6700;
+      }
+      #network[data-severity='blocked'] {
+        border-color: #cf222e;
+      }
     </style>
   </head>
   <body>
@@ -61,6 +76,7 @@
     <p class="lede">
       Worker: <span id="worker-health">…</span>
     </p>
+    <p id="network" data-severity="pending">Checking the network…</p>
     <dl id="status"></dl>
     <button id="refresh" type="button">Refresh</button>
     <script type="module" src="/src/renderer.ts"></script>

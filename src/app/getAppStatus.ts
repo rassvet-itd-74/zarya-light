@@ -1,3 +1,7 @@
+import {
+  NOT_CHECKED,
+  type NetworkStatusView,
+} from '../adapters/chain/networkStatusView';
 import type { PublicConfig } from '../adapters/config/appConfig';
 import type { WorkerHealth } from '../adapters/electron/workerProtocol';
 import { PERMITTED_NETWORK_NAME } from '../domain/network/networkPolicy';
@@ -19,6 +23,12 @@ export interface AppStatus {
   readonly memberSignerConfigured: boolean;
   readonly executorSignerConfigured: boolean;
   readonly worker: WorkerStatus;
+  /**
+   * The chain identity verdict. `NOT_CHECKED` while the worker is starting —
+   * distinct from a failed check, because "we have not looked" and "it is wrong"
+   * must never render the same.
+   */
+  readonly network: NetworkStatusView;
 }
 
 export interface WorkerStatus {
@@ -36,6 +46,8 @@ export interface WorkerProbe {
   health(): WorkerHealth;
   /** Resolves `null` if the worker is down or does not answer. */
   probe(): Promise<{ protocolVersion: number; uptimeSeconds: number } | null>;
+  /** Resolves `null` if the worker could not be asked at all. */
+  network(): Promise<NetworkStatusView | null>;
 }
 
 export interface GetAppStatusDeps {
@@ -49,7 +61,7 @@ export async function getAppStatus({
 }: GetAppStatusDeps): Promise<AppStatus> {
   // A failed probe is a status to report, not an error to propagate: the UI's
   // job here is to show that the worker is not answering.
-  const probed = await worker.probe();
+  const [probed, network] = await Promise.all([worker.probe(), worker.network()]);
 
   return {
     appVersion: publicConfig.appVersion,
@@ -65,5 +77,8 @@ export async function getAppStatus({
       protocolVersion: probed?.protocolVersion ?? null,
       uptimeSeconds: probed?.uptimeSeconds ?? null,
     },
+    // A worker that cannot be asked leaves the verdict unknown, which is not the
+    // same as a network that failed its check.
+    network: network ?? NOT_CHECKED,
   };
 }

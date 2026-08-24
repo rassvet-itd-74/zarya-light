@@ -11,7 +11,12 @@
  * a clear rejection beats a `TypeError` three frames deep.
  */
 
-export const WORKER_PROTOCOL_VERSION = 1;
+import type { NetworkStatusView } from '../chain/networkStatusView';
+
+export type { NetworkStatusView };
+
+/** Bumped whenever a request or reply shape changes. */
+export const WORKER_PROTOCOL_VERSION = 2;
 
 /**
  * Liveness of the worker **process**. Not executor health: a healthy worker can
@@ -36,7 +41,7 @@ export function isWorkerHealth(value: unknown): value is WorkerHealth {
 }
 
 export type WorkerRequest = {
-  readonly kind: 'ping';
+  readonly kind: 'ping' | 'checkNetwork';
   readonly requestId: string;
 };
 
@@ -46,6 +51,11 @@ export type WorkerReply =
       readonly requestId: string;
       readonly protocolVersion: number;
       readonly uptimeSeconds: number;
+    }
+  | {
+      readonly kind: 'network';
+      readonly requestId: string;
+      readonly status: NetworkStatusView;
     }
   | {
       readonly kind: 'failure';
@@ -62,8 +72,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const hasRequestId = (value: Record<string, unknown>): boolean =>
   typeof value.requestId === 'string' && value.requestId.length > 0;
 
+const REQUEST_KINDS: ReadonlySet<string> = new Set(['ping', 'checkNetwork']);
+
 export function isWorkerRequest(value: unknown): value is WorkerRequest {
-  return isRecord(value) && hasRequestId(value) && value.kind === 'ping';
+  return (
+    isRecord(value) &&
+    hasRequestId(value) &&
+    typeof value.kind === 'string' &&
+    REQUEST_KINDS.has(value.kind)
+  );
 }
 
 export function isWorkerReply(value: unknown): value is WorkerReply {
@@ -73,6 +90,9 @@ export function isWorkerReply(value: unknown): value is WorkerReply {
       typeof value.protocolVersion === 'number' &&
       typeof value.uptimeSeconds === 'number'
     );
+  }
+  if (value.kind === 'network') {
+    return isRecord(value.status) && typeof value.status.status === 'string';
   }
   if (value.kind === 'failure') {
     return typeof value.message === 'string';

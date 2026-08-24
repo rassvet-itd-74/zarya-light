@@ -72,7 +72,7 @@ Run `npm run lint` after any change that moves code across a boundary.
 ## Anti-patterns
 
 - A library type in a domain signature — `Contract`, `Provider`, `PDFDocument`, `Buffer`, `Database`. Language primitives including `bigint` are fine.
-- The domain importing `src/chain/abi/Zarya.abi.json`. The ABI is an adapter detail.
+- The domain importing `src/adapters/chain/abi/Zarya.abi.json`. The ABI is an adapter detail.
 - A config module that the domain imports and that itself imports a library.
 - An adapter that validates business rules, or a domain that formats a user-facing string.
 - A port with one implementation and a shape mirroring that implementation exactly — that is a wrapper, not a boundary. Ask what the second implementation is; "the test fake" is a legitimate answer.

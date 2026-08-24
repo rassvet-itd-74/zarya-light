@@ -9,7 +9,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const aiDir = resolve(scriptDir, '..');
 const repoRoot = resolve(aiDir, '..');
 const skillsRoot = join(repoRoot, '.claude', 'skills');
-const abiPath = join(repoRoot, 'src', 'chain', 'abi', 'Zarya.abi.json');
+const abiPath = join(repoRoot, 'src', 'adapters', 'chain', 'abi', 'Zarya.abi.json');
 const solRoot = join(repoRoot, 'temporal_docs');
 const solPaths = [
   join(solRoot, 'Zarya.sol'),
@@ -41,7 +41,7 @@ const REQUIRED = [
   '__ai/references/USE_CASES.md',
   '__ai/templates/BUG_TASK.md',
   '__ai/templates/IMPLEMENTATION_TASK.md',
-  'src/chain/abi/Zarya.abi.json',
+  'src/adapters/chain/abi/Zarya.abi.json',
 ];
 
 // Frontmatter keys Claude Code accepts in a project skill. The stricter
@@ -73,7 +73,7 @@ let abiFunctions = new Map();
 try {
   const abi = JSON.parse(await readFile(abiPath, 'utf8'));
   if (!Array.isArray(abi)) {
-    fail('src/chain/abi/Zarya.abi.json must be a bare ABI array, not a build artifact');
+    fail('src/adapters/chain/abi/Zarya.abi.json must be a bare ABI array, not a build artifact');
   } else {
     abiSymbols = new Set(abi.map((e) => e.name).filter(Boolean));
     abiFunctions = new Map(
@@ -146,7 +146,7 @@ if (sourceSeen === solPaths.length && abiFunctions.size) {
   if (missingFromAbi.length) {
     fail(
       `temporal_docs/Zarya.sol exposes ${missingFromAbi.map((n) => `${n}()`).join(', ')} ` +
-        'but the ABI does not — recompile src/chain/abi/Zarya.abi.json',
+        'but the ABI does not — recompile src/adapters/chain/abi/Zarya.abi.json',
     );
   }
   if (missingFromSource.length) {
@@ -333,7 +333,11 @@ for (const name of skillDirs) {
 
 // ------------------------------------------------------------- cross-links
 
-const LINK = /`(__ai\/[A-Za-z0-9_./-]+|src\/chain\/abi\/[A-Za-z0-9_.]+)`/g;
+// `src/chain/abi/` deliberately absent: the ABI moved under adapters/chain/ in
+// Phase 2, and append-only worklog entries still name the old path in their
+// narrative. History may cite a file that no longer exists; current references
+// may not.
+const LINK = /`(__ai\/[A-Za-z0-9_./-]+|src\/adapters\/chain\/abi\/[A-Za-z0-9_.]+)`/g;
 
 // A path containing a placeholder token describes a naming pattern, not a file.
 const isPlaceholder = (p) => /YYYY|MM-DD|<[^>]+>|\*|\.\.\./.test(p);

@@ -1,6 +1,6 @@
 # Zarya contract surface
 
-**Derived from `temporal_docs/Zarya.sol` and its libraries, cross-checked against `src/chain/abi/Zarya.abi.json`** — 1 constructor, 43 functions, 12 events, 16 custom errors in the ABI. Source and ABI agree exactly on the external surface, names and argument counts alike; `npm run ai:validate` re-checks that on every run.
+**Derived from `temporal_docs/Zarya.sol` and its libraries, cross-checked against `src/adapters/chain/abi/Zarya.abi.json`** — 1 constructor, 43 functions, 12 events, 16 custom errors in the ABI. Source and ABI agree exactly on the external surface, names and argument counts alike; `npm run ai:validate` re-checks that on every run.
 
 Behaviors the product documentation does not anticipate are in `CONTRACT_DEFECTS.md` — **read it before designing the executor, organ resolution, or any UI that reports an outcome.** Stale prose lines: `DOCUMENTATION_STATUS.md`. Network and address: `DEPLOYMENT.md`.
 

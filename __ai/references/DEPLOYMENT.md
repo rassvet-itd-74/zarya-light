@@ -16,14 +16,14 @@ Sepolia is the only permitted live network for this demo unless the user explici
 | Item | Value |
 | --- | --- |
 | `Zarya` address | `0x6b31cC58a7DC5919f460068cF68D16281F360d25` |
-| ABI (bundled) | `src/chain/abi/Zarya.abi.json` |
+| ABI (bundled) | `src/adapters/chain/abi/Zarya.abi.json` |
 | Solidity source | `temporal_docs/Zarya.sol`, `temporal_docs/libraries/*.sol` |
 
 Redeployed on 2026-08-24 to carry the contract fixes of that date. The previous deployment at `0x141eb271…` predates them and expects the **three-argument** `castVote`; do not point a current client at it.
 
 Application code must read the address from configuration, not from this file and not from a literal in domain code. Verify the configured address has code, and — because two incompatible deployments now exist — verify the interface before writing. The cheapest discriminator is a `castVote` arity check: simulate the two-argument form and treat a decode failure as "wrong deployment", rather than discovering it on a real vote.
 
-`src/chain/abi/Zarya.abi.json` holds only the `abi` array. The full build artifact — bytecode, metadata, method identifiers — is not kept in the repository; deploy bytecode has no business in a renderer bundle. Regenerate it from the source repository if it is needed again.
+`src/adapters/chain/abi/Zarya.abi.json` holds only the `abi` array. The full build artifact — bytecode, metadata, method identifiers — is not kept in the repository; deploy bytecode has no business in a renderer bundle. Regenerate it from the source repository if it is needed again.
 
 ## Linked libraries
 

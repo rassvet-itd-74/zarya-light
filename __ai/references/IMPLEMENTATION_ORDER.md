@@ -10,7 +10,7 @@ Phase 0: the Solidity source arrived and closed every open question; the contrac
 
 Phase 1: the hexagon exists and is enforced. `src/domain/` holds `primitives.ts`, the `Clock` and `IdGenerator` ports, and `network/networkPolicy.ts`; `src/app/` holds `getAppStatus`; `src/adapters/` holds `config/`, `platform/`, and `electron/`. `src/worker.ts` runs as a supervised `utilityProcess`, `src/preload.ts` exposes a two-method `contextBridge` surface, and the window sets `contextIsolation`/`nodeIntegration`/`sandbox` explicitly with DevTools disabled outside development. Vitest is the runner (`npm test`), with 90 tests across the domain, config, IPC, preload, CSP, and supervisor.
 
-Still absent: chain code, form code, persistence, and a PDF library. The ABI remains at `src/chain/abi/Zarya.abi.json`.
+Still absent: form code, persistence, and a PDF library.
 
 What remains in `CONTRACT_DEFECTS.md` is absorbed by ordinary implementation and needs no decision up front: terminal classification for quorum-failed votings plus their local suppression (Phase 7, and Phase 5 for the storage column); region ordinals and the extended error registry (Phase 2); threshold configuration as one three-value operation (Phase 3); and recovering a voting's organ from creation events, which makes the event projection load-bearing earlier than it would otherwise be (Phase 2).
 
@@ -31,7 +31,14 @@ Deferred out of Phase 1 with reasons, not by oversight: the `Signer` port and an
 
 Ahead of the form layer because template pre-fill depends on these reads.
 
-- Provider and chainId validation; contract code check.
+Being built in slices. **Slice 1 (foundation and network guard) is done, 2026-08-24**: viem as the chain library, `NetworkGuard` and the `Clock` implementation, and the deployment discriminator. Remaining: the error registry, region table and organ resolution, voting reads, `VotingCreated` discovery, and preflight.
+
+Two things settled there that bind the rest of the phase:
+
+- **Tests run against a local anvil forking Sepolia.** The real deployed contract, its real linked libraries, and its real state, with nothing compiled here and nothing broadcast — the live network is read once, at fork time. Opt-in via `ZARYA_FORK_RPC_URL`; the suite skips and stays green without it.
+- **The identity check is four distinct verdicts, not one.** chainId, contract code, an eligibility fingerprint, and the `castVote` arity probe. `UNREACHABLE` is separate from all of them, because an outage must never be reported as a wrong deployment.
+
+- ~~Provider and chainId validation; contract code check.~~ **Done.**
 - Organ resolution via `getPartyOrgan`, carrying the structured triple with `region` as an **enum ordinal**, validated against `getPartyOrganIdentifier` on every resolution.
 - Reads: `isVotingActive`, `isVotingFinalized`, `hasVoted`, `isMember`, `getVotingResults`.
 - `VotingCreated` event indexing with a persisted block cursor — the only source of `endTime`, and the same cursor the matrix coordinate index projects from.
