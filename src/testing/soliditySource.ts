@@ -11,11 +11,12 @@ import { existsSync, readFileSync } from 'node:fs';
  *
  * ## These checks are temporary by design
  *
- * `temporal_docs/` is scheduled to leave the repository once the implementation
- * plan is complete. So every source-derived check is **opt-in on the source
+ * `temporal_docs/` stays until every phase of the implementation plan is done,
+ * and may then be folded into documentation rather than deleted. Either way it
+ * is not permanent, so every source-derived check is **opt-in on the source
  * being present** — {@link hasSoliditySource} — exactly as the fork tests are
- * opt-in on an RPC URL. When the sources go, those suites skip and the run stays
- * green rather than failing over a file nobody meant to keep.
+ * opt-in on an RPC URL. Whenever the sources go, those suites skip and the run
+ * stays green rather than failing over a file nobody meant to keep.
  *
  * What survives that removal is the stronger evidence, not the weaker:
  *

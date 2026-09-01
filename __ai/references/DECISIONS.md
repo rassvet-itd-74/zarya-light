@@ -66,6 +66,10 @@ These are *decisions*, not invariants — rules that hold unconditionally are in
 
 - Member wallet signs form-driven proposal, vote, and privileged configuration transactions.
 - A separate minimally privileged executor wallet signs `executeVoting`.
+- An EOA's private key is **generated once and stored encrypted at rest** in a keystore file, rather than read from an environment variable on every start. `temporal_docs/keystore.json` is the working example and currently holds a **testing** key.
+- The file is `{ salt, iv, tag, ciphertext }` — an AEAD envelope, so decryption is authenticated and a tampered file fails rather than yielding garbage. The KDF parameters behind `salt` are not recorded anywhere yet; **Phase 6 must pin them before it writes a reader**, because a keystore whose derivation is only implied by the code that wrote it cannot be re-opened by anything else.
+- Key material never enters the repository, encrypted or not, and never enters the renderer, the logs, or the database. `.gitignore` covers `keystore.json`, `*.key`, and `.env*` so a test key cannot become a committed habit.
+- `PublicConfig` reports **presence only** — `memberSignerConfigured` / `executorSignerConfigured` — never a path, an address derived from the key, or any part of the material.
 
 ## Documentation mismatch policy
 

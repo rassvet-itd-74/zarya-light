@@ -36,7 +36,7 @@ Patterns to follow when extending it:
 - **A read that did not answer returns `undefined`, never `false`.** "Not a member" and "could not tell" are different facts; conflating them hides a privilege or queues an execution against a settled voting.
 - **`nextVotingId` holds the *last* id, not the next.** It pre-increments. The port calls it `highestVotingId` so the contract's misleading name stops at the adapter boundary.
 
-Testing is against a local **anvil forking Sepolia** — the real deployment, nothing compiled locally, nothing broadcast. See `testing/anvil.ts`; opt-in via `ZARYA_FORK_RPC_URL`. Tables derived from `temporal_docs/` are checked against that source by tests that **skip when it is absent** (`src/testing/soliditySource.ts`), because it leaves the repository when the plan completes; the durable checks are the fork sweep over all 98 regions and the literal keccak digests and error selectors.
+Testing is against a local **anvil forking Sepolia** — the real deployment, nothing compiled locally, nothing broadcast. See `testing/anvil.ts`; opt-in via `ZARYA_FORK_RPC_URL`. Tables derived from `temporal_docs/` are checked against that source by tests that **skip when it is absent** (`src/testing/soliditySource.ts`), because it does not stay past the end of the plan; the durable checks are the fork sweep over all 98 regions and the literal keccak digests, error selectors and event topics.
 
 ## Organ resolution comes first
 

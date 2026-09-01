@@ -189,6 +189,10 @@ from a literal — the governing organ it depends on exists nowhere else.
   belong to the matrix report in Phase 4 and were deliberately kept out of `MatrixReader`.
 - **Nothing is wired to the worker, IPC, or the renderer.** `npm start` was not run; worker protocol
   stays at v2. Preflight has no caller outside tests — the form pipeline is Phase 4.
-- **`npm run ai:validate` still breaks when `temporal_docs/` is deleted**, unchanged across three
-  slices now and still a decision rather than a cleanup. It is worth taking before Phase 4, since
-  the plan schedules that removal on completion and Phase 2 is now complete.
+- **`npm run ai:validate` still breaks when `temporal_docs/` is deleted** — and that is not a
+  problem to solve yet. The user confirmed on 2026-09-01 that the sources **stay until every phase
+  is done**, and may then be folded into documentation rather than deleted at all. So the
+  source-derived tests keep their `hasSoliditySource` guards for the reason they were written — the
+  fork sweeps and the literal digests are the stronger evidence either way — but nothing should be
+  pulled forward to accommodate a removal that is not scheduled for this part of the plan. Earlier
+  in this slice I suggested taking it before Phase 4; that was wrong.
