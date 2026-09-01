@@ -31,22 +31,28 @@ Hexagonal — ports and adapters. Dependencies point inward; the domain core def
 
 ```text
 src/domain/          no imports from electron, chain, PDF, storage, or node:*
-  primitives.ts      branded UnixSeconds, ChainId, EvmAddress, OperationRef
+  primitives.ts      branded UnixSeconds, ChainId, EvmAddress, OperationRef,
+                     Bytes32, and the exported Brand helper
   network/           the Sepolia-only rule as a pure predicate
+  chain/             what a revert means and what to do about it
+  organs/            the 98-region table, the eight organ types, identifier
+                     composition — no hashing, which needs a chain library
   intents/
-  organs/
   batches/
   executor/
   ports/             interfaces the domain owns
 src/app/             use cases that orchestrate ports
 src/adapters/
-  chain/             viem; abi/, network guard, clock, revert decoding
+  chain/             viem; abi/, network guard, clock, revert and error
+                     decoding, organ resolution and the label table
   forms/             PDF library; issue, parse, receipt, and the shared field schema
   store/             database, migrations
   electron/          IPC contract and handlers, preload surface, dialogs,
                      window options, CSP, worker supervision and protocol
   config/            environment → PublicConfig + SecretConfig
   platform/          IdGenerator over node:crypto
+src/testing/         test support only, in no build entry — currently the
+                     Solidity source parsers the derived-table tests compare against
 src/main.ts  src/preload.ts  src/renderer.ts  src/worker.ts
 ```
 
@@ -58,6 +64,10 @@ The field-name schema lives in `adapters/forms/` and is shared by all three form
 
 `src/domain/**` import restrictions are enforced by an ESLint override in `.eslintrc.json`. The directory exists, so the guard is live — observed rejecting Electron, `node:*`, the ABI, and an adapter import.
 
+The override covers domain **test** files too, deliberately. When domain tests needed to read `temporal_docs/` the fix was `src/testing/`, a module outside both layers that nothing shipped imports — not an exception in the rule, which would have applied to production modules the next time one was added.
+
+Organ hashing is the one place the client computes an organ identifier's `keccak256` itself, and it lives in the adapter because the domain may not import a chain library. That split is not incidental: the *forward* direction resolves through the contract's own `getPartyOrgan`, and the local hash exists only to build the reverse table, which has no getter to build it from.
+
 ## Ports
 
 Driven ports — the domain declares these, adapters implement them.
@@ -66,7 +76,7 @@ Driven ports — the domain declares these, adapters implement them.
 | --- | --- | --- |
 | `VotingReader` | active, finalized, results, `hasVoted` | chain |
 | `MembershipReader` | `isMember` | chain |
-| `OrganResolver` | triple → `bytes32` for calls, and `bytes32` → label for display; both via `pure` helpers, cacheable forever | chain |
+| `OrganResolver` | triple → `bytes32` for calls via the `pure` helpers, verified against `getPartyOrganIdentifier` on every resolution; `bytes32` → label from a locally enumerated table, bounded at local organ number 99 and returning `undefined` rather than guessing | chain — *implemented* |
 | `MatrixReader` | cell organ, allowed categories, decimals, themes, statements, history | chain |
 | `MatrixIndex` | which coordinates exist, projected from the event stream | chain |
 | `VotingDiscovery` | `VotingCreated` indexing with a resumable cursor | chain |

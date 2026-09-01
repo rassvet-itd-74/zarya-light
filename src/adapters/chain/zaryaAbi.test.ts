@@ -77,7 +77,12 @@ describe('assertAbiContract', () => {
   });
 
   it('checks every function the adapter depends on', () => {
-    expect(REQUIRED_FUNCTIONS.map(([name]) => name)).toEqual(['castVote', 'simpleMajority']);
+    expect(REQUIRED_FUNCTIONS.map(([name]) => name)).toEqual([
+      'castVote',
+      'simpleMajority',
+      'getPartyOrgan',
+      'getPartyOrganIdentifier',
+    ]);
     for (const [name, arity] of REQUIRED_FUNCTIONS) {
       expect(() => requireFunction(name, arity, ZARYA_ABI)).not.toThrow();
     }

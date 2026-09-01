@@ -66,6 +66,11 @@ export const REQUIRED_FUNCTIONS: ReadonlyArray<readonly [name: string, arity: nu
   ['castVote', 2],
   // The identity fingerprint.
   ['simpleMajority', 0],
+  // Organ resolution. Both `pure`, and both taking the structured triple —
+  // (organType, region, number) — so an arity change here would mean the organ
+  // encoding itself moved.
+  ['getPartyOrgan', 3],
+  ['getPartyOrganIdentifier', 3],
 ];
 
 export function assertAbiContract(abi: Abi = ZARYA_ABI): void {

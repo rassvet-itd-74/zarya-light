@@ -9,16 +9,25 @@ Read `__ai/references/CONTRACT.md` first — the full surface from the Solidity 
 
 The ABI is at `src/adapters/chain/abi/Zarya.abi.json`. Do not hand-write signatures — generate types from the ABI or import it directly. But the ABI is not the whole surface: four errors and one event are declared in externally-linked libraries and are absent from it. Register those by hand.
 
-## What exists (Phase 2, slice 1)
+## What exists (Phase 2, slices 1–2)
 
 The library is **viem**. `publicClient.ts` builds the read-only client — there is no wallet client anywhere in this phase. `zaryaAbi.ts` imports the ABI as the single source and asserts at load that every function this code calls exists with the expected arity, which is how a drifted ABI fails loudly instead of at the first call. `chainClock.ts` implements `Clock`. `networkGuard.ts` observes; `domain/network/networkIdentity.ts` decides.
 
-Two patterns to follow when extending it:
+Slice 2 added organ resolution and the error registry:
+
+- `domain/organs/regions.ts` — the 98-region table with `RegionOrdinal` and `SubjectCode` as **separate branded types**. There is no numeric conversion between them, only the table, so a form's answer reaches a call argument through `regionBySubjectCode` or not at all.
+- `domain/organs/partyOrgan.ts` — the eight types, their scope, and identifier composition. `partyOrganTriple()` normalizes: global organs zero their region and number, so a Chairperson organ "in Chelyabinsk" *is* the Chairperson organ.
+- `domain/chain/contractErrors.ts` — every error name and its disposition. `adapters/chain/errorDecoder.ts` decodes, including the five fragments no ABI carries.
+- `adapters/chain/organLabelTable.ts` and `organResolver.ts` — the reverse table and the chain-verified forward path.
+
+Patterns to follow when extending it:
 
 - **Importing the ABI as JSON widens it to `Abi`, and viem's `readContract` generics do not survive that.** Use `encodeFunctionData` → `client.call` → `decodeFunctionResult` instead. Same wire behavior, no generic fight.
-- **A revert and a transport failure arrive at the same catch site and mean opposite things.** `revertData.ts` separates them, and returns "not a revert" when unsure. Never let an RPC timeout become a verdict about the contract.
+- **A revert and a transport failure arrive at the same catch site and mean opposite things.** `revertData.ts` separates them, and returns "not a revert" when unsure. Never let an RPC timeout become a verdict about the contract. `classifyCallFailure` is the whole path: outcome `UNKNOWN` with reason `NOT_A_REVERT`, `EMPTY_REVERT`, or `UNDECODABLE`, never a fabricated verdict.
+- **Decoding is adapter work, meaning is domain work.** Add a new error to `ZARYA_ERROR_NAMES` with a disposition, and a fragment only if the ABI lacks it.
+- **Verify a resolution, do not trust it.** Both organ helpers are `pure`, so checking every resolution costs a round trip and nothing else.
 
-Testing is against a local **anvil forking Sepolia** — the real deployment, nothing compiled locally, nothing broadcast. See `testing/anvil.ts`; opt-in via `ZARYA_FORK_RPC_URL`.
+Testing is against a local **anvil forking Sepolia** — the real deployment, nothing compiled locally, nothing broadcast. See `testing/anvil.ts`; opt-in via `ZARYA_FORK_RPC_URL`. Tables derived from `temporal_docs/` are checked against that source by tests that **skip when it is absent** (`src/testing/soliditySource.ts`), because it leaves the repository when the plan completes; the durable checks are the fork sweep over all 98 regions and the literal keccak digests and error selectors.
 
 ## Organ resolution comes first
 

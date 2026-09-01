@@ -13,7 +13,12 @@
 
 declare const brand: unique symbol;
 
-type Brand<T, B extends string> = T & { readonly [brand]: B };
+/**
+ * Exported so modules that own a narrower vocabulary — regions, organs — can
+ * brand their own types without re-declaring the mechanism, and without this
+ * file having to know their validation rules.
+ */
+export type Brand<T, B extends string> = T & { readonly [brand]: B };
 
 /** A Unix timestamp in **seconds**. Chain block time, never `Date.now()`. */
 export type UnixSeconds = Brand<number, 'UnixSeconds'>;
@@ -41,6 +46,16 @@ export type EvmAddress = Brand<`0x${string}`, 'EvmAddress'>;
  * form comes back — never read from the returned file itself.
  */
 export type OperationRef = Brand<string, 'OperationRef'>;
+
+/**
+ * A 32-byte value in `0x`-prefixed hex — an organ identifier, a transaction
+ * hash, a block hash.
+ *
+ * Lower-cased on construction. Unlike an address, a `bytes32` carries no
+ * checksum, so casing is noise: normalizing it here means two spellings of the
+ * same organ compare equal and key the same map entry.
+ */
+export type Bytes32 = Brand<`0x${string}`, 'Bytes32'>;
 
 export class InvalidPrimitiveError extends Error {
   constructor(what: string, received: unknown) {
@@ -104,4 +119,16 @@ export function operationRef(value: string): OperationRef {
     );
   }
   return value as OperationRef;
+}
+
+const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
+
+export function bytes32(value: string): Bytes32 {
+  if (!BYTES32_PATTERN.test(value)) {
+    throw new InvalidPrimitiveError(
+      'a bytes32 must be 0x followed by 64 hex characters',
+      value,
+    );
+  }
+  return value.toLowerCase() as Bytes32;
 }
