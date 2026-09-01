@@ -44,7 +44,9 @@ src/domain/          no imports from electron, chain, PDF, storage, or node:*
   preflight/         the contract's authorization rules as values, the castVote
                      guard order, the matrix preconditions checked at execution,
                      the client duration bound, and simulation reconciliation
-  intents/
+  intents/          the closed allow-listed union, the field readers that build
+                    it from raw text, semantic identity, and which
+                    AuthorizationRule guards each variant
   batches/
   executor/
   ports/             interfaces the domain owns

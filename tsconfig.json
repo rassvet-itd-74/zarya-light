@@ -6,6 +6,14 @@
     "allowJs": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
+    // The part this codebase actually depends on is `strictNullChecks`. Every
+    // reader returns `T | undefined` to keep "could not read" apart from
+    // "false"; without it `undefined` is assignable to `boolean`, so the rule
+    // the whole chain adapter is built on would be enforced by discipline
+    // alone. It also restores narrowing for boolean-literal discriminants.
+    // Turned on once the tree already satisfied it with zero errors.
+    "strict": true,
+    // Redundant under `strict`, kept because it predates it and says so.
     "noImplicitAny": true,
     "sourceMap": true,
     "noEmit": true,

@@ -57,13 +57,15 @@ Five things settled here that bind the rest of the plan:
 
 ## Phase 3 — intent model
 
-- Typed allow-listed intent union: the eight `create*Voting` variants, `CastVote`, and explicit privileged `SetMinimumQuorum` / `SetMinimumApprovalPercentage` / `TransferChairmanship`.
-- `ExecuteVoting` is **not** a form intent.
-- Organ represented as a structured triple, not a label.
-- Schema validation separate from normalization separate from chain preflight.
-- Exhaustive intent-to-adapter mapping with a `never` check so a new variant cannot silently fall through.
-- Each variant maps to one `AuthorizationRule` from Phase 2 — the intent model decides *what* is being asked, never *who may ask it*. `creationRule` already covers the eight creation variants; the privileged setters are `CHAIRMAN_ONLY`.
-- `CallSimulator` grows an arm per new write. It names calls rather than taking calldata on purpose: a port accepting bytes would put a hole in the form allow-list one layer below where anyone would look for it.
+Being built in slices. **Slice 1 (the union, validation, identity) is done, 2026-09-01.** Remaining: the exhaustive dispatch to contract calls, and the simulator arm that consumes it.
+
+- ~~Typed allow-listed intent union: the eight `create*Voting` variants, `CastVote`, and explicit privileged configuration.~~ **Done** — eleven variants. The two threshold setters named here became **one** `CONFIGURE_ORGAN_THRESHOLDS` carrying all three values, because the base doubles as an enable flag and three intents would make a silent no-op the default outcome.
+- ~~`ExecuteVoting` is **not** a form intent.~~ **Done, by absence.** There is no variant to construct, so the form pipeline cannot reach it — enforcement rather than a rule to remember.
+- ~~Organ represented as a structured triple, not a label.~~ **Done**, and the form asks for a **subject code** which becomes an ordinal only through the region table.
+- ~~Schema validation separate from normalization separate from chain preflight.~~ **Done.** `buildIntent` does shape only — no chain read, no clock, no storage — so a validation result is reproducible and a failure is never an outage.
+- ~~Each variant maps to one `AuthorizationRule` from Phase 2.~~ **Done** in `intentAuthorization.ts`, exhaustive. The organ on a threshold intent is the *target*, not the authorizer, which is the one arm that would be wrong in the obvious way.
+- Exhaustive intent-to-adapter mapping with a `never` check so a new variant cannot silently fall through. `CONFIGURE_ORGAN_THRESHOLDS` is the only intent that is not one transaction — it expands to three, and the ordering is the dispatcher's decision.
+- `CallSimulator` grows an arm that takes an intent. It takes the **union**, never calldata: a port accepting bytes would put a hole in the form allow-list one layer below where anyone would look for it.
 
 ## Phase 4 — PDF form schema, issuance, and ingestion
 

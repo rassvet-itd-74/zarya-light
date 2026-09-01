@@ -36,12 +36,17 @@ export type AuthorizationRule =
   /** `onlyChairman` — the privileged setters and `transferChairmanship`. */
   | { readonly kind: 'CHAIRMAN_ONLY' }
   /**
-   * Not a rule the contract has: the rule this client cannot determine.
+   * Not a rule the contract has: the rule this client cannot determine, because
+   * it does not know which organ decides.
    *
-   * `castVote` reads the voting's organ from storage and no getter returns it,
-   * so a voting missing from the event projection has an eligibility nobody can
-   * evaluate locally. That is **not** the same as no organ. See
-   * "A voting's governing organ has no getter" in `CONTRACT_DEFECTS.md`.
+   * Two ways to get here. `castVote` reads the voting's organ from storage and
+   * no getter returns it, so a voting missing from the event projection has an
+   * eligibility nobody can evaluate locally — see "A voting's governing organ
+   * has no getter" in `CONTRACT_DEFECTS.md`. And an intent naming an organ whose
+   * `bytes32` has not been resolved yet is in the same position for a duller
+   * reason.
+   *
+   * Neither is the same as **no** organ, which is a permission.
    */
   | { readonly kind: 'UNDETERMINED_ORGAN' };
 
