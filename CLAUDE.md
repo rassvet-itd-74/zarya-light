@@ -43,6 +43,8 @@ Detail behind each: `__ai/references/INVARIANTS.md`. Structure: `__ai/references
 - **`region` is the enum ordinal, never the subject code.** They differ for 50 of 98 regions and a wrong one silently addresses a *different real region*. Chelyabinsk is ordinal 74 *and* code "74", so the project's own region hides the bug in testing.
 - **The approval base doubles as an enable flag.** An organ whose `approvalPercentageBase` is zero falls back to `simpleMajority` entirely, so a quorum set without a base is silently discarded. Configure all three together. Values are **basis points**, not percent.
 - **`castVote` takes two arguments** — `(votingId, support)`. The organ comes from the voting, which has no getter, so vote preflight must recover it from creation events.
+- **`nextVotingId` holds the *last* id issued, not the next.** It pre-increments, and `votingExists` accepts ids up to and including it. Paging to `nextVotingId - 1` silently skips the newest voting; an empty contract reports `0`, not `1`.
+- **`isVotingActive` is a pure time window and ignores `finalized`**, and its comparison is `<=`. So execution is due strictly *after* `endTime` — at exactly `endTime` the voting is still active and `executeVoting` reverts.
 - **No eligibility getter exists.** UI cannot display a voting's thresholds, and a configuration write cannot be read back.
 - **The matrix cannot be enumerated, and organ labels have no reverse getter.** Coordinates come from an event projection over the executor's cursor; `bytes32` → label needs a locally cached table built from the `pure` helpers.
 - **The ABI is not the whole error surface.** `NoThemeSet`, `NoStatementSet`, `InvalidCategory`, and `Panic(0x11/0x12/0x32)` are all reachable and none are in it.

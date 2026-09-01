@@ -9,7 +9,7 @@ Read `__ai/references/CONTRACT.md` first — the full surface from the Solidity 
 
 The ABI is at `src/adapters/chain/abi/Zarya.abi.json`. Do not hand-write signatures — generate types from the ABI or import it directly. But the ABI is not the whole surface: four errors and one event are declared in externally-linked libraries and are absent from it. Register those by hand.
 
-## What exists (Phase 2, slices 1–2)
+## What exists (Phase 2, slices 1–3)
 
 The library is **viem**. `publicClient.ts` builds the read-only client — there is no wallet client anywhere in this phase. `zaryaAbi.ts` imports the ABI as the single source and asserts at load that every function this code calls exists with the expected arity, which is how a drifted ABI fails loudly instead of at the first call. `chainClock.ts` implements `Clock`. `networkGuard.ts` observes; `domain/network/networkIdentity.ts` decides.
 
@@ -20,12 +20,21 @@ Slice 2 added organ resolution and the error registry:
 - `domain/chain/contractErrors.ts` — every error name and its disposition. `adapters/chain/errorDecoder.ts` decodes, including the five fragments no ABI carries.
 - `adapters/chain/organLabelTable.ts` and `organResolver.ts` — the reverse table and the chain-verified forward path.
 
+Slice 3 added the reads and the projection:
+
+- `domain/voting/voting.ts` — `VotingId` (zero refused), the eight suggestion types, and `GoverningOrgan` as a **tri-state**: `ORGAN`, `NONE` for theme and statement votings, and `UNKNOWN` for a projection gap. Collapsing the last two is the bug this type exists to prevent.
+- `domain/voting/votingLifecycle.ts` — the `(active, finalized)` pair, and `isExecutionDue` as **strictly greater** than `endTime`.
+- `domain/voting/discoveryPlan.ts` — which blocks to scan: 12 confirmations behind head, 5 000 per window, backfilling from the configured deployment block. Reports `CURSOR_AHEAD` rather than rewinding on its own.
+- `adapters/chain/votingReader.ts`, `votingDiscovery.ts`, `adapters/store/memoryCursorStore.ts`.
+
 Patterns to follow when extending it:
 
 - **Importing the ABI as JSON widens it to `Abi`, and viem's `readContract` generics do not survive that.** Use `encodeFunctionData` → `client.call` → `decodeFunctionResult` instead. Same wire behavior, no generic fight.
 - **A revert and a transport failure arrive at the same catch site and mean opposite things.** `revertData.ts` separates them, and returns "not a revert" when unsure. Never let an RPC timeout become a verdict about the contract. `classifyCallFailure` is the whole path: outcome `UNKNOWN` with reason `NOT_A_REVERT`, `EMPTY_REVERT`, or `UNDECODABLE`, never a fabricated verdict.
 - **Decoding is adapter work, meaning is domain work.** Add a new error to `ZARYA_ERROR_NAMES` with a disposition, and a fragment only if the ABI lacks it.
 - **Verify a resolution, do not trust it.** Both organ helpers are `pure`, so checking every resolution costs a round trip and nothing else.
+- **A read that did not answer returns `undefined`, never `false`.** "Not a member" and "could not tell" are different facts; conflating them hides a privilege or queues an execution against a settled voting.
+- **`nextVotingId` holds the *last* id, not the next.** It pre-increments. The port calls it `highestVotingId` so the contract's misleading name stops at the adapter boundary.
 
 Testing is against a local **anvil forking Sepolia** — the real deployment, nothing compiled locally, nothing broadcast. See `testing/anvil.ts`; opt-in via `ZARYA_FORK_RPC_URL`. Tables derived from `temporal_docs/` are checked against that source by tests that **skip when it is absent** (`src/testing/soliditySource.ts`), because it leaves the repository when the plan completes; the durable checks are the fork sweep over all 98 regions and the literal keccak digests and error selectors.
 

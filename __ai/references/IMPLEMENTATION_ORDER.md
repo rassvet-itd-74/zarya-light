@@ -31,21 +31,22 @@ Deferred out of Phase 1 with reasons, not by oversight: the `Signer` port and an
 
 Ahead of the form layer because template pre-fill depends on these reads.
 
-Being built in slices. **Slice 1 (foundation and network guard) is done, 2026-08-24**: viem as the chain library, `NetworkGuard` and the `Clock` implementation, and the deployment discriminator. **Slice 2 (organ resolution and the error registry) is done, 2026-09-01.** Remaining: voting reads, `VotingCreated` discovery, the `ValueAdded` fragment, and preflight.
+Being built in slices. **Slice 1 (foundation and network guard) is done, 2026-08-24**: viem as the chain library, `NetworkGuard` and the `Clock` implementation, and the deployment discriminator. **Slice 2 (organ resolution and the error registry) is done, 2026-09-01.** **Slice 3 (voting reads and discovery) is done, 2026-09-01.** Remaining: the `ValueAdded` fragment and preflight.
 
-Three things settled there that bind the rest of the phase:
+Four things settled there that bind the rest of the phase:
 
 - **Tests run against a local anvil forking Sepolia.** The real deployed contract, its real linked libraries, and its real state, with nothing compiled here and nothing broadcast — the live network is read once, at fork time. Opt-in via `ZARYA_FORK_RPC_URL`; the suite skips and stays green without it.
 - **The identity check is four distinct verdicts, not one.** chainId, contract code, an eligibility fingerprint, and the `castVote` arity probe. `UNREACHABLE` is separate from all of them, because an outage must never be reported as a wrong deployment.
 - **A revert's *meaning* is domain, its *decoding* is adapter.** `CallOutcome` has an `UNKNOWN` member with three distinct reasons, so an outage, an empty revert, and an unnameable selector never collapse into a verdict about what the contract decided.
+- **The deployment has exactly one voting, and it is the instructive one.** Voting 1 is a membership voting for `74.СОВ` with zero votes, past its deadline and unfinalized — the "Quorum failure is permanent" case, live. Simulating `executeVoting(1)` on the fork reverts `InsufficientVotes`, so the executor's terminal rule is now observed rather than inferred. Anything that changes on that deployment changes these tests.
 
 - ~~Provider and chainId validation; contract code check.~~ **Done.**
 - ~~Organ resolution via `getPartyOrgan`, carrying the structured triple with `region` as an **enum ordinal**, validated against `getPartyOrganIdentifier` on every resolution.~~ **Done** — and the ordinal is a branded type with no numeric route from a subject code, so a form's answer can only become an argument through the table.
 - ~~`OrganResolver` both directions, including the `bytes32` → label reverse table.~~ **Done.** The reverse table is local — 297 closed entries plus local organs enumerated to number 99, configurable. An unlisted hash returns `undefined`; the caller shows the hash rather than a guess.
 - ~~Error decoding across the ABI's 16 errors **plus** `NoThemeSet`, `NoStatementSet`, `InvalidCategory`, and `Panic(0x11/0x12/0x32)`.~~ **Done**, plus `Error(string)`. Dispositions are `ALREADY_DONE` / `NOT_YET` / `REJECTED` / `TERMINAL`; `InsufficientVotes` and `InvalidOrgan` are the two terminal ones.
-- Reads: `isVotingActive`, `isVotingFinalized`, `hasVoted`, `isMember`, `getVotingResults`.
-- `VotingCreated` event indexing with a persisted block cursor — the only source of `endTime`, and the same cursor the matrix coordinate index projects from.
-- A hand-written fragment for `ValueAdded`, which fires at the Zarya address but is absent from the ABI.
+- ~~Reads: `isVotingActive`, `isVotingFinalized`, `hasVoted`, `isMember`, `getVotingResults`.~~ **Done**, plus `exists` and `highestVotingId`. Every read returns `undefined` rather than a plausible `false` when it could not read — `VotingNotFound` included.
+- ~~`VotingCreated` event indexing with a persisted block cursor — the only source of `endTime`, and the same cursor the matrix coordinate index projects from.~~ **Done**, with the cursor in memory until Phase 5 (`CursorStore` is declared and its monotonicity rule enforced). The window is chosen by `planDiscovery`: 12 confirmations behind head, 5 000 blocks per scan, backfilling from block **11553464** — found by binary search over `eth_getCode`, not transcribed.
+- A hand-written fragment for `ValueAdded`, which fires at the Zarya address but is absent from the ABI. Note that everything else *is* in the ABI: the `Votings` library's functions are `internal`, so its twelve events survive into it, and only `Matricies`' `external` functions cause absence.
 - Chairman-aware preflight: `isMember` against the Chairperson organ for UX, simulation for the decision.
 - ~~Tests keyed on a region whose ordinal and subject code differ.~~ **Done** — Chechnya (ordinal 20, code 95) throughout, and the fork test sweeps all 98 regions against the deployed helpers.
 

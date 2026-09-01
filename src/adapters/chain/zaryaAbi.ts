@@ -1,4 +1,4 @@
-import type { Abi, AbiFunction } from 'viem';
+import type { Abi, AbiEvent, AbiFunction } from 'viem';
 import abiJson from './abi/Zarya.abi.json';
 
 /**
@@ -73,12 +73,61 @@ export const REQUIRED_FUNCTIONS: ReadonlyArray<readonly [name: string, arity: nu
   ['getPartyOrganIdentifier', 3],
 ];
 
+/**
+ * Asserts the ABI declares an event exactly once with `inputCount` parameters,
+ * and returns the fragment so callers decode against the bundled ABI rather
+ * than a transcription of it.
+ *
+ * The `Votings` library's functions are `internal`, so they inline and their
+ * events **do** reach the contract ABI — unlike `Matricies.ValueAdded`, whose
+ * `external` function does not. Everything this projection reads is therefore
+ * available here, and hand-writing any of it would be re-transcribing a
+ * signature the file already holds.
+ */
+export function requireEvent(name: string, inputCount: number, abi: Abi = ZARYA_ABI): AbiEvent {
+  const overloads = abi.filter(
+    (item): item is AbiEvent => item.type === 'event' && item.name === name,
+  );
+  if (overloads.length === 0) {
+    throw new AbiContractError(`the ABI declares no ${name} event`);
+  }
+  if (overloads.length > 1) {
+    throw new AbiContractError(
+      `the ABI declares ${overloads.length} ${name} events, so a decode could pick either`,
+    );
+  }
+  const [only] = overloads;
+  if (only.inputs.length !== inputCount) {
+    throw new AbiContractError(
+      `the ${name} event takes ${only.inputs.length} parameter(s) in the ABI, this adapter expects ${inputCount}`,
+    );
+  }
+  return only;
+}
+
+/** Every event this client decodes, with the parameter count it assumes. */
+export const REQUIRED_EVENTS: ReadonlyArray<readonly [name: string, inputCount: number]> = [
+  // The discovery primitive and the only carrier of endTime.
+  ['VotingCreated', 5],
+  // The only carriers of a voting's governing organ. Theme and Statement are
+  // absent on purpose: those votings have no organ.
+  ['MembershipVotingCreated', 3],
+  ['MembershipRevocationVotingCreated', 3],
+  ['CategoryVotingCreated', 6],
+  ['DecimalsVotingCreated', 5],
+  ['CategoricalValueVotingCreated', 6],
+  ['NumericalValueVotingCreated', 6],
+];
+
 export function assertAbiContract(abi: Abi = ZARYA_ABI): void {
   if (!Array.isArray(abi) || abi.length === 0) {
     throw new AbiContractError('the ABI is empty or not an array');
   }
   for (const [name, arity] of REQUIRED_FUNCTIONS) {
     requireFunction(name, arity, abi);
+  }
+  for (const [name, inputCount] of REQUIRED_EVENTS) {
+    requireEvent(name, inputCount, abi);
   }
 }
 

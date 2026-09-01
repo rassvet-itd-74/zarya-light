@@ -30,6 +30,16 @@ export interface PublicConfig {
    * URL lives in {@link SecretConfig}.
    */
   readonly rpcHost: string;
+  /**
+   * Where event discovery starts backfilling. Nothing before it exists to find,
+   * and scanning from genesis on a public endpoint is not viable.
+   *
+   * A `number`, not a `bigint`, because this type crosses IPC and appears in
+   * logs — and `JSON.stringify` throws on a BigInt rather than degrading. Block
+   * heights are nowhere near 2^53, so nothing is lost; the chain adapter widens
+   * it at the call site.
+   */
+  readonly deploymentBlock: number;
   readonly executorPollIntervalSeconds: number;
   readonly appVersion: string;
   /**
@@ -96,6 +106,17 @@ const DEFAULTS = {
   contractAddress: '0x6b31cC58a7DC5919f460068cF68D16281F360d25',
   rpcUrl: 'https://rpc.sepolia.org',
   executorPollIntervalSeconds: 300,
+  /**
+   * Located by binary search over `eth_getCode` against Sepolia, not
+   * transcribed: block 11553464 is the first holding code at the configured
+   * address, and its timestamp is 2026-08-24T00:13:00Z — matching the redeploy
+   * date in `DEPLOYMENT.md`.
+   *
+   * It travels with the address, so overriding one without the other backfills
+   * from the wrong place. Overriding the address alone is caught only if the new
+   * deployment is *newer*, which is why they are validated together below.
+   */
+  deploymentBlock: 11_553_464,
 } as const;
 
 const MIN_POLL_INTERVAL_SECONDS = 15;
@@ -167,6 +188,30 @@ export function loadConfig({ env = process.env, appVersion }: LoadConfigOptions)
     );
   }
 
+  const rawDeploymentBlock = env.ZARYA_DEPLOYMENT_BLOCK;
+  let deploymentBlock: number;
+  if (rawDeploymentBlock === undefined) {
+    // The default belongs to the default address. A custom address with the
+    // stock deployment block would backfill from before its own deployment —
+    // wasteful but harmless — or, if it is older, miss its early votings
+    // entirely. Refuse rather than guess.
+    if (contractAddress.toLowerCase() !== DEFAULTS.contractAddress.toLowerCase()) {
+      throw new ConfigError(
+        'ZARYA_DEPLOYMENT_BLOCK must be set when ZARYA_CONTRACT_ADDRESS is not the default — ' +
+          'discovery would otherwise backfill from another deployment’s block',
+      );
+    }
+    deploymentBlock = DEFAULTS.deploymentBlock;
+  } else {
+    const parsed = readInteger(rawDeploymentBlock, 'ZARYA_DEPLOYMENT_BLOCK');
+    if (parsed < 0) {
+      throw new ConfigError(
+        `ZARYA_DEPLOYMENT_BLOCK must not be negative, received ${parsed}`,
+      );
+    }
+    deploymentBlock = parsed;
+  }
+
   // Presence, not value. Nothing in this function ever copies key material.
   const configured = (value: string | undefined): boolean =>
     value !== undefined && value.trim().length > 0;
@@ -176,6 +221,7 @@ export function loadConfig({ env = process.env, appVersion }: LoadConfigOptions)
       chainId: observedChainId,
       contractAddress,
       rpcHost,
+      deploymentBlock,
       executorPollIntervalSeconds,
       appVersion,
       memberSignerConfigured: configured(env.ZARYA_MEMBER_KEY),

@@ -47,6 +47,8 @@ Approval failure **finalizes** with `success = false` and is terminal in the ord
 
 `FINALIZED_REJECTED` is reachable only through the approval path. See `STATE_MACHINES.md`.
 
+**Confirmed on the deployed contract, 2026-09-01.** Voting 1 — the only one that exists — is a membership voting created at block 11553481 with a 120-second duration and **zero votes cast**. It reads `isVotingActive: false, isVotingFinalized: false`, and simulating `executeVoting(1)` on a Sepolia fork reverts `InsufficientVotes(0, 0)`. The voting is past its deadline, unfinalized, and stays that way after the attempt. This defect is no longer inferred from source; `votingReader.fork.test.ts` asserts it.
+
 ## The approval base doubles as an enable flag
 
 **High, and new with the fix. Silent misconfiguration.**
@@ -120,6 +122,35 @@ Only Moscow 99 and Saint Petersburg 98 have codes beyond the enum bound and woul
 **Worse than a plain off-by-one:** `CHELYABINSKAYA_OBLAST` is ordinal **74** and its subject code is **"74"**. The project's primary region works under either interpretation, so any test written against `74` passes while half the country resolves to the wrong organ.
 
 **What the client must do:** carry the enum ordinal in the domain model and treat the subject code as a display string only. Never accept a subject code where an ordinal is expected, including from a form field — a form asking for a region maps its answer through a table. Verify with `getPartyOrganIdentifier`, which is `pure`: the label contains the subject code, so a mismatch against the code you expected is detectable. Check on every organ resolution, not once at startup.
+
+## `nextVotingId` is the *last* id, not the next one
+
+**Medium. Silent off-by-one in any paging fallback. Confirmed against the deployed contract 2026-09-01.**
+
+The public state variable is named for the value it is about to produce, not the value it holds:
+
+```solidity
+uint256 public nextVotingId;                       // Zarya.sol:17
+function _getNextVotingId() private returns (uint256) {
+    return ++nextVotingId;                         // Zarya.sol:508 — pre-increment
+}
+if (votingId == 0 || votingId > nextVotingId) revert VotingNotFound(votingId);  // Zarya.sol:566
+```
+
+Because the increment happens **before** the value is returned, the stored number is the id just handed out. `votingExists` agrees: it rejects ids *greater than* `nextVotingId`, so `nextVotingId` is itself always a valid id whenever it is non-zero.
+
+| Votings created | `nextVotingId()` | Valid ids |
+| --- | --- | --- |
+| none | `0` | none |
+| one | `1` | `1` |
+| five | `5` | `1..5` |
+
+Two ways to get this wrong, both quiet:
+
+- **Paging `1 .. nextVotingId - 1`** skips the newest voting — the one most likely to still be active, and the one a user just created.
+- **Reading `1` as "none exist"** is wrong twice: an empty contract reports `0`, and `1` means exactly one voting exists. This client made that mistake and it survived a probe against Sepolia, because a deployment with one voting reports the same number a mis-modelled empty one would.
+
+**What the client must do:** treat it as an **inclusive** upper bound, and name it something that says so. `VotingReader.highestVotingId()` exists for that reason — the contract's name is not repeated into this codebase, so the trap cannot propagate through call sites. Discovery still comes from events; this is only the paging fallback.
 
 ## A voting's governing organ has no getter
 

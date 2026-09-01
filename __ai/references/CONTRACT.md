@@ -137,7 +137,7 @@ Values are **basis points** — `5000` of `10000` is 50%. Treat quorum as an exa
 
 ```solidity
 // voting
-nextVotingId() view returns (uint256)
+nextVotingId() view returns (uint256)   // the LAST id issued, inclusive; 0 when none exist
 isVotingActive(uint256 votingId) view returns (bool)
 isVotingFinalized(uint256 votingId) view returns (bool)
 hasVoted(uint256 votingId, address member) view returns (bool)
@@ -220,7 +220,9 @@ DecimalsVotingCreated / ThemeVotingCreated / StatementVotingCreated /
 CategoricalValueVotingCreated / NumericalValueVotingCreated
 ```
 
-`VotingCreated` is the discovery primitive: indexed by `votingId` and the only carrier of `endTime`. Index it with a persisted block cursor and reconcile against `isVotingFinalized`. `nextVotingId()` supports bounded paging as a fallback. Do not rescan the chain on every poll.
+`VotingCreated` is the discovery primitive: indexed by `votingId` and the only carrier of `endTime`. Index it with a persisted block cursor and reconcile against `isVotingFinalized`. Do not rescan the chain on every poll.
+
+`nextVotingId()` supports bounded paging as a fallback, but **it holds the last id issued, not the next one** — `_getNextVotingId` pre-increments, and `votingExists` accepts ids up to and including it. Treat it as an inclusive bound; an empty contract reports `0`. See "`nextVotingId` is the *last* id" in `CONTRACT_DEFECTS.md`.
 
 `SuggestionType` is `{ Membership, MembershipRevocation, Category, Decimals, Theme, Statement, CategoricalValue, NumericalValue }` — ordinals 0-7, in that order.
 
