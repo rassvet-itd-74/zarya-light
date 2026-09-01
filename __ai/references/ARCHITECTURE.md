@@ -39,6 +39,11 @@ src/domain/          no imports from electron, chain, PDF, storage, or node:*
                      composition — no hashing, which needs a chain library
   voting/            voting ids, suggestion types, the governing-organ tri-state,
                      lifecycle and deadline rules, the discovery window plan
+  matrix/            coordinates, cell binding, axis labels, and which matrix a
+                     ValueAdded log belongs to
+  preflight/         the contract's authorization rules as values, the castVote
+                     guard order, the matrix preconditions checked at execution,
+                     the client duration bound, and simulation reconciliation
   intents/
   batches/
   executor/
@@ -80,8 +85,9 @@ Driven ports — the domain declares these, adapters implement them.
 | `VotingReader` | active, finalized, results, `hasVoted`, `highestVotingId`, `exists` — every method returns `undefined` rather than a plausible `false` when it could not read | chain — *implemented* |
 | `MembershipReader` | `isMember`, which is also the Chairman check | chain — *implemented* |
 | `OrganResolver` | triple → `bytes32` for calls via the `pure` helpers, verified against `getPartyOrganIdentifier` on every resolution; `bytes32` → label from a locally enumerated table, bounded at local organ number 99 and returning `undefined` rather than guessing | chain — *implemented* |
-| `MatrixReader` | cell organ, allowed categories, decimals, themes, statements, history | chain |
-| `MatrixIndex` | which coordinates exist, projected from the event stream | chain |
+| `MatrixReader` | cell binding, allowed categories, decimals, themes, statements — the metadata preflight needs. The checkpoint readers belong to the report and are deliberately absent | chain — *implemented* |
+| `MatrixIndex` | which coordinates exist, projected from the event stream. The applied half — `ValueAdded` and `CategoryAdded` — scans now; the gated half is Phase 4 | chain — *partial* |
+| `CallSimulator` | `eth_call` with a sender, for `castVote` and `executeVoting`. Named calls, never raw calldata, so the form pipeline's allow-list has no hole below it | chain — *implemented* |
 | `VotingDiscovery` | `VotingCreated` indexing joined to the six organ-bearing detail events; scans a window, never decides which | chain — *implemented* |
 | `ChainWriter` | submit, await confirmation, return a decoded outcome | chain |
 | `NetworkGuard` | chainId, contract code, eligibility fingerprint, and `castVote` arity — four distinct verdicts, plus `UNREACHABLE` for "could not tell" | chain — *implemented* |

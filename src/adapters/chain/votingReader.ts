@@ -1,5 +1,3 @@
-import { decodeFunctionResult, encodeFunctionData } from 'viem';
-import type { CallOutcome } from '../../domain/chain/contractErrors';
 import type {
   MembershipReader,
   VoteResults,
@@ -8,9 +6,8 @@ import type {
 import type { Bytes32, EvmAddress } from '../../domain/primitives';
 import type { VotingId } from '../../domain/voting/voting';
 import type { VotingObservations } from '../../domain/voting/votingLifecycle';
-import { classifyCallFailure } from './errorDecoder';
+import { type ReadOutcome, callContract } from './contractCall';
 import type { ZaryaPublicClient } from './publicClient';
-import { ZARYA_ABI } from './zaryaAbi';
 
 /**
  * The `view` reads, behind the domain's ports.
@@ -112,38 +109,11 @@ export class ZaryaVotingReader implements VotingReader, MembershipReader {
   }
 
   /**
-   * encode/call/decode rather than `readContract`: the ABI is imported as JSON
-   * and widens to `Abi`, which viem's generics do not survive.
-   *
-   * Returns the classified failure rather than collapsing it, so callers that
-   * need to tell `VotingNotFound` from an outage can, and those that do not can
-   * keep ignoring it.
+   * The classified failure is kept rather than collapsed, so callers that need
+   * to tell `VotingNotFound` from an outage can, and those that do not can keep
+   * ignoring it.
    */
-  private async read(functionName: string, args: readonly unknown[]): Promise<ReadOutcome> {
-    let data: `0x${string}`;
-    try {
-      data = encodeFunctionData({ abi: ZARYA_ABI, functionName, args: args as unknown[] });
-    } catch {
-      // Local encoding failure: a programming error, not a chain condition, and
-      // not something the error registry describes.
-      return { kind: 'FAILURE', failure: { kind: 'UNKNOWN', reason: 'NOT_A_REVERT' } };
-    }
-
-    try {
-      const { data: result } = await this.client.call({ to: this.address, data });
-      if (result === undefined || result === '0x') {
-        return { kind: 'FAILURE', failure: { kind: 'UNKNOWN', reason: 'EMPTY_REVERT' } };
-      }
-      return {
-        kind: 'VALUE',
-        value: decodeFunctionResult({ abi: ZARYA_ABI, functionName, data: result }),
-      };
-    } catch (error) {
-      return { kind: 'FAILURE', failure: classifyCallFailure(error) };
-    }
+  private read(functionName: string, args: readonly unknown[]): Promise<ReadOutcome> {
+    return callContract(this.client, this.address, functionName, args);
   }
 }
-
-type ReadOutcome =
-  | { readonly kind: 'VALUE'; readonly value: unknown }
-  | { readonly kind: 'FAILURE'; readonly failure: CallOutcome };

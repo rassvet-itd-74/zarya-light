@@ -49,6 +49,53 @@ Approval failure **finalizes** with `success = false` and is terminal in the ord
 
 **Confirmed on the deployed contract, 2026-09-01.** Voting 1 — the only one that exists — is a membership voting created at block 11553481 with a 120-second duration and **zero votes cast**. It reads `isVotingActive: false, isVotingFinalized: false`, and simulating `executeVoting(1)` on a Sepolia fork reverts `InsufficientVotes(0, 0)`. The voting is past its deadline, unfinalized, and stays that way after the attempt. This defect is no longer inferred from source; `votingReader.fork.test.ts` asserts it.
 
+## An approved voting can be permanently unexecutable
+
+**High. The second class of permanent unexecutability, and the worse one — this voting *passed*. Found 2026-09-01 while implementing preflight.**
+
+`executeVoting` applies the approved mutation **before** it marks the voting finalized (`Votings.sol:436-442`):
+
+```solidity
+success = approvalPercentage > self.eligibilityParameters.approvalPercentage;
+
+if (success) {
+    _executeApprovedSuggestion(self, membersRegistry, matricies);   // <- can revert
+}
+
+self.finalized = true;                                             // <- never reached if it does
+```
+
+There is no `try`. If applying the suggestion reverts, the whole transaction reverts, `finalized` stays `false`, and the voting joins the quorum-failed ones: past its deadline, unfinalized, and re-offered by discovery on every pass. The difference is that this one met its quorum and won its vote. The members decided, and the decision is discarded.
+
+Five of the eight suggestion types can fail this way:
+
+| Suggestion | Applied by | Reverts with |
+| --- | --- | --- |
+| `Statement` | `setStatement` | `NoThemeSet` — no theme at `x` |
+| `Category` | `addCategory` | `InvalidOrgan`, `CategoryAlreadyExists` |
+| `Decimals` | `setDecimals` | `InvalidOrgan` |
+| `CategoricalValue` | `addValue` | `NoThemeSet`, `NoStatementSet`, `InvalidCategory` |
+| `NumericalValue` | `addValue` | `NoThemeSet`, `NoStatementSet`, `InvalidOrgan` |
+
+`Membership` and `MembershipRevocation` call `EnumerableSet.add` / `.remove` and discard the return, and `setTheme` is a bare assignment, so those three cannot fail.
+
+**None of these conditions is checked at creation.** Creating a value voting checks `onlyMember(organ)` and nothing else — not the theme, not the statement, not the cell's binding. So the gap between "this proposal is well-formed" and "this proposal can be applied" is the entire voting period.
+
+Two of the errors are **not in the ABI** (`NoThemeSet`, `NoStatementSet`, `InvalidCategory` are raised from `external` library functions), so an executor without the hand-registered fragments sees an undecodable selector rather than a reason.
+
+**Recoverability is not uniform, and that distinction matters more here than anywhere else in the error registry:**
+
+- `NoThemeSet`, `NoStatementSet`, `InvalidCategory`, `CategoryAlreadyExists` — **recoverable in principle.** Another voting can set the theme, set the statement, or add the category, and the stuck voting then executes. It is not retryable *on a timer*, but it must not be suppressed forever either.
+- `InvalidOrgan` — **permanent.** Cell binding is first-writer-wins with no rebinding path.
+
+**What the client must do:**
+
+1. **Check the preconditions when the proposal is written**, which is the only moment they can still be fixed cheaply. `domain/preflight/applicationPreflight.ts` does this and reports it as a *warning*, not a refusal — creation genuinely will succeed, and the state can change before execution.
+2. Do not let the executor treat a recoverable application failure as terminal, and do not let it retry one every poll either. Phase 7 owes this its own state, distinct from the `InsufficientVotes` suppression.
+3. Never report such a voting as rejected. It was accepted; it is stuck.
+
+The contract-side fix is to set `finalized = true` before applying, or to apply inside a `try`, so a voting's outcome is recorded even when its effect cannot be.
+
 ## The approval base doubles as an enable flag
 
 **High, and new with the fix. Silent misconfiguration.**
@@ -174,6 +221,7 @@ The second is what to build. It makes the event projection **load-bearing for vo
 Not defects to design around, but surprises worth knowing before reading the source. All in `Matricies.sol`, which was not modified, except where noted.
 
 - **Statements are keyed by `y` alone.** `setStatement(isCategorical, x, y, statement)` validates that a theme exists at `x` but writes to `statements[isCategorical][y]` (`Matricies.sol:168-181`), and `getStatement` reads by `y` only. The `x` argument is a gate, not part of the address. A later statement voting at a different `x` but the same `y` overwrites.
+- **The public `isCategoryAllowed` is not the guard `addValue` applies.** There are two functions of that name in `Matricies.sol`. The one behind the getter takes `(x, y, category)` and tests set membership alone (`266-277`); the one `addValue` calls takes `(organ, x, y, category)` and tests `allowedCategories.contains(category) && cell.organ == organ` (`48-61`). So `isCategoryAllowed(x, y, c) == true` does **not** mean the value can be added — the organ half of the real check is invisible to the getter, and a preflight built on it alone approves a proposal that will revert. Read the cell's binding separately. A consequence: because the category guard runs before the organ guard, `InvalidOrgan` is **unreachable** on the categorical branch of `addValue` — an organ mismatch there reverts `InvalidCategory`, naming the category rather than the organ that actually caused it.
 - **Cell organ ownership is first-writer-wins and permanent.** The first successful write binds the cell to an organ; a later write with a different organ reverts `InvalidOrgan` (`Matricies.sol:98-104`). There is no rebinding path. Now reachable, since value and category votings can pass.
 - **`get*ValueAtTimestamp` returns the timestamp you asked for**, not the checkpoint's (`Matricies.sol:398-413`). Do not display it as "when this value was set" — use `get*ValueAt` or the history readers.
 - **`get*ValueAt` reverts out of bounds.** It indexes the checkpoint array directly, so bound the index by `get*SampleLength` first; an overrun is `Panic(0x32)`, not a custom error.

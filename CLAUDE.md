@@ -40,6 +40,8 @@ Detail behind each: `__ai/references/INVARIANTS.md`. Structure: `__ai/references
 ## Gotchas
 
 - **`InsufficientVotes` is terminal, not retryable.** Zero votes or quorum unmet reverts without finalizing, so the voting is unexecutable forever and discovery keeps re-offering it. The executor must record and suppress it.
+- **An *approved* voting can be permanently unexecutable too.** `executeVoting` applies the mutation before setting `finalized`, so a suggestion that cannot be applied — no theme, no statement, a cell bound to another organ — reverts the whole call and leaves a voting that *passed* stuck forever. Creation checks none of those, so the only cheap moment to catch it is when the proposal is written.
+- **`isCategoryAllowed(x, y, c)` is not the guard `addValue` applies.** The internal one also requires the cell to be bound to the proposing organ; the public getter cannot see that. Read the binding too, or preflight approves proposals that revert.
 - **`region` is the enum ordinal, never the subject code.** They differ for 50 of 98 regions and a wrong one silently addresses a *different real region*. Chelyabinsk is ordinal 74 *and* code "74", so the project's own region hides the bug in testing.
 - **The approval base doubles as an enable flag.** An organ whose `approvalPercentageBase` is zero falls back to `simpleMajority` entirely, so a quorum set without a base is silently discarded. Configure all three together. Values are **basis points**, not percent.
 - **`castVote` takes two arguments** — `(votingId, support)`. The organ comes from the voting, which has no getter, so vote preflight must recover it from creation events.

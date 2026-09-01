@@ -94,13 +94,17 @@ Exact behavior from `Votings.sol:416-445`, in order:
 | still within `[startTime, endTime]` | revert `VotingStillActive` |
 | already finalized | revert `VotingAlreadyFinalized` |
 | `totalVotes == 0` **or** `totalVotes < quorum` | revert `InsufficientVotes` — **`finalized` stays false, so this is permanent** |
-| quorum met | `finalized = true`, emit `VotingFinalized(success)`; mutation applied only if `success` |
+| quorum met, `success == false` | `finalized = true`, emit `VotingFinalized(false)`. No mutation |
+| quorum met, `success == true`, mutation applies | `finalized = true`, emit `VotingFinalized(true)` |
+| quorum met, `success == true`, **mutation reverts** | whole call reverts — **`finalized` stays false, so this is permanent too** |
 
 `success` is `(forVotes * approvalPercentageBase) / totalVotes > approvalPercentage` — a **strict** `>`, and integer division truncates before the comparison.
 
 Execution is possible only *strictly after* `endTime`: `isActive` uses `block.timestamp <= endTime`, and execution requires `!isActive`.
 
-The two revert paths never finalize, so such votings remain unfinalized and unexecutable forever, and keep appearing in any discovery projection. See "Quorum failure is permanent" in `CONTRACT_DEFECTS.md`.
+The mutation runs **before** `finalized = true` (`Votings.sol:436-442`) and is not wrapped, so a suggestion that cannot be applied takes the whole transaction down with it and leaves an *approved* voting unfinalized forever. Five of the eight types can fail there — statement, category, decimals and both value types. See "An approved voting can be permanently unexecutable" in `CONTRACT_DEFECTS.md`, and check the matrix preconditions when the proposal is written, since creation checks none of them.
+
+All three revert paths never finalize, so such votings remain unfinalized and unexecutable forever, and keep appearing in any discovery projection. See also "Quorum failure is permanent" in `CONTRACT_DEFECTS.md`.
 
 ## Eligibility parameters
 
@@ -152,7 +156,7 @@ getNumericalCellOrgan(uint256 x, uint256 y) view returns (bytes32)
 getCategoricalCellInfo(uint256 x, uint256 y) view returns (bytes32, uint64[], uint256)
 getNumericalCellInfo(uint256 x, uint256 y) view returns (bytes32, uint8, uint256)
 getAllowedCategories(uint256 x, uint256 y) view returns (uint64[])
-isCategoryAllowed(uint256 x, uint256 y, uint64 category) view returns (bool)
+isCategoryAllowed(uint256 x, uint256 y, uint64 category) view returns (bool)   // NOT the guard addValue applies
 getCategoryName(uint256 x, uint256 y, uint64 category) view returns (string)
 getTheme(bool isCategorical, uint256 x) view returns (string)
 getStatement(bool isCategorical, uint256 y) view returns (string)   // keyed by y only
@@ -165,7 +169,9 @@ getCategoricalSampleLength(uint256 x, uint256 y) view returns (uint256)
 getCategoricalHistory(uint256 x, uint256 y, uint32 offset, uint256 limit) view returns (uint32[], address[], uint64[])
 ```
 
-`DecodedCheckpoint` is `{ uint32 timestamp, address author, uint64 value }`. Two traps in the value readers — `get*ValueAtTimestamp` returns the timestamp you queried rather than the checkpoint's, and `get*ValueAt` panics out of bounds. See the quirks list in `CONTRACT_DEFECTS.md`.
+`DecodedCheckpoint` is `{ uint32 timestamp, address author, uint64 value }`. Two traps in the value readers — `get*ValueAtTimestamp` returns the timestamp you queried rather than the checkpoint's, and `get*ValueAt` panics out of bounds. And one in the metadata: **`isCategoryAllowed(x, y, category)` is not the check `addValue` performs** — the guard also requires the cell to be bound to the *proposing* organ, and the getter cannot see that half. Read the binding from `getCategoricalCellInfo` as well. See the quirks list in `CONTRACT_DEFECTS.md`.
+
+An unwritten cell's organ reads as 32 zero bytes rather than reverting, so "unbound" and "bound to `0x00…00`" share a representation the client has to interpret.
 
 `votingId == 0` is now rejected by the `votingExists` guard, so reads on it revert `VotingNotFound` rather than returning zero-values.
 

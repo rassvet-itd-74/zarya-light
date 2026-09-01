@@ -127,6 +127,41 @@ export function errorParameterTypes(path: string, name: string): string[] | unde
     .filter((part) => part !== '');
 }
 
+export interface SolidityEventParameter {
+  readonly type: string;
+  readonly indexed: boolean;
+  readonly name: string;
+}
+
+/**
+ * The parameters of a declared `event`, in order, with their `indexed` flags.
+ *
+ * Needed for exactly one event: `ValueAdded`, which is the only signature this
+ * client hand-writes, because an externally-linked library's events never reach
+ * the calling contract's ABI. Everything else is read from the ABI file itself.
+ */
+export function eventParameters(
+  path: string,
+  name: string,
+): SolidityEventParameter[] | undefined {
+  const declaration = new RegExp(`event\\s+${name}\\(([^)]*)\\);`).exec(read(path));
+  if (declaration === null) return undefined;
+
+  return declaration[1]
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part !== '')
+    .map((part) => {
+      const words = part.split(/\s+/);
+      const indexed = words.includes('indexed');
+      return {
+        type: words[0],
+        indexed,
+        name: words[words.length - 1],
+      };
+    });
+}
+
 /** Whether a `unicode"..."` literal appears verbatim in the source. */
 export const declaresUnicodeLiteral = (path: string, literal: string): boolean =>
   read(path).includes(`unicode"${literal}"`);

@@ -90,3 +90,10 @@ typings/
 
 # Electron-Forge
 out/
+
+# Key material. Encrypted or not, it never enters the repository.
+keystore.json
+*.keystore
+*.key
+.env
+.env.*

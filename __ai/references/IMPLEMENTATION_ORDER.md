@@ -4,7 +4,7 @@ Use only when the repository does not already have a more advanced implementatio
 
 ## Current repository state
 
-**Phases 0 and 1 are complete** as of 2026-08-24.
+**Phases 0 and 1 are complete** as of 2026-08-24; **Phase 2 as of 2026-09-01.**
 
 Phase 0: the Solidity source arrived and closed every open question; the contract surface is in `CONTRACT.md` and the behaviors that surprised us are in `CONTRACT_DEFECTS.md`. Both halves of the product are specified — the contract by its source, the document format by us — so nothing below is blocked on external input.
 
@@ -27,18 +27,19 @@ Two things worth carrying forward from how it was built:
 
 Deferred out of Phase 1 with reasons, not by oversight: the `Signer` port and any secret store (Phase 6), and a runtime Electron harness that proves the renderer cannot reach Node (Phase 10 — the current tests assert the configuration, not the sandbox's behavior).
 
-## Phase 2 — chain read adapter and preflight
+## Phase 2 — chain read adapter and preflight — **done 2026-09-01**
 
 Ahead of the form layer because template pre-fill depends on these reads.
 
-Being built in slices. **Slice 1 (foundation and network guard) is done, 2026-08-24**: viem as the chain library, `NetworkGuard` and the `Clock` implementation, and the deployment discriminator. **Slice 2 (organ resolution and the error registry) is done, 2026-09-01.** **Slice 3 (voting reads and discovery) is done, 2026-09-01.** Remaining: the `ValueAdded` fragment and preflight.
+Built in four slices. **Slice 1** — foundation and network guard, 2026-08-24: viem as the chain library, `NetworkGuard` and the `Clock` implementation, and the deployment discriminator. **Slice 2** — organ resolution and the error registry. **Slice 3** — voting reads and discovery. **Slice 4** — the `ValueAdded` fragment, the matrix reads, and preflight.
 
-Four things settled there that bind the rest of the phase:
+Five things settled here that bind the rest of the plan:
 
 - **Tests run against a local anvil forking Sepolia.** The real deployed contract, its real linked libraries, and its real state, with nothing compiled here and nothing broadcast — the live network is read once, at fork time. Opt-in via `ZARYA_FORK_RPC_URL`; the suite skips and stays green without it.
 - **The identity check is four distinct verdicts, not one.** chainId, contract code, an eligibility fingerprint, and the `castVote` arity probe. `UNREACHABLE` is separate from all of them, because an outage must never be reported as a wrong deployment.
 - **A revert's *meaning* is domain, its *decoding* is adapter.** `CallOutcome` has an `UNKNOWN` member with three distinct reasons, so an outage, an empty revert, and an unnameable selector never collapse into a verdict about what the contract decided.
 - **The deployment has exactly one voting, and it is the instructive one.** Voting 1 is a membership voting for `74.СОВ` with zero votes, past its deadline and unfinalized — the "Quorum failure is permanent" case, live. Simulating `executeVoting(1)` on the fork reverts `InsufficientVotes`, so the executor's terminal rule is now observed rather than inferred. Anything that changes on that deployment changes these tests.
+- **Preflight predicts a revert *name*, and the guard order is part of the prediction.** `castVote` checks the voting's organ before the window, so a non-member looking at an expired voting is refused for membership — confirmed on the fork. Predictions are compared against simulations and the disagreement is reported, because a client stricter than the chain refuses real governance and a stale projection has no other symptom.
 
 - ~~Provider and chainId validation; contract code check.~~ **Done.**
 - ~~Organ resolution via `getPartyOrgan`, carrying the structured triple with `region` as an **enum ordinal**, validated against `getPartyOrganIdentifier` on every resolution.~~ **Done** — and the ordinal is a branded type with no numeric route from a subject code, so a form's answer can only become an argument through the table.
@@ -46,9 +47,11 @@ Four things settled there that bind the rest of the phase:
 - ~~Error decoding across the ABI's 16 errors **plus** `NoThemeSet`, `NoStatementSet`, `InvalidCategory`, and `Panic(0x11/0x12/0x32)`.~~ **Done**, plus `Error(string)`. Dispositions are `ALREADY_DONE` / `NOT_YET` / `REJECTED` / `TERMINAL`; `InsufficientVotes` and `InvalidOrgan` are the two terminal ones.
 - ~~Reads: `isVotingActive`, `isVotingFinalized`, `hasVoted`, `isMember`, `getVotingResults`.~~ **Done**, plus `exists` and `highestVotingId`. Every read returns `undefined` rather than a plausible `false` when it could not read — `VotingNotFound` included.
 - ~~`VotingCreated` event indexing with a persisted block cursor — the only source of `endTime`, and the same cursor the matrix coordinate index projects from.~~ **Done**, with the cursor in memory until Phase 5 (`CursorStore` is declared and its monotonicity rule enforced). The window is chosen by `planDiscovery`: 12 confirmations behind head, 5 000 blocks per scan, backfilling from block **11553464** — found by binary search over `eth_getCode`, not transcribed.
-- A hand-written fragment for `ValueAdded`, which fires at the Zarya address but is absent from the ABI. Note that everything else *is* in the ABI: the `Votings` library's functions are `internal`, so its twelve events survive into it, and only `Matricies`' `external` functions cause absence.
-- Chairman-aware preflight: `isMember` against the Chairperson organ for UX, simulation for the decision.
+- ~~A hand-written fragment for `ValueAdded`, which fires at the Zarya address but is absent from the ABI.~~ **Done**, pinned by a literal topic hash as well as against the declaration, since the topic outlives `temporal_docs/` and a wrong fragment fails by matching nothing. Everything else *is* in the ABI: the `Votings` library's functions are `internal`, so its twelve events survive into it, and only `Matricies`' `external` functions cause absence.
+- ~~Chairman-aware preflight: `isMember` against the Chairperson organ for UX, simulation for the decision.~~ **Done.** The contract's five guards are values (`AuthorizationRule`), the Chairman exemption is granted only where the contract grants it — not for the four matrix-configuration votings — and the Chairperson read is not even *made* under a rule that would not use it.
 - ~~Tests keyed on a region whose ordinal and subject code differ.~~ **Done** — Chechnya (ordinal 20, code 95) throughout, and the fork test sweeps all 98 regions against the deployed helpers.
+- Matrix metadata reads, added because preflight needs them: cell binding, allowed categories, decimals, themes and statements. The checkpoint readers stay out until the matrix report.
+- **Found while building this:** an *approved* voting can be permanently unexecutable, because the mutation runs before `finalized = true`. Creation checks none of the matrix preconditions, so preflight warns at proposal time. New entry in `CONTRACT_DEFECTS.md`; Phase 7 owes it executor state distinct from the `InsufficientVotes` suppression, and Phase 4's form templates should surface the warning.
 
 **`temporal_docs/` is scheduled for removal once this plan is complete**, so the tables derived from it are guarded two ways. The source-parsing tests skip when the sources are absent (`hasSoliditySource`), and what remains is the stronger evidence: the fork tests resolve every region and organ type through the deployed contract, and literal keccak digests and error selectors pin the local mirrors with no file dependency. **`npm run ai:validate` is not yet ready for that removal** — it hard-fails on a missing `.sol` and cross-checks 596 source symbols. Decide before deleting.
 
@@ -59,6 +62,8 @@ Four things settled there that bind the rest of the phase:
 - Organ represented as a structured triple, not a label.
 - Schema validation separate from normalization separate from chain preflight.
 - Exhaustive intent-to-adapter mapping with a `never` check so a new variant cannot silently fall through.
+- Each variant maps to one `AuthorizationRule` from Phase 2 — the intent model decides *what* is being asked, never *who may ask it*. `creationRule` already covers the eight creation variants; the privileged setters are `CHAIRMAN_ONLY`.
+- `CallSimulator` grows an arm per new write. It names calls rather than taking calldata on purpose: a port accepting bytes would put a hole in the form allow-list one layer below where anyone would look for it.
 
 ## Phase 4 — PDF form schema, issuance, and ingestion
 
