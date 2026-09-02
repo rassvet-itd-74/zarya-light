@@ -15,7 +15,7 @@ These are *decisions*, not invariants — rules that hold unconditionally are in
 
 ## The PDF library is pdf-lib 1.17.1 — decided 2026-09-02
 
-Chosen by probing the package, not by reading its README. What was observed: `/OpenAction` with `/JS` survives a load as inert data and the package contains no interpreter, `eval`, or `new Function`; every `fetch(` in its source is inside a JSDoc example and there are zero runtime occurrences; AcroForm names and values round-trip including Cyrillic and hex-encoded strings; and it throws on garbage, on an empty buffer, and on a truncated document.
+Chosen by probing the package, not by reading its README. What was observed: `/OpenAction` with `/JS` survives a load as inert data and the package contains no interpreter, `eval`, or `new Function`; every `fetch` in its source is inside a JSDoc example and there are zero runtime occurrences; AcroForm names and values round-trip including Cyrillic and hex-encoded strings; and it throws on garbage, on an empty buffer, and on a truncated document.
 
 `@cantoo/pdf-lib`, the maintained fork, was rejected despite pdf-lib being unmaintained since 2022. The fork pulls in an HTML parser at `>=1.5.9` — an unpinned major range — plus `color` and `html-entities`, for features this project does not use. That is dependency surface on the one boundary that parses hostile input, and pdf-lib has four narrow dependencies and roughly 25 times the weekly downloads.
 
@@ -26,7 +26,7 @@ Two ways pdf-lib does not meet the stated library constraints, both accepted wit
 
 Only `src/adapters/forms/` may import it, enforced by ESLint and observed firing. Nothing else in the client parses a document.
 
-Two facts about the library that shape the code above it: a dotted field name is stored as a `/Parent` chain and composed back by `getName()`, so `zarya.input.member` is a node tree rather than a flat string; and a present-but-unfilled field reads as `undefined`, which the parser must turn into a blank rather than an absence.
+Two facts about the library that shape the code above it: a dotted field name is stored as a `/Parent` chain and composed back by pdf-lib's name accessor, so `zarya.input.member` is a node tree rather than a flat string; and a present-but-unfilled field reads as `undefined`, which the parser must turn into a blank rather than an absence.
 
 ## Matrix reference report
 
