@@ -119,19 +119,25 @@ describe('the applied wording', () => {
 });
 
 describe('a pending slot', () => {
-  it('renders bracketed and never blank', () => {
-    // A missing label on a printed form is worse than an obvious placeholder,
-    // because a member cannot tell the field is unexplained.
-    for (const slot of pendingLabels()) {
-      const text = textFor(slot);
-      expect(text.startsWith('['), slot).toBe(true);
-      expect(text.length, slot).toBeGreaterThan(2);
-    }
+  it('is not something any slot currently is', () => {
+    // Asserted directly rather than by looping over `pendingLabels()`: an empty
+    // loop is a test that checks nothing, and this file had one the moment the
+    // Russian landed.
+    expect(pendingLabels()).toEqual([]);
   });
 
-  it('keeps its English description as a description, not a draft', () => {
+  it('would render bracketed and never blank', () => {
+    // The mechanism still matters — a slot added tomorrow falls back to it, and
+    // a missing label on a printed form is worse than an obvious placeholder
+    // because a member cannot tell the field is unexplained.
     expect(labelText({ kind: 'PENDING', english: 'cast vote' })).toBe('[cast vote]');
     expect(labelText({ kind: 'RU', text: 'Голосование' })).toBe('Голосование');
+  });
+
+  it('is what an empty value in the fill-in file produces', () => {
+    // Blanking a line in `wording.ru.txt` is the supported way to withdraw
+    // wording, so it must not produce an empty label.
+    expect(labelText({ kind: 'PENDING', english: 'x' })).toBe('[x]');
   });
 });
 

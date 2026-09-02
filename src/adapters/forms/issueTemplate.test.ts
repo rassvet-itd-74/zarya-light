@@ -306,23 +306,27 @@ describe('the full round trip: issue, fill, ingest', () => {
   });
 });
 
-describe('the wording that is still outstanding', () => {
-  it('is enumerated rather than remembered', () => {
-    // Not an assertion that the count is right — an assertion that the suite
-    // can say what it is. When the Russian text lands this drops to zero and
-    // the number below changes with it.
-    const outstanding = pendingLabels();
+describe('the wording', () => {
+  it('is complete, so no form prints a placeholder', () => {
+    // This used to assert 61 outstanding. The Russian has landed, so the
+    // assertion inverts: a slot falling back to a bracketed placeholder now
+    // means a regression rather than work in progress.
     expect(LABEL_SLOT_COUNT).toBe(62);
-    expect(outstanding).toHaveLength(61);
-    expect(outstanding).toContain('operationTitle.CAST_VOTE');
-    expect(outstanding).not.toContain('brand');
+    expect(pendingLabels()).toEqual([]);
   });
 
-  it('renders a pending label visibly bracketed, never blank', async () => {
-    // A missing label on a printed form is worse than an obvious placeholder,
-    // because a member cannot tell the field is unexplained.
+  it('titles a form in Russian, in the document metadata as well as on the page', async () => {
     const { bytes } = await issue('CAST_VOTE');
-    const document = await PDFDocument.load(bytes);
-    expect(document.getTitle()).toBe('[cast vote]');
+    const document = await PDFDocument.load(bytes, { updateMetadata: false });
+    expect(document.getTitle()).toBe('Отдача голоса по вопросу');
+  });
+
+  it('draws Cyrillic on every form without an encoding failure', async () => {
+    // The reason PT Sans is embedded at all: the standard fonts throw
+    // `WinAnsi cannot encode "С"`. Now that every label is Cyrillic, issuing
+    // all eleven is itself the test that the font covers what they draw.
+    for (const type of OPERATION_TYPES) {
+      await expect(issue(type)).resolves.toBeDefined();
+    }
   });
 });

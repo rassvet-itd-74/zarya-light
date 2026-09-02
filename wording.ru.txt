@@ -41,7 +41,7 @@
 #   Appears : 1 of 11 - CREATE_MEMBERSHIP_VOTING
 #   Means   : Proposes admitting an address as a member of the organ named in the context block.
 #   English : create membership voting
-operationTitle.CREATE_MEMBERSHIP_VOTING = 
+operationTitle.CREATE_MEMBERSHIP_VOTING = Голосование о членстве в органе Партии
 
 # --------------------------------------------------------------------------
 # operationTitle.CREATE_MEMBERSHIP_REVOCATION_VOTING
@@ -49,7 +49,7 @@ operationTitle.CREATE_MEMBERSHIP_VOTING =
 #   Appears : 1 of 11 - CREATE_MEMBERSHIP_REVOCATION_VOTING
 #   Means   : Proposes removing a member from the organ named in the context block.
 #   English : create membership revocation voting
-operationTitle.CREATE_MEMBERSHIP_REVOCATION_VOTING = 
+operationTitle.CREATE_MEMBERSHIP_REVOCATION_VOTING = Голосование об исключении из органа Партии
 
 # --------------------------------------------------------------------------
 # operationTitle.CREATE_CATEGORY_VOTING
@@ -57,7 +57,7 @@ operationTitle.CREATE_MEMBERSHIP_REVOCATION_VOTING =
 #   Appears : 1 of 11 - CREATE_CATEGORY_VOTING
 #   Means   : Proposes adding an allowed category to one cell of the categorical matrix.
 #   English : create category voting
-operationTitle.CREATE_CATEGORY_VOTING = 
+operationTitle.CREATE_CATEGORY_VOTING = Голосование о новой категории по вопросу
 
 # --------------------------------------------------------------------------
 # operationTitle.CREATE_DECIMALS_VOTING
@@ -65,7 +65,7 @@ operationTitle.CREATE_CATEGORY_VOTING =
 #   Appears : 1 of 11 - CREATE_DECIMALS_VOTING
 #   Means   : Proposes how many decimal places one numerical cell stores.
 #   English : create decimals voting
-operationTitle.CREATE_DECIMALS_VOTING = 
+operationTitle.CREATE_DECIMALS_VOTING = Голосование о точности по вопросу
 
 # --------------------------------------------------------------------------
 # operationTitle.CREATE_THEME_VOTING
@@ -73,7 +73,7 @@ operationTitle.CREATE_DECIMALS_VOTING =
 #   Appears : 1 of 11 - CREATE_THEME_VOTING
 #   Means   : Proposes the heading of a matrix column. Carries no organ - anyone may propose and vote.
 #   English : create theme voting
-operationTitle.CREATE_THEME_VOTING = 
+operationTitle.CREATE_THEME_VOTING = Голосование о новой теме
 
 # --------------------------------------------------------------------------
 # operationTitle.CREATE_STATEMENT_VOTING
@@ -81,7 +81,7 @@ operationTitle.CREATE_THEME_VOTING =
 #   Appears : 1 of 11 - CREATE_STATEMENT_VOTING
 #   Means   : Proposes the proposition of a matrix row. Carries no organ - anyone may propose and vote.
 #   English : create statement voting
-operationTitle.CREATE_STATEMENT_VOTING = 
+operationTitle.CREATE_STATEMENT_VOTING = Голосование о новом вопросе
 
 # --------------------------------------------------------------------------
 # operationTitle.CREATE_CATEGORICAL_VALUE_VOTING
@@ -89,7 +89,7 @@ operationTitle.CREATE_STATEMENT_VOTING =
 #   Appears : 1 of 11 - CREATE_CATEGORICAL_VALUE_VOTING
 #   Means   : Proposes recording a category as the value of one categorical cell.
 #   English : create categorical value voting
-operationTitle.CREATE_CATEGORICAL_VALUE_VOTING = 
+operationTitle.CREATE_CATEGORICAL_VALUE_VOTING = Голосование о новом ответе на вопрос по категории
 
 # --------------------------------------------------------------------------
 # operationTitle.CREATE_NUMERICAL_VALUE_VOTING
@@ -97,7 +97,7 @@ operationTitle.CREATE_CATEGORICAL_VALUE_VOTING =
 #   Appears : 1 of 11 - CREATE_NUMERICAL_VALUE_VOTING
 #   Means   : Proposes recording a number as the value of one numerical cell.
 #   English : create numerical value voting
-operationTitle.CREATE_NUMERICAL_VALUE_VOTING = 
+operationTitle.CREATE_NUMERICAL_VALUE_VOTING = Голосование о новом ответе на вопрос по числовому значению
 
 # --------------------------------------------------------------------------
 # operationTitle.CAST_VOTE
@@ -105,7 +105,7 @@ operationTitle.CREATE_NUMERICAL_VALUE_VOTING =
 #   Appears : 1 of 11 - CAST_VOTE
 #   Means   : Casts a for-or-against vote on a voting that already exists.
 #   English : cast vote
-operationTitle.CAST_VOTE = 
+operationTitle.CAST_VOTE = Отдача голоса по вопросу
 
 # --------------------------------------------------------------------------
 # operationTitle.CONFIGURE_ORGAN_THRESHOLDS
@@ -113,7 +113,7 @@ operationTitle.CAST_VOTE =
 #   Appears : 1 of 11 - CONFIGURE_ORGAN_THRESHOLDS
 #   Means   : CHAIRMAN ONLY. Sets quorum, approval and base for one organ, all three together.
 #   English : configure organ thresholds
-operationTitle.CONFIGURE_ORGAN_THRESHOLDS = 
+operationTitle.CONFIGURE_ORGAN_THRESHOLDS = Конфигурация параметров голосования для органа
 
 # --------------------------------------------------------------------------
 # operationTitle.TRANSFER_CHAIRMANSHIP
@@ -121,7 +121,7 @@ operationTitle.CONFIGURE_ORGAN_THRESHOLDS =
 #   Appears : 1 of 11 - TRANSFER_CHAIRMANSHIP
 #   Means   : CHAIRMAN ONLY. Hands the chairmanship to another address.
 #   English : transfer chairmanship
-operationTitle.TRANSFER_CHAIRMANSHIP = 
+operationTitle.TRANSFER_CHAIRMANSHIP = Передача прав Председателя
 
 # ##########################################################################
 # 2. INPUT FIELD LABELS
@@ -138,7 +138,7 @@ operationTitle.TRANSFER_CHAIRMANSHIP =
 #   Appears : 2 of 11 - CREATE_MEMBERSHIP_VOTING, CREATE_MEMBERSHIP_REVOCATION_VOTING
 #   Means   : The address being admitted or removed.
 #   English : member address
-input.member = 
+input.member = Адрес коллеги
 
 # --------------------------------------------------------------------------
 # input.duration
@@ -146,7 +146,7 @@ input.member =
 #   Appears : 8 of 11 - CREATE_MEMBERSHIP_VOTING, CREATE_MEMBERSHIP_REVOCATION_VOTING, CREATE_CATEGORY_VOTING, CREATE_DECIMALS_VOTING, CREATE_THEME_VOTING, CREATE_STATEMENT_VOTING, CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING
 #   Means   : How long the voting stays open. The member writes a number of seconds.
 #   English : voting duration
-input.duration = 
+input.duration = Длительность
 
 # --------------------------------------------------------------------------
 # input.x
@@ -154,7 +154,7 @@ input.duration =
 #   Appears : 6 of 11 - CREATE_CATEGORY_VOTING, CREATE_DECIMALS_VOTING, CREATE_THEME_VOTING, CREATE_STATEMENT_VOTING, CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING
 #   Means   : The matrix column. A member copies it from the printed matrix reference report.
 #   English : column (x)
-input.x = 
+input.x = Тема (Ось X)
 
 # --------------------------------------------------------------------------
 # input.y
@@ -162,7 +162,7 @@ input.x =
 #   Appears : 5 of 11 - CREATE_CATEGORY_VOTING, CREATE_DECIMALS_VOTING, CREATE_STATEMENT_VOTING, CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING
 #   Means   : The matrix row. A member copies it from the printed matrix reference report.
 #   English : row (y)
-input.y = 
+input.y = Вопрос или Утверждение (Ось Y)
 
 # --------------------------------------------------------------------------
 # input.category
@@ -170,7 +170,7 @@ input.y =
 #   Appears : 2 of 11 - CREATE_CATEGORY_VOTING, CREATE_CATEGORICAL_VALUE_VOTING
 #   Means   : The category number. NOTE: one label serves two forms - declaring a category as allowed, and recording one as a cell value.
 #   English : category number
-input.category = 
+input.category = Номер категории
 
 # --------------------------------------------------------------------------
 # input.categoryName
@@ -178,7 +178,7 @@ input.category =
 #   Appears : 1 of 11 - CREATE_CATEGORY_VOTING
 #   Means   : The human-readable name printed beside the category number.
 #   English : category name
-input.categoryName = 
+input.categoryName = Название категории
 
 # --------------------------------------------------------------------------
 # input.decimals
@@ -186,7 +186,7 @@ input.categoryName =
 #   Appears : 1 of 11 - CREATE_DECIMALS_VOTING
 #   Means   : How many decimal places the cell should store. Here it is the thing being PROPOSED.
 #   English : decimal places
-input.decimals = 
+input.decimals = Точность
 
 # --------------------------------------------------------------------------
 # input.matrix
@@ -194,7 +194,7 @@ input.decimals =
 #   Appears : 2 of 11 - CREATE_THEME_VOTING, CREATE_STATEMENT_VOTING
 #   Means   : Which of the two matrices. An option group, not a text field.
 #   English : which matrix
-input.matrix = 
+input.matrix = Выбор матрицы
 
 # --------------------------------------------------------------------------
 # input.theme
@@ -202,7 +202,7 @@ input.matrix =
 #   Appears : 1 of 11 - CREATE_THEME_VOTING
 #   Means   : The column heading being proposed. Free Russian text.
 #   English : theme
-input.theme = 
+input.theme = Тема
 
 # --------------------------------------------------------------------------
 # input.statement
@@ -210,7 +210,7 @@ input.theme =
 #   Appears : 1 of 11 - CREATE_STATEMENT_VOTING
 #   Means   : The row proposition being proposed. Free Russian text.
 #   English : statement
-input.statement = 
+input.statement = Вопрос или Утверждение
 
 # --------------------------------------------------------------------------
 # input.value
@@ -218,7 +218,7 @@ input.statement =
 #   Appears : 1 of 11 - CREATE_NUMERICAL_VALUE_VOTING
 #   Means   : The number being recorded. Its precision is fixed by the cell, not the member.
 #   English : value
-input.value = 
+input.value = Значение
 
 # --------------------------------------------------------------------------
 # input.valueAuthor
@@ -226,7 +226,7 @@ input.value =
 #   Appears : 2 of 11 - CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING
 #   Means   : The address credited as the author of the value. Not the sender.
 #   English : author of the value
-input.valueAuthor = 
+input.valueAuthor = Автор значения
 
 # --------------------------------------------------------------------------
 # input.support
@@ -234,7 +234,7 @@ input.valueAuthor =
 #   Appears : 1 of 11 - CAST_VOTE
 #   Means   : For or against. An option group, not a text field.
 #   English : your vote
-input.support = 
+input.support = Ваш голос
 
 # --------------------------------------------------------------------------
 # input.quorum
@@ -242,7 +242,7 @@ input.support =
 #   Appears : 1 of 11 - CONFIGURE_ORGAN_THRESHOLDS
 #   Means   : The minimum number of votes for a voting to count. An exact COUNT, never a percentage.
 #   English : quorum
-input.quorum = 
+input.quorum = Кворум
 
 # --------------------------------------------------------------------------
 # input.approvalPercentage
@@ -250,7 +250,7 @@ input.quorum =
 #   Appears : 1 of 11 - CONFIGURE_ORGAN_THRESHOLDS
 #   Means   : The share of votes in favour required, in basis points.
 #   English : approval threshold
-input.approvalPercentage = 
+input.approvalPercentage = Процент для принятия решения
 
 # --------------------------------------------------------------------------
 # input.approvalPercentageBase
@@ -258,7 +258,7 @@ input.approvalPercentage =
 #   Appears : 1 of 11 - CONFIGURE_ORGAN_THRESHOLDS
 #   Means   : The base the share is measured against. 10000 means 100%. Zero resets the organ to a simple majority.
 #   English : approval base
-input.approvalPercentageBase = 
+input.approvalPercentageBase = База процента для принятия решения
 
 # --------------------------------------------------------------------------
 # input.newChairman
@@ -266,7 +266,7 @@ input.approvalPercentageBase =
 #   Appears : 1 of 11 - TRANSFER_CHAIRMANSHIP
 #   Means   : The address receiving the chairmanship.
 #   English : new chairman
-input.newChairman = 
+input.newChairman = Новый Председатель
 
 # ##########################################################################
 # 3. FIELD HINTS
@@ -283,7 +283,7 @@ input.newChairman =
 #   Appears : 8 of 11 - CREATE_MEMBERSHIP_VOTING, CREATE_MEMBERSHIP_REVOCATION_VOTING, CREATE_CATEGORY_VOTING, CREATE_DECIMALS_VOTING, CREATE_THEME_VOTING, CREATE_STATEMENT_VOTING, CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING
 #   Means   : Under the duration label. The unit is where mistakes happen.
 #   English : in seconds
-hint.duration = 
+hint.duration = в секундах
 
 # --------------------------------------------------------------------------
 # hint.x
@@ -291,7 +291,7 @@ hint.duration =
 #   Appears : 6 of 11 - CREATE_CATEGORY_VOTING, CREATE_DECIMALS_VOTING, CREATE_THEME_VOTING, CREATE_STATEMENT_VOTING, CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING
 #   Means   : Under the column label. Points a member at the matrix reference report. Usually the same text as hint.y.
 #   English : from the matrix reference report
-hint.x = 
+hint.x = значение оси X из отчёта по состоянию Зари
 
 # --------------------------------------------------------------------------
 # hint.y
@@ -299,7 +299,7 @@ hint.x =
 #   Appears : 5 of 11 - CREATE_CATEGORY_VOTING, CREATE_DECIMALS_VOTING, CREATE_STATEMENT_VOTING, CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING
 #   Means   : Under the row label. Usually the same text as hint.x.
 #   English : from the matrix reference report
-hint.y = 
+hint.y = значение оси Y из отчёта по состоянию Зари
 
 # --------------------------------------------------------------------------
 # hint.value
@@ -307,7 +307,7 @@ hint.y =
 #   Appears : 1 of 11 - CREATE_NUMERICAL_VALUE_VOTING
 #   Means   : Under the value label. Warns that the cell fixes the precision, so extra digits are refused rather than rounded.
 #   English : this cell allows a fixed number of decimal places
-hint.value = 
+hint.value = число с точностью, заданной для ячейки
 
 # --------------------------------------------------------------------------
 # hint.decimals
@@ -315,7 +315,7 @@ hint.value =
 #   Appears : 1 of 11 - CREATE_DECIMALS_VOTING
 #   Means   : Under the decimals label. The accepted range.
 #   English : 0 to 255
-hint.decimals = 
+hint.decimals = от 0 до 255
 
 # --------------------------------------------------------------------------
 # hint.quorum
@@ -323,7 +323,7 @@ hint.decimals =
 #   Appears : 1 of 11 - CONFIGURE_ORGAN_THRESHOLDS
 #   Means   : Under the quorum label. The count-not-percentage warning; the one most likely to be misread.
 #   English : an exact number of votes, not a percentage
-hint.quorum = 
+hint.quorum = точное количество голосов, не процент
 
 # --------------------------------------------------------------------------
 # hint.approvalPercentage
@@ -331,7 +331,7 @@ hint.quorum =
 #   Appears : 1 of 11 - CONFIGURE_ORGAN_THRESHOLDS
 #   Means   : Under the approval label. Basis points, so 50% is 5000.
 #   English : in basis points
-hint.approvalPercentage = 
+hint.approvalPercentage = в базовых пунктах
 
 # --------------------------------------------------------------------------
 # hint.approvalPercentageBase
@@ -339,7 +339,7 @@ hint.approvalPercentage =
 #   Appears : 1 of 11 - CONFIGURE_ORGAN_THRESHOLDS
 #   Means   : Under the base label. Explains 10000 = 100% and that zero is a deliberate reset.
 #   English : in basis points; 10000 means 100%
-hint.approvalPercentageBase = 
+hint.approvalPercentageBase = в базовых пунктах; 10000 это 100%
 
 # --------------------------------------------------------------------------
 # hint.categoryName
@@ -347,7 +347,7 @@ hint.approvalPercentageBase =
 #   Appears : 1 of 11 - CREATE_CATEGORY_VOTING
 #   Means   : Under the category name label.
 #   English : the name shown beside the category number
-hint.categoryName = 
+hint.categoryName = имя нумерованной категории
 
 # ##########################################################################
 # 4. OPTION LABELS
@@ -364,7 +364,7 @@ hint.categoryName =
 #   Appears : 1 of 11 - CAST_VOTE
 #   Means   : Beside the first box on a vote form. Stored value stays FOR.
 #   English : for
-option.FOR = 
+option.FOR = ЗА
 
 # --------------------------------------------------------------------------
 # option.AGAINST
@@ -372,7 +372,7 @@ option.FOR =
 #   Appears : 1 of 11 - CAST_VOTE
 #   Means   : Beside the second box on a vote form. Stored value stays AGAINST.
 #   English : against
-option.AGAINST = 
+option.AGAINST = ПРОТИВ
 
 # --------------------------------------------------------------------------
 # option.CATEGORICAL
@@ -380,7 +380,7 @@ option.AGAINST =
 #   Appears : 2 of 11 - CREATE_THEME_VOTING, CREATE_STATEMENT_VOTING
 #   Means   : Beside the first box of the matrix chooser. Stored value stays CATEGORICAL.
 #   English : categorical matrix
-option.CATEGORICAL = 
+option.CATEGORICAL = КАТЕГОРИАЛЬНАЯ
 
 # --------------------------------------------------------------------------
 # option.NUMERICAL
@@ -388,7 +388,7 @@ option.CATEGORICAL =
 #   Appears : 2 of 11 - CREATE_THEME_VOTING, CREATE_STATEMENT_VOTING
 #   Means   : Beside the second box of the matrix chooser. Stored value stays NUMERICAL.
 #   English : numerical matrix
-option.NUMERICAL = 
+option.NUMERICAL = ЧИСЛОВАЯ
 
 # ##########################################################################
 # 5. CONTEXT LABELS
@@ -405,7 +405,7 @@ option.NUMERICAL =
 #   Appears : all 11 forms
 #   Means   : The network the form was issued against. Display only - never read back from the file.
 #   English : network
-context.chainId = 
+context.chainId = Номер сети
 
 # --------------------------------------------------------------------------
 # context.contract
@@ -413,7 +413,7 @@ context.chainId =
 #   Appears : all 11 forms
 #   Means   : The contract address the form was issued against. Display only.
 #   English : contract address
-context.contract = 
+context.contract = Адрес контракта
 
 # --------------------------------------------------------------------------
 # context.organ
@@ -421,7 +421,7 @@ context.contract =
 #   Appears : 7 of 11 - CREATE_MEMBERSHIP_VOTING, CREATE_MEMBERSHIP_REVOCATION_VOTING, CREATE_CATEGORY_VOTING, CREATE_DECIMALS_VOTING, CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING, CONFIGURE_ORGAN_THRESHOLDS
 #   Means   : The proposing organ as the contract renders it, e.g. 95.SOV. A member checks this is the right organ.
 #   English : party organ
-context.organ = 
+context.organ = Партийный орган
 
 # --------------------------------------------------------------------------
 # context.votingId
@@ -429,7 +429,7 @@ context.organ =
 #   Appears : 1 of 11 - CAST_VOTE
 #   Means   : Which voting the vote is about. Display only; the real number comes from the application record.
 #   English : voting number
-context.votingId = 
+context.votingId = Номер голосования
 
 # ##########################################################################
 # 6. RECEIPT LABELS
@@ -446,7 +446,7 @@ context.votingId =
 #   Appears : all 11 forms
 #   Means   : The transaction hash, written after confirmation.
 #   English : transaction hash
-receipt.txHash = 
+receipt.txHash = Хеш транзакции
 
 # --------------------------------------------------------------------------
 # receipt.status
@@ -454,7 +454,7 @@ receipt.txHash =
 #   Appears : all 11 forms
 #   Means   : Whether the transaction succeeded or reverted. NOTE: the transaction outcome, not whether the proposal passed.
 #   English : status
-receipt.status = 
+receipt.status = Статус
 
 # --------------------------------------------------------------------------
 # receipt.blockNumber
@@ -462,7 +462,7 @@ receipt.status =
 #   Appears : all 11 forms
 #   Means   : The block the transaction was mined in.
 #   English : block
-receipt.blockNumber = 
+receipt.blockNumber = Номер блока
 
 # --------------------------------------------------------------------------
 # receipt.chainId
@@ -470,7 +470,7 @@ receipt.blockNumber =
 #   Appears : all 11 forms
 #   Means   : The network the transaction was sent to.
 #   English : network
-receipt.chainId = 
+receipt.chainId = Номер сети
 
 # --------------------------------------------------------------------------
 # receipt.confirmedAt
@@ -478,7 +478,7 @@ receipt.chainId =
 #   Appears : all 11 forms
 #   Means   : The block timestamp of confirmation. Chain time, not the workstation clock.
 #   English : confirmed at
-receipt.confirmedAt = 
+receipt.confirmedAt = Время подтверждения
 
 # --------------------------------------------------------------------------
 # receipt.signer
@@ -486,7 +486,7 @@ receipt.confirmedAt =
 #   Appears : all 11 forms
 #   Means   : The address that signed. No key material ever appears on the form.
 #   English : signed by
-receipt.signer = 
+receipt.signer = Подписано
 
 # ##########################################################################
 # 7. METADATA LABELS
@@ -503,7 +503,7 @@ receipt.signer =
 #   Appears : all 11 forms
 #   Means   : Labels the reference the application uses to recover everything it authored. Keep very short.
 #   English : operation reference
-meta.operationRef = 
+meta.operationRef = Референс операции
 
 # --------------------------------------------------------------------------
 # meta.operationType
@@ -511,7 +511,7 @@ meta.operationRef =
 #   Appears : all 11 forms
 #   Means   : Labels the machine name of the operation. Keep very short.
 #   English : operation
-meta.operationType = 
+meta.operationType = Тип операции
 
 # --------------------------------------------------------------------------
 # meta.schemaVersion
@@ -519,7 +519,7 @@ meta.operationType =
 #   Appears : all 11 forms
 #   Means   : Labels the form format version. Keep very short.
 #   English : form version
-meta.schemaVersion = 
+meta.schemaVersion = Версия формы
 
 # ##########################################################################
 # 8. SECTION HEADINGS
@@ -536,7 +536,7 @@ meta.schemaVersion =
 #   Appears : all 11 forms
 #   Means   : Heading over the shaded fields the application filled in.
 #   English : completed by the application
-section.context = 
+section.context = Блок контекстуальных полей
 
 # --------------------------------------------------------------------------
 # section.input
@@ -544,7 +544,7 @@ section.context =
 #   Appears : all 11 forms
 #   Means   : Heading over the empty fields the member fills in. The most important heading on the page.
 #   English : to be completed by the member
-section.input = 
+section.input = Блок полей к заполнению
 
 # --------------------------------------------------------------------------
 # section.receipt
@@ -552,7 +552,7 @@ section.input =
 #   Appears : all 11 forms
 #   Means   : Heading over the block that stays empty until the transaction confirms.
 #   English : transaction receipt
-section.receipt = 
+section.receipt = Блок полей проверки
 
 # ##########################################################################
 # 9. SENTENCES
@@ -569,7 +569,7 @@ section.receipt =
 #   Appears : all 11 forms
 #   Means   : Under the member-block heading. Tells a member to fill only that block and return the file to the application.
 #   English : Fill in only the member block, then return this file to the application.
-sentence.instruction = 
+sentence.instruction = Заполнив все доступные к заполнению поля, пожалуйста, загрузите файл обратно в приложение.
 
 # --------------------------------------------------------------------------
 # sentence.tamperNotice
@@ -577,7 +577,7 @@ sentence.instruction =
 #   Appears : all 11 forms
 #   Means   : Under the application-block heading. States that editing those values changes nothing, because they are not read from the file.
 #   English : Values in the application block are not read from this file. Editing them changes nothing.
-sentence.tamperNotice = 
+sentence.tamperNotice = Значения контекстуальных полей не считываются из файла. Их редактирование ни на что не влияет.
 
 # --------------------------------------------------------------------------
 # sentence.coordinateDisclosure
@@ -585,7 +585,7 @@ sentence.tamperNotice =
 #   Appears : 6 of 11 - CREATE_CATEGORY_VOTING, CREATE_DECIMALS_VOTING, CREATE_THEME_VOTING, CREATE_STATEMENT_VOTING, CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING
 #   Means   : Under the member-block heading, only on forms asking for a column or a row. States that coordinates come from the reference report and are checked again at submission.
 #   English : Coordinates come from the matrix reference report and are checked again when the form is submitted.
-sentence.coordinateDisclosure = 
+sentence.coordinateDisclosure = Координаты должны соответствовать тем, которые были указаны в отчёте Зари, и сверяются с ним при загрузке файла формы обратно.
 
 # --------------------------------------------------------------------------
 # sentence.receiptNotice
@@ -593,7 +593,7 @@ sentence.coordinateDisclosure =
 #   Appears : all 11 forms
 #   Means   : Under the receipt heading. Explains why the block is empty.
 #   English : The receipt block is filled in by the application after the transaction confirms.
-sentence.receiptNotice = 
+sentence.receiptNotice = Блок полей проверки заполняется приложением автоматически после того, как файл успешно был обработан Зарёй.
 
 # ##########################################################################
 # 10. APPLICATION NAME
