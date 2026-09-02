@@ -26,6 +26,16 @@ Two ways pdf-lib does not meet the stated library constraints, both accepted wit
 
 Only `src/adapters/forms/` may import it, enforced by ESLint and observed firing. Nothing else in the client parses a document.
 
+## Templates are generated, in Russian, on A4 — decided 2026-09-02
+
+- **The application generates every template.** A hand-prepared PDF filled in by the app was considered and rejected: it becomes an untracked binary whose field names nothing can check against `FIELD_PLAN`, and the reproducibility decision above turns into pinning someone's file rather than the issuer's output.
+- **PT Sans, embedded whole rather than subset.** `src/assets/pt-sans/`, OFL. pdf-lib's standard fonts are WinAnsi and throw `WinAnsi cannot encode "С"`, so an embedded font is required. Subsetting would cost 11 KB against 322 KB, and is **not** used: a subset carries only the glyphs the issuer draws, and a viewer regenerating a field's appearance from it would show a member blanks where their own Cyrillic should be — a form that looks broken while the data is correct. Reasoned, not observed; revisit only after checking a template in a real viewer.
+- **A4**, and **Russian only** on every printed string.
+- **Printed wording lives in one module** (`formLabels.ts`) as values, and a slot with no Russian text yet renders bracketed rather than blank — a missing label is worse than an obvious placeholder, because a member cannot tell the field is unexplained. `pendingLabels()` enumerates what is outstanding so the suite reports it instead of anyone remembering.
+- **Option groups keep ASCII export values.** `FOR`, `AGAINST`, `CATEGORICAL`, `NUMERICAL` are what the parser reads; only the text drawn beside the box is translated. Translating an export value is a form schema change.
+- **Assets are injected into the issuer as bytes, never imported by it.** Vite's `?inline` resolves to a data URL in a build and to a *path string* under vitest, so an issuer that imported its own font could not be tested against the real file.
+- **A form states that coordinates come from the matrix reference report** and are checked again at submission, on every template that asks for one.
+
 Two facts about the library that shape the code above it: a dotted field name is stored as a `/Parent` chain and composed back by pdf-lib's name accessor, so `zarya.input.member` is a node tree rather than a flat string; and a present-but-unfilled field reads as `undefined`, which the parser must turn into a blank rather than an absence.
 
 ## Matrix reference report
