@@ -74,7 +74,16 @@ Two things settled in slice 2 that bind what follows:
 
 ## Phase 4 — PDF form schema, issuance, and ingestion
 
-- Define the field-name schema and `schemaVersion` in one module all three directions import.
+Being built in slices. **Slice 1 (the field-name schema and the mapping onto domain keys) is done, 2026-09-02.** Remaining: the PDF library, issuance, real parsing, receipt field writing, hostile fixtures, and the matrix report.
+
+Settled in slice 1 and binding on the rest:
+
+- **The `zarya.input.*` suffix *is* the domain key.** `zarya.input.member` carries `member`, so the form-to-domain mapping is a prefix strip with no table to fall out of date. A hand-maintained map fails silently when a key is renamed on one side; this fails at compile time.
+- **`FIELD_PLAN` is hard rule 4 expressed per operation** — which keys a human fills and which the app recovers from its record. The two entries that matter are `decimals` on a numerical value proposal and `votingId` on a vote; both are bound, and the form's copies are compared rather than used.
+- **Bound forms only.** No `operationRef` is a refusal, not a generic blank form. An unbound form would have to take the organ triple from the file, which is what the bound half exists to prevent.
+- **The plan is verified against the builder, not against a list.** A `Proxy` records every key `buildIntent` touches and the test asserts the plan provides all of them, so a key added to a builder cannot become a form that can never be completed.
+
+- ~~Define the field-name schema and `schemaVersion` in one module all three directions import.~~ **Done** — `adapters/forms/formSchema.ts`, plus `assembleFormInput.ts` for the structural half of ingestion that needs no PDF library.
 - Issuance: template generation from chain context, logo drawn, empty `zarya.receipt.*` fields present, `operationRef` persisted before the file is emitted, reproducible output.
 - Ingestion: parse `zarya.input.*` only; recover app-authored context from storage; structural refusal for XFA, encryption, flattening, a populated receipt marker, unknown version or field.
 - Round-trip test as the primary check: issue → fill programmatically → ingest → assert the intent matches.

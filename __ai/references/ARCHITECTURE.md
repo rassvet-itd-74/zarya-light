@@ -72,6 +72,8 @@ The ABI lives at `src/adapters/chain/abi/Zarya.abi.json`, where the adapter that
 
 The field-name schema lives in `adapters/forms/` and is shared by all three form directions. It is an adapter detail: the domain receives typed intents and never sees a field name.
 
+As of Phase 4 slice 1 that directory holds `formSchema.ts` — the field names, `FORM_SCHEMA_VERSION`, and the per-operation split between human-filled and app-authored keys — and `assembleFormInput.ts`, the structural half of ingestion. Neither imports a PDF library, which is why they are testable and why the round-trip test exists before the library does. **`FormParser` is deliberately not declared as a port yet:** a port returning field names would contradict the rule above, and the honest shape only becomes clear once the library that produces them is chosen. The application-facing surface is a function that ends at a typed intent.
+
 `src/domain/**` import restrictions are enforced by an ESLint override in `.eslintrc.json`. The directory exists, so the guard is live — observed rejecting Electron, `node:*`, the ABI, and an adapter import.
 
 The override covers domain **test** files too, deliberately. When domain tests needed to read `temporal_docs/` the fix was `src/testing/`, a module outside both layers that nothing shipped imports — not an exception in the rule, which would have applied to production modules the next time one was added.
