@@ -1,272 +1,615 @@
-# ЗАРЯ — ТЕКСТЫ ФОРМ (русский)
-# Zarya form wording. Fill in the right-hand side of each "key =" line.
+# ZARYA - FORM WORDING (Russian)
+# Fill in the right-hand side of each "key =" line.
 #
 # HOW TO FILL
-#   - Write only after the "=". Do not change a key, and do not reorder lines.
+#   - Write only after the "=". Do not change a key and do not reorder lines.
 #   - One line per entry. A line break inside a value is not supported.
-#   - "max" is the character count that fits at that size in PT Sans, measured
-#     against a Russian sample. Nothing wraps: a longer string runs off the page.
+#   - "Limit" is the character count that fits at that size in PT Sans, measured
+#     against a Russian sample. NOTHING WRAPS: a longer string runs off the page.
 #   - Lines starting with # are comments and are ignored.
 #   - Leave a value empty to keep the English placeholder for now.
 #
-# DO NOT TRANSLATE the stored option values (FOR, AGAINST, CATEGORICAL,
-# NUMERICAL) or any zarya.* field name. Only the printed text is Russian.
+# HOW TO CHECK YOUR WORK
+#   npm run wording:check    validates and reports, writes nothing
+#   npm run wording:apply    applies it to the application
 #
-# 61 strings outstanding.
+# The checker refuses a duplicate key, an unknown key, or a value too wide for
+# where it is drawn. A missing key is reported but allowed.
+#
+# DO NOT TRANSLATE the stored option values (FOR, AGAINST, CATEGORICAL,
+# NUMERICAL) or any zarya.* field name. Only printed text is Russian.
+#
+# EVERY FORM IS ONE A4 PAGE, top to bottom:
+#   header    application name, form title, one grey line of service data
+#   context   shaded read-only fields the application filled in
+#   member    empty fields to fill in - the ONLY ones read back from the file
+#   receipt   shaded read-only fields, empty until the transaction confirms
 
 
-# ========================================================================
-# 1. ЗАГОЛОВКИ ОПЕРАЦИЙ / operation titles
-# The heading at the top of each form.
-# max 81 characters
-# ========================================================================
+# ##########################################################################
+# 1. OPERATION TITLES
+#
+# One per form. Eleven forms, eleven titles.
+# Element: Form title. The first thing a member reads, directly under the application name.
+# Style  : 13pt bold, full width
+# Limit  : 81 characters
+# ##########################################################################
 
-# en: create membership voting
+# --------------------------------------------------------------------------
+# operationTitle.CREATE_MEMBERSHIP_VOTING
+#   Field   : (drawn text, not a field)
+#   Appears : 1 of 11 - CREATE_MEMBERSHIP_VOTING
+#   Means   : Proposes admitting an address as a member of the organ named in the context block.
+#   English : create membership voting
 operationTitle.CREATE_MEMBERSHIP_VOTING = 
 
-# en: create membership revocation voting
+# --------------------------------------------------------------------------
+# operationTitle.CREATE_MEMBERSHIP_REVOCATION_VOTING
+#   Field   : (drawn text, not a field)
+#   Appears : 1 of 11 - CREATE_MEMBERSHIP_REVOCATION_VOTING
+#   Means   : Proposes removing a member from the organ named in the context block.
+#   English : create membership revocation voting
 operationTitle.CREATE_MEMBERSHIP_REVOCATION_VOTING = 
 
-# en: create category voting
+# --------------------------------------------------------------------------
+# operationTitle.CREATE_CATEGORY_VOTING
+#   Field   : (drawn text, not a field)
+#   Appears : 1 of 11 - CREATE_CATEGORY_VOTING
+#   Means   : Proposes adding an allowed category to one cell of the categorical matrix.
+#   English : create category voting
 operationTitle.CREATE_CATEGORY_VOTING = 
 
-# en: create decimals voting
+# --------------------------------------------------------------------------
+# operationTitle.CREATE_DECIMALS_VOTING
+#   Field   : (drawn text, not a field)
+#   Appears : 1 of 11 - CREATE_DECIMALS_VOTING
+#   Means   : Proposes how many decimal places one numerical cell stores.
+#   English : create decimals voting
 operationTitle.CREATE_DECIMALS_VOTING = 
 
-# en: create theme voting
+# --------------------------------------------------------------------------
+# operationTitle.CREATE_THEME_VOTING
+#   Field   : (drawn text, not a field)
+#   Appears : 1 of 11 - CREATE_THEME_VOTING
+#   Means   : Proposes the heading of a matrix column. Carries no organ - anyone may propose and vote.
+#   English : create theme voting
 operationTitle.CREATE_THEME_VOTING = 
 
-# en: create statement voting
+# --------------------------------------------------------------------------
+# operationTitle.CREATE_STATEMENT_VOTING
+#   Field   : (drawn text, not a field)
+#   Appears : 1 of 11 - CREATE_STATEMENT_VOTING
+#   Means   : Proposes the proposition of a matrix row. Carries no organ - anyone may propose and vote.
+#   English : create statement voting
 operationTitle.CREATE_STATEMENT_VOTING = 
 
-# en: create categorical value voting
+# --------------------------------------------------------------------------
+# operationTitle.CREATE_CATEGORICAL_VALUE_VOTING
+#   Field   : (drawn text, not a field)
+#   Appears : 1 of 11 - CREATE_CATEGORICAL_VALUE_VOTING
+#   Means   : Proposes recording a category as the value of one categorical cell.
+#   English : create categorical value voting
 operationTitle.CREATE_CATEGORICAL_VALUE_VOTING = 
 
-# en: create numerical value voting
+# --------------------------------------------------------------------------
+# operationTitle.CREATE_NUMERICAL_VALUE_VOTING
+#   Field   : (drawn text, not a field)
+#   Appears : 1 of 11 - CREATE_NUMERICAL_VALUE_VOTING
+#   Means   : Proposes recording a number as the value of one numerical cell.
+#   English : create numerical value voting
 operationTitle.CREATE_NUMERICAL_VALUE_VOTING = 
 
-# en: cast vote
+# --------------------------------------------------------------------------
+# operationTitle.CAST_VOTE
+#   Field   : (drawn text, not a field)
+#   Appears : 1 of 11 - CAST_VOTE
+#   Means   : Casts a for-or-against vote on a voting that already exists.
+#   English : cast vote
 operationTitle.CAST_VOTE = 
 
-# en: configure organ thresholds
+# --------------------------------------------------------------------------
+# operationTitle.CONFIGURE_ORGAN_THRESHOLDS
+#   Field   : (drawn text, not a field)
+#   Appears : 1 of 11 - CONFIGURE_ORGAN_THRESHOLDS
+#   Means   : CHAIRMAN ONLY. Sets quorum, approval and base for one organ, all three together.
+#   English : configure organ thresholds
 operationTitle.CONFIGURE_ORGAN_THRESHOLDS = 
 
-# en: transfer chairmanship
+# --------------------------------------------------------------------------
+# operationTitle.TRANSFER_CHAIRMANSHIP
+#   Field   : (drawn text, not a field)
+#   Appears : 1 of 11 - TRANSFER_CHAIRMANSHIP
+#   Means   : CHAIRMAN ONLY. Hands the chairmanship to another address.
+#   English : transfer chairmanship
 operationTitle.TRANSFER_CHAIRMANSHIP = 
 
+# ##########################################################################
+# 2. INPUT FIELD LABELS
+#
+# The fields a member actually writes in.
+# Element: Bold label drawn immediately above an EMPTY field the member fills in.
+# Style  : 9pt bold, full width
+# Limit  : 118 characters
+# ##########################################################################
 
-# ========================================================================
-# 2. ПОДПИСИ ПОЛЕЙ / input field labels
-# Bold, above the field a member writes in.
-# max 118 characters
-# ========================================================================
-
-# en: member address
+# --------------------------------------------------------------------------
+# input.member
+#   Field   : zarya.input.member
+#   Appears : 2 of 11 - CREATE_MEMBERSHIP_VOTING, CREATE_MEMBERSHIP_REVOCATION_VOTING
+#   Means   : The address being admitted or removed.
+#   English : member address
 input.member = 
 
-# en: voting duration
+# --------------------------------------------------------------------------
+# input.duration
+#   Field   : zarya.input.duration
+#   Appears : 8 of 11 - CREATE_MEMBERSHIP_VOTING, CREATE_MEMBERSHIP_REVOCATION_VOTING, CREATE_CATEGORY_VOTING, CREATE_DECIMALS_VOTING, CREATE_THEME_VOTING, CREATE_STATEMENT_VOTING, CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING
+#   Means   : How long the voting stays open. The member writes a number of seconds.
+#   English : voting duration
 input.duration = 
 
-# en: column (x)
+# --------------------------------------------------------------------------
+# input.x
+#   Field   : zarya.input.x
+#   Appears : 6 of 11 - CREATE_CATEGORY_VOTING, CREATE_DECIMALS_VOTING, CREATE_THEME_VOTING, CREATE_STATEMENT_VOTING, CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING
+#   Means   : The matrix column. A member copies it from the printed matrix reference report.
+#   English : column (x)
 input.x = 
 
-# en: row (y)
+# --------------------------------------------------------------------------
+# input.y
+#   Field   : zarya.input.y
+#   Appears : 5 of 11 - CREATE_CATEGORY_VOTING, CREATE_DECIMALS_VOTING, CREATE_STATEMENT_VOTING, CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING
+#   Means   : The matrix row. A member copies it from the printed matrix reference report.
+#   English : row (y)
 input.y = 
 
-# en: category number
+# --------------------------------------------------------------------------
+# input.category
+#   Field   : zarya.input.category
+#   Appears : 2 of 11 - CREATE_CATEGORY_VOTING, CREATE_CATEGORICAL_VALUE_VOTING
+#   Means   : The category number. NOTE: one label serves two forms - declaring a category as allowed, and recording one as a cell value.
+#   English : category number
 input.category = 
 
-# en: category name
+# --------------------------------------------------------------------------
+# input.categoryName
+#   Field   : zarya.input.categoryName
+#   Appears : 1 of 11 - CREATE_CATEGORY_VOTING
+#   Means   : The human-readable name printed beside the category number.
+#   English : category name
 input.categoryName = 
 
-# en: decimal places
+# --------------------------------------------------------------------------
+# input.decimals
+#   Field   : zarya.input.decimals
+#   Appears : 1 of 11 - CREATE_DECIMALS_VOTING
+#   Means   : How many decimal places the cell should store. Here it is the thing being PROPOSED.
+#   English : decimal places
 input.decimals = 
 
-# en: which matrix
+# --------------------------------------------------------------------------
+# input.matrix
+#   Field   : zarya.input.matrix
+#   Appears : 2 of 11 - CREATE_THEME_VOTING, CREATE_STATEMENT_VOTING
+#   Means   : Which of the two matrices. An option group, not a text field.
+#   English : which matrix
 input.matrix = 
 
-# en: theme
+# --------------------------------------------------------------------------
+# input.theme
+#   Field   : zarya.input.theme
+#   Appears : 1 of 11 - CREATE_THEME_VOTING
+#   Means   : The column heading being proposed. Free Russian text.
+#   English : theme
 input.theme = 
 
-# en: statement
+# --------------------------------------------------------------------------
+# input.statement
+#   Field   : zarya.input.statement
+#   Appears : 1 of 11 - CREATE_STATEMENT_VOTING
+#   Means   : The row proposition being proposed. Free Russian text.
+#   English : statement
 input.statement = 
 
-# en: value
+# --------------------------------------------------------------------------
+# input.value
+#   Field   : zarya.input.value
+#   Appears : 1 of 11 - CREATE_NUMERICAL_VALUE_VOTING
+#   Means   : The number being recorded. Its precision is fixed by the cell, not the member.
+#   English : value
 input.value = 
 
-# en: author of the value
+# --------------------------------------------------------------------------
+# input.valueAuthor
+#   Field   : zarya.input.valueAuthor
+#   Appears : 2 of 11 - CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING
+#   Means   : The address credited as the author of the value. Not the sender.
+#   English : author of the value
 input.valueAuthor = 
 
-# en: your vote
+# --------------------------------------------------------------------------
+# input.support
+#   Field   : zarya.input.support
+#   Appears : 1 of 11 - CAST_VOTE
+#   Means   : For or against. An option group, not a text field.
+#   English : your vote
 input.support = 
 
-# en: quorum
+# --------------------------------------------------------------------------
+# input.quorum
+#   Field   : zarya.input.quorum
+#   Appears : 1 of 11 - CONFIGURE_ORGAN_THRESHOLDS
+#   Means   : The minimum number of votes for a voting to count. An exact COUNT, never a percentage.
+#   English : quorum
 input.quorum = 
 
-# en: approval threshold
+# --------------------------------------------------------------------------
+# input.approvalPercentage
+#   Field   : zarya.input.approvalPercentage
+#   Appears : 1 of 11 - CONFIGURE_ORGAN_THRESHOLDS
+#   Means   : The share of votes in favour required, in basis points.
+#   English : approval threshold
 input.approvalPercentage = 
 
-# en: approval base
+# --------------------------------------------------------------------------
+# input.approvalPercentageBase
+#   Field   : zarya.input.approvalPercentageBase
+#   Appears : 1 of 11 - CONFIGURE_ORGAN_THRESHOLDS
+#   Means   : The base the share is measured against. 10000 means 100%. Zero resets the organ to a simple majority.
+#   English : approval base
 input.approvalPercentageBase = 
 
-# en: new chairman
+# --------------------------------------------------------------------------
+# input.newChairman
+#   Field   : zarya.input.newChairman
+#   Appears : 1 of 11 - TRANSFER_CHAIRMANSHIP
+#   Means   : The address receiving the chairmanship.
+#   English : new chairman
 input.newChairman = 
 
+# ##########################################################################
+# 3. FIELD HINTS
+#
+# Only nine fields have one. Everything else is left unhinted on purpose.
+# Element: Small grey line between a label and its field. Only where a unit or a source causes mistakes.
+# Style  : 7.5pt grey, full width
+# Limit  : 142 characters
+# ##########################################################################
 
-# ========================================================================
-# 3. ПОЯСНЕНИЯ / field hints
-# Small grey line under a label. Only where a unit or source causes mistakes. hint.x and hint.y usually take the same text.
-# max 142 characters
-# ========================================================================
-
-# en: in seconds
+# --------------------------------------------------------------------------
+# hint.duration
+#   Field   : zarya.input.duration
+#   Appears : 8 of 11 - CREATE_MEMBERSHIP_VOTING, CREATE_MEMBERSHIP_REVOCATION_VOTING, CREATE_CATEGORY_VOTING, CREATE_DECIMALS_VOTING, CREATE_THEME_VOTING, CREATE_STATEMENT_VOTING, CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING
+#   Means   : Under the duration label. The unit is where mistakes happen.
+#   English : in seconds
 hint.duration = 
 
-# en: from the matrix reference report
+# --------------------------------------------------------------------------
+# hint.x
+#   Field   : zarya.input.x
+#   Appears : 6 of 11 - CREATE_CATEGORY_VOTING, CREATE_DECIMALS_VOTING, CREATE_THEME_VOTING, CREATE_STATEMENT_VOTING, CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING
+#   Means   : Under the column label. Points a member at the matrix reference report. Usually the same text as hint.y.
+#   English : from the matrix reference report
 hint.x = 
 
-# en: from the matrix reference report
+# --------------------------------------------------------------------------
+# hint.y
+#   Field   : zarya.input.y
+#   Appears : 5 of 11 - CREATE_CATEGORY_VOTING, CREATE_DECIMALS_VOTING, CREATE_STATEMENT_VOTING, CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING
+#   Means   : Under the row label. Usually the same text as hint.x.
+#   English : from the matrix reference report
 hint.y = 
 
-# en: this cell allows a fixed number of decimal places
+# --------------------------------------------------------------------------
+# hint.value
+#   Field   : zarya.input.value
+#   Appears : 1 of 11 - CREATE_NUMERICAL_VALUE_VOTING
+#   Means   : Under the value label. Warns that the cell fixes the precision, so extra digits are refused rather than rounded.
+#   English : this cell allows a fixed number of decimal places
 hint.value = 
 
-# en: 0 to 255
+# --------------------------------------------------------------------------
+# hint.decimals
+#   Field   : zarya.input.decimals
+#   Appears : 1 of 11 - CREATE_DECIMALS_VOTING
+#   Means   : Under the decimals label. The accepted range.
+#   English : 0 to 255
 hint.decimals = 
 
-# en: an exact number of votes, not a percentage
+# --------------------------------------------------------------------------
+# hint.quorum
+#   Field   : zarya.input.quorum
+#   Appears : 1 of 11 - CONFIGURE_ORGAN_THRESHOLDS
+#   Means   : Under the quorum label. The count-not-percentage warning; the one most likely to be misread.
+#   English : an exact number of votes, not a percentage
 hint.quorum = 
 
-# en: in basis points
+# --------------------------------------------------------------------------
+# hint.approvalPercentage
+#   Field   : zarya.input.approvalPercentage
+#   Appears : 1 of 11 - CONFIGURE_ORGAN_THRESHOLDS
+#   Means   : Under the approval label. Basis points, so 50% is 5000.
+#   English : in basis points
 hint.approvalPercentage = 
 
-# en: in basis points; 10000 means 100%
+# --------------------------------------------------------------------------
+# hint.approvalPercentageBase
+#   Field   : zarya.input.approvalPercentageBase
+#   Appears : 1 of 11 - CONFIGURE_ORGAN_THRESHOLDS
+#   Means   : Under the base label. Explains 10000 = 100% and that zero is a deliberate reset.
+#   English : in basis points; 10000 means 100%
 hint.approvalPercentageBase = 
 
-# en: the name shown beside the category number
+# --------------------------------------------------------------------------
+# hint.categoryName
+#   Field   : zarya.input.categoryName
+#   Appears : 1 of 11 - CREATE_CATEGORY_VOTING
+#   Means   : Under the category name label.
+#   English : the name shown beside the category number
 hint.categoryName = 
 
+# ##########################################################################
+# 4. OPTION LABELS
+#
+# Printed text only. The stored values are never translated.
+# Element: Text printed beside a tick box. The stored value is NOT this text.
+# Style  : 9pt, beside a 12pt tick box
+# Limit  : 114 characters
+# ##########################################################################
 
-# ========================================================================
-# 4. ПОДПИСИ ВАРИАНТОВ / option labels
-# Printed beside the box. The stored value stays FOR / AGAINST / CATEGORICAL / NUMERICAL and is NOT translated.
-# max 114 characters
-# ========================================================================
-
-# en: for
+# --------------------------------------------------------------------------
+# option.FOR
+#   Field   : zarya.input.support = FOR
+#   Appears : 1 of 11 - CAST_VOTE
+#   Means   : Beside the first box on a vote form. Stored value stays FOR.
+#   English : for
 option.FOR = 
 
-# en: against
+# --------------------------------------------------------------------------
+# option.AGAINST
+#   Field   : zarya.input.support = AGAINST
+#   Appears : 1 of 11 - CAST_VOTE
+#   Means   : Beside the second box on a vote form. Stored value stays AGAINST.
+#   English : against
 option.AGAINST = 
 
-# en: categorical matrix
+# --------------------------------------------------------------------------
+# option.CATEGORICAL
+#   Field   : zarya.input.matrix = CATEGORICAL
+#   Appears : 2 of 11 - CREATE_THEME_VOTING, CREATE_STATEMENT_VOTING
+#   Means   : Beside the first box of the matrix chooser. Stored value stays CATEGORICAL.
+#   English : categorical matrix
 option.CATEGORICAL = 
 
-# en: numerical matrix
+# --------------------------------------------------------------------------
+# option.NUMERICAL
+#   Field   : zarya.input.matrix = NUMERICAL
+#   Appears : 2 of 11 - CREATE_THEME_VOTING, CREATE_STATEMENT_VOTING
+#   Means   : Beside the second box of the matrix chooser. Stored value stays NUMERICAL.
+#   English : numerical matrix
 option.NUMERICAL = 
 
+# ##########################################################################
+# 5. CONTEXT LABELS
+#
+# Read-only, application-filled. Compared against the file to detect edits, never used from it.
+# Element: Bold label above a SHADED, read-only field the application already filled in.
+# Style  : 9pt bold, full width
+# Limit  : 118 characters
+# ##########################################################################
 
-# ========================================================================
-# 5. ПОДПИСИ КОНТЕКСТА / context labels
-# App-filled, read-only fields. Display and tamper check only.
-# max 118 characters
-# ========================================================================
-
-# en: network
+# --------------------------------------------------------------------------
+# context.chainId
+#   Field   : zarya.context.chainId
+#   Appears : all 11 forms
+#   Means   : The network the form was issued against. Display only - never read back from the file.
+#   English : network
 context.chainId = 
 
-# en: contract address
+# --------------------------------------------------------------------------
+# context.contract
+#   Field   : zarya.context.contract
+#   Appears : all 11 forms
+#   Means   : The contract address the form was issued against. Display only.
+#   English : contract address
 context.contract = 
 
-# en: party organ
+# --------------------------------------------------------------------------
+# context.organ
+#   Field   : zarya.context.organ
+#   Appears : 7 of 11 - CREATE_MEMBERSHIP_VOTING, CREATE_MEMBERSHIP_REVOCATION_VOTING, CREATE_CATEGORY_VOTING, CREATE_DECIMALS_VOTING, CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING, CONFIGURE_ORGAN_THRESHOLDS
+#   Means   : The proposing organ as the contract renders it, e.g. 95.SOV. A member checks this is the right organ.
+#   English : party organ
 context.organ = 
 
-# en: voting number
+# --------------------------------------------------------------------------
+# context.votingId
+#   Field   : zarya.context.votingId
+#   Appears : 1 of 11 - CAST_VOTE
+#   Means   : Which voting the vote is about. Display only; the real number comes from the application record.
+#   English : voting number
 context.votingId = 
 
+# ##########################################################################
+# 6. RECEIPT LABELS
+#
+# TIGHTEST LIMIT: two per row, so each gets half the page width.
+# Element: Bold label above a shaded read-only field that stays EMPTY until the transaction confirms.
+# Style  : 9pt bold, HALF width - two per row
+# Limit  : 57 characters
+# ##########################################################################
 
-# ========================================================================
-# 6. ПОДПИСИ ОТМЕТКИ О ТРАНЗАКЦИИ / receipt labels
-# TIGHTEST LIMIT — these sit two per row, so each has only half the width.
-# max 57 characters
-# ========================================================================
-
-# en: transaction hash
+# --------------------------------------------------------------------------
+# receipt.txHash
+#   Field   : zarya.receipt.txHash
+#   Appears : all 11 forms
+#   Means   : The transaction hash, written after confirmation.
+#   English : transaction hash
 receipt.txHash = 
 
-# en: status
+# --------------------------------------------------------------------------
+# receipt.status
+#   Field   : zarya.receipt.status
+#   Appears : all 11 forms
+#   Means   : Whether the transaction succeeded or reverted. NOTE: the transaction outcome, not whether the proposal passed.
+#   English : status
 receipt.status = 
 
-# en: block
+# --------------------------------------------------------------------------
+# receipt.blockNumber
+#   Field   : zarya.receipt.blockNumber
+#   Appears : all 11 forms
+#   Means   : The block the transaction was mined in.
+#   English : block
 receipt.blockNumber = 
 
-# en: network
+# --------------------------------------------------------------------------
+# receipt.chainId
+#   Field   : zarya.receipt.chainId
+#   Appears : all 11 forms
+#   Means   : The network the transaction was sent to.
+#   English : network
 receipt.chainId = 
 
-# en: confirmed at
+# --------------------------------------------------------------------------
+# receipt.confirmedAt
+#   Field   : zarya.receipt.confirmedAt
+#   Appears : all 11 forms
+#   Means   : The block timestamp of confirmation. Chain time, not the workstation clock.
+#   English : confirmed at
 receipt.confirmedAt = 
 
-# en: signed by
+# --------------------------------------------------------------------------
+# receipt.signer
+#   Field   : zarya.receipt.signer
+#   Appears : all 11 forms
+#   Means   : The address that signed. No key material ever appears on the form.
+#   English : signed by
 receipt.signer = 
 
+# ##########################################################################
+# 7. METADATA LABELS
+#
+# All three share ONE line together with their values. Abbreviations are expected here.
+# Element: Part of one grey line at the very top, rendered as "label: value . label: value . label: value".
+# Style  : 7pt grey, one third of a shared line
+# Limit  : 32 characters
+# ##########################################################################
 
-# ========================================================================
-# 7. ПОДПИСИ СЛУЖЕБНЫХ ПОЛЕЙ / metadata labels
-# All three share ONE line with their values, joined by " · ". Keep them very short — abbreviations are fine.
-# max 20 characters
-# ========================================================================
-
-# en: operation reference
+# --------------------------------------------------------------------------
+# meta.operationRef
+#   Field   : zarya.meta.operationRef
+#   Appears : all 11 forms
+#   Means   : Labels the reference the application uses to recover everything it authored. Keep very short.
+#   English : operation reference
 meta.operationRef = 
 
-# en: operation
+# --------------------------------------------------------------------------
+# meta.operationType
+#   Field   : zarya.meta.operationType
+#   Appears : all 11 forms
+#   Means   : Labels the machine name of the operation. Keep very short.
+#   English : operation
 meta.operationType = 
 
-# en: form version
+# --------------------------------------------------------------------------
+# meta.schemaVersion
+#   Field   : zarya.meta.schemaVersion
+#   Appears : all 11 forms
+#   Means   : Labels the form format version. Keep very short.
+#   English : form version
 meta.schemaVersion = 
 
+# ##########################################################################
+# 8. SECTION HEADINGS
+#
+# Three blocks: what the app filled, what the member fills, what the receipt will say.
+# Element: Bold heading introducing one of the three blocks of the form.
+# Style  : 10.5pt bold, full width
+# Limit  : 101 characters
+# ##########################################################################
 
-# ========================================================================
-# 8. ЗАГОЛОВКИ РАЗДЕЛОВ / section headings
-# Bold, above each of the three blocks.
-# max 101 characters
-# ========================================================================
-
-# en: completed by the application
+# --------------------------------------------------------------------------
+# section.context
+#   Field   : (drawn text, not a field)
+#   Appears : all 11 forms
+#   Means   : Heading over the shaded fields the application filled in.
+#   English : completed by the application
 section.context = 
 
-# en: to be completed by the member
+# --------------------------------------------------------------------------
+# section.input
+#   Field   : (drawn text, not a field)
+#   Appears : all 11 forms
+#   Means   : Heading over the empty fields the member fills in. The most important heading on the page.
+#   English : to be completed by the member
 section.input = 
 
-# en: transaction receipt
+# --------------------------------------------------------------------------
+# section.receipt
+#   Field   : (drawn text, not a field)
+#   Appears : all 11 forms
+#   Means   : Heading over the block that stays empty until the transaction confirms.
+#   English : transaction receipt
 section.receipt = 
 
+# ##########################################################################
+# 9. SENTENCES
+#
+# ONE LINE EACH. Nothing wraps - a longer sentence runs off the page.
+# Element: One grey line of prose. Instructional text, not a label.
+# Style  : 8pt grey, full width, ONE line
+# Limit  : 133 characters
+# ##########################################################################
 
-# ========================================================================
-# 9. ФРАЗЫ / sentences
-# ONE LINE EACH — nothing wraps. If it does not fit, it runs off the page.
-# max 133 characters
-# ========================================================================
-
-# en: Fill in only the member block, then return this file to the application.
+# --------------------------------------------------------------------------
+# sentence.instruction
+#   Field   : (drawn text, not a field)
+#   Appears : all 11 forms
+#   Means   : Under the member-block heading. Tells a member to fill only that block and return the file to the application.
+#   English : Fill in only the member block, then return this file to the application.
 sentence.instruction = 
 
-# en: Values in the application block are not read from this file. Editing them changes nothing.
+# --------------------------------------------------------------------------
+# sentence.tamperNotice
+#   Field   : (drawn text, not a field)
+#   Appears : all 11 forms
+#   Means   : Under the application-block heading. States that editing those values changes nothing, because they are not read from the file.
+#   English : Values in the application block are not read from this file. Editing them changes nothing.
 sentence.tamperNotice = 
 
-# en: Coordinates come from the matrix reference report and are checked again when the form is submitted.
+# --------------------------------------------------------------------------
+# sentence.coordinateDisclosure
+#   Field   : (drawn text, not a field)
+#   Appears : 6 of 11 - CREATE_CATEGORY_VOTING, CREATE_DECIMALS_VOTING, CREATE_THEME_VOTING, CREATE_STATEMENT_VOTING, CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING
+#   Means   : Under the member-block heading, only on forms asking for a column or a row. States that coordinates come from the reference report and are checked again at submission.
+#   English : Coordinates come from the matrix reference report and are checked again when the form is submitted.
 sentence.coordinateDisclosure = 
 
-# en: The receipt block is filled in by the application after the transaction confirms.
+# --------------------------------------------------------------------------
+# sentence.receiptNotice
+#   Field   : (drawn text, not a field)
+#   Appears : all 11 forms
+#   Means   : Under the receipt heading. Explains why the block is empty.
+#   English : The receipt block is filled in by the application after the transaction confirms.
 sentence.receiptNotice = 
 
-# ========================================================================
-# 10. НАЗВАНИЕ ПРИЛОЖЕНИЯ / application name
-# Drawn at the top of every form. Already supplied by the whitepaper.
-# max 46 characters
-# ========================================================================
+# ##########################################################################
+# 10. APPLICATION NAME
+#
+# Drawn on every form.
+# Element: The application name, top-left of every form beside the logo.
+# Style  : 16pt bold, top-left beside the logo
+# Limit  : 60 characters
+# ##########################################################################
 
-# en: Zarya
+# --------------------------------------------------------------------------
+# brand
+#   Field   : (drawn text, not a field)
+#   Appears : all 11 forms
+#   Means   : Already supplied by the whitepaper. Change only if the application is renamed.
+#   English : Zarya
 brand = Заря
 
-# end — 62 entries
+# end - 62 entries
