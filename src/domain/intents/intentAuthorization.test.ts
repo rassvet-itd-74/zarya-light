@@ -1,85 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { partyOrganTriple } from '../organs/partyOrgan';
 import { judgeAuthorization } from '../preflight/authorization';
-import { bytes32, evmAddress } from '../primitives';
-import { votingId } from '../voting/voting';
-import { OPERATION_TYPES, type GovernanceIntent, votingRef } from './intent';
+import { bytes32 } from '../primitives';
+import { OPERATION_TYPES } from './intent';
 import { authorizationFor, organToResolve } from './intentAuthorization';
+import { INTENT_SAMPLES as SAMPLES, SAMPLE_SOVIET as SOVIET } from './testing/intentSamples';
 
 const ORGAN = bytes32('0x99e1c11fb0d768f41b2a2dd99b1b9689289601d4551681713801f9d4e029ecb5');
-const SOVIET = partyOrganTriple({ organType: 'RegionalSoviet', region: 20 });
-const SOMEONE = evmAddress('0x57eb63d0aab5822EFCd7A9B56775F772D3e03CfD');
-
-/** One intent per operation type, so the mapping can be swept. */
-const SAMPLES: Record<string, GovernanceIntent> = {
-  CREATE_MEMBERSHIP_VOTING: {
-    type: 'CREATE_MEMBERSHIP_VOTING',
-    organ: SOVIET,
-    member: SOMEONE,
-    duration: 1,
-  },
-  CREATE_MEMBERSHIP_REVOCATION_VOTING: {
-    type: 'CREATE_MEMBERSHIP_REVOCATION_VOTING',
-    organ: SOVIET,
-    member: SOMEONE,
-    duration: 1,
-  },
-  CREATE_CATEGORY_VOTING: {
-    type: 'CREATE_CATEGORY_VOTING',
-    organ: SOVIET,
-    at: { x: 1n, y: 2n },
-    category: 3n,
-    categoryName: 'Good',
-    duration: 1,
-  },
-  CREATE_DECIMALS_VOTING: {
-    type: 'CREATE_DECIMALS_VOTING',
-    organ: SOVIET,
-    at: { x: 1n, y: 2n },
-    decimals: 2,
-    duration: 1,
-  },
-  CREATE_THEME_VOTING: {
-    type: 'CREATE_THEME_VOTING',
-    matrix: 'CATEGORICAL',
-    x: 1n,
-    theme: 'Housing',
-    duration: 1,
-  },
-  CREATE_STATEMENT_VOTING: {
-    type: 'CREATE_STATEMENT_VOTING',
-    matrix: 'NUMERICAL',
-    at: { x: 1n, y: 2n },
-    statement: 'Rents rise',
-    duration: 1,
-  },
-  CREATE_CATEGORICAL_VALUE_VOTING: {
-    type: 'CREATE_CATEGORICAL_VALUE_VOTING',
-    organ: SOVIET,
-    at: { x: 1n, y: 2n },
-    category: 3n,
-    valueAuthor: SOMEONE,
-    duration: 1,
-  },
-  CREATE_NUMERICAL_VALUE_VOTING: {
-    type: 'CREATE_NUMERICAL_VALUE_VOTING',
-    organ: SOVIET,
-    at: { x: 1n, y: 2n },
-    value: 1n,
-    decimals: 0,
-    valueAuthor: SOMEONE,
-    duration: 1,
-  },
-  CAST_VOTE: { type: 'CAST_VOTE', voting: votingRef(votingId(7n)), direction: 'FOR' },
-  CONFIGURE_ORGAN_THRESHOLDS: {
-    type: 'CONFIGURE_ORGAN_THRESHOLDS',
-    organ: SOVIET,
-    quorum: 1n,
-    approvalPercentage: 5000n,
-    approvalPercentageBase: 10_000n,
-  },
-  TRANSFER_CHAIRMANSHIP: { type: 'TRANSFER_CHAIRMANSHIP', newChairman: SOMEONE },
-};
 
 describe('the mapping is total', () => {
   it('assigns a rule to every operation type', () => {

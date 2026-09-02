@@ -71,6 +71,12 @@ const fakes = (options: FakeOptions) => {
       return options.simulation ?? { kind: 'WOULD_SUCCEED' };
     },
     executeVoting: async () => ({ kind: 'WOULD_SUCCEED' }),
+    // Not reachable from vote preflight, which simulates the `castVote` arm
+    // directly. Throwing rather than returning a success says so: a test that
+    // starts routing through here has changed what it is testing.
+    forIntent: async () => {
+      throw new Error('vote preflight must not simulate a whole intent');
+    },
   };
 
   return { spy, votings, members, organs, simulator };

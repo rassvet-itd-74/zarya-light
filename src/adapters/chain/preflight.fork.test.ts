@@ -55,14 +55,10 @@ describe.skipIf(RPC_URL === undefined)('vote preflight against a Sepolia fork', 
       forkBlockNumber: forkBlockNumber(),
     });
     const client = createZaryaPublicClient({ rpcUrl: anvil.url });
-    simulator = new ZaryaCallSimulator(client, CONFIG.contractAddress);
+    const organs = new ZaryaOrganResolver(client, CONFIG.contractAddress);
+    simulator = new ZaryaCallSimulator(client, CONFIG.contractAddress, organs);
     const votings = new ZaryaVotingReader(client, CONFIG.contractAddress);
-    dependencies = {
-      votings,
-      members: votings,
-      organs: new ZaryaOrganResolver(client, CONFIG.contractAddress),
-      simulator,
-    };
+    dependencies = { votings, members: votings, organs, simulator };
 
     // The record comes from the real creation logs, not from a literal: the
     // governing organ preflight depends on exists only there.

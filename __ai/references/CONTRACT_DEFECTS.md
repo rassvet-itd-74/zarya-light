@@ -137,6 +137,21 @@ The combinations, all reachable and none observable:
 
 The contract-side fix is small: default only the missing field rather than the whole struct, or keep an explicit `configured` flag per organ. See `zarya-solidity-governance`.
 
+### The window between the three transactions is permanent for anything created in it
+
+Eligibility is **snapshotted at voting creation**, not read at execution: each `create*Voting` calls `_getEligibilityParams` and copies the three values into the voting (`Zarya.sol:497-503`, and every creation path from `Zarya.sol:82` onward). So a voting created between two of the three setter transactions keeps the half-applied thresholds *for its whole life*, and no getter can show it. The window is seconds; the consequence is not.
+
+That makes the order of the three a real decision, and `domain/intents/intentCalls.ts` makes it:
+
+| Target base | Order sent | Why |
+| --- | --- | --- |
+| non-zero | quorum, approval, **base** | The first two are inert while the base is zero, so on an organ still in the fallback — every organ never configured — the whole configuration goes live in one transaction |
+| zero (the deliberate reset) | **base**, quorum, approval | Base last would pass through quorum 0 *and* approval 0 against a still-live base, and that combination is `one "for" vote passes` from the table above. Base first means the organ reads as `simpleMajority` from the first transaction on |
+
+The reset still sends the two inert writes, so that a later base-only configuration cannot resurrect a quorum nobody asked for.
+
+**What this does not fix:** changing thresholds on an organ that *already* has a non-zero base. The first transaction then changes what a new voting snapshots, and no ordering of three writes avoids it. The only fix is a fourth transaction zeroing the base first, so every intermediate state is a complete `simpleMajority` — which trades a mixed configuration for a temporary *downgrade* to the default. Which is worse is a governance decision, so it is not made in the dispatcher; the three-transaction form is what ships.
+
 ## A region has two representations, and only one is the argument
 
 **High, because the failure is silent and produces valid-looking wrong writes. Unchanged — `Regions.sol` was not touched.**

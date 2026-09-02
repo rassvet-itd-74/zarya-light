@@ -35,10 +35,10 @@ import {
  * Discriminated by a string `kind`, like every other union in this codebase, and
  * not by an `ok: boolean`.
  *
- * That is not only convention. This project does not run TypeScript's `strict`
- * mode, and without `strictNullChecks` a `true`/`false` literal discriminant
- * does not narrow — `if (result.kind === 'INTENT')` leaves the union intact and every access to
- * the other arm is an error. A string discriminant narrows either way.
+ * Convention, and it was also load-bearing once: a boolean-literal discriminant
+ * does not narrow without `strictNullChecks`, which this project did not enable
+ * until the flag was turned on alongside this module. A string discriminant
+ * narrows either way, so it never depended on the compiler setting.
  */
 export type BuildIntentResult =
   | { readonly kind: 'INTENT'; readonly intent: GovernanceIntent }

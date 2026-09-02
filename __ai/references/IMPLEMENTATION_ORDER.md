@@ -55,17 +55,22 @@ Five things settled here that bind the rest of the plan:
 
 **`temporal_docs/` stays until every phase is done** (confirmed 2026-09-01), and may then be folded into documentation rather than deleted. Nothing in the plan should be reordered to accommodate its removal. The tables derived from it are guarded two ways regardless: the source-parsing tests skip when the sources are absent (`hasSoliditySource`), and what remains is the stronger evidence — the fork tests resolve every region and organ type through the deployed contract, and literal keccak digests, error selectors and event topics pin the local mirrors with no file dependency. **`npm run ai:validate` hard-fails on a missing `.sol`** and cross-checks 912 source symbols, so it needs work if and when the sources do leave — not before.
 
-## Phase 3 — intent model
+## Phase 3 — intent model — **done 2026-09-02**
 
-Being built in slices. **Slice 1 (the union, validation, identity) is done, 2026-09-01.** Remaining: the exhaustive dispatch to contract calls, and the simulator arm that consumes it.
+Built in two slices. **Slice 1** — the union, validation, and identity, 2026-09-01. **Slice 2** — the dispatch to contract calls and the simulator arm, 2026-09-02.
+
+Two things settled in slice 2 that bind what follows:
+
+- **There are two closed unions, not one.** `GovernanceIntent` says what a document asks for; `ZaryaWriteCall` says what the contract takes. They differ in arity (one intent, three transactions), in naming (a categorical `category` is the ABI's `value`), and in argument order — and each difference now happens in a named place rather than inline at an encoder.
+- **`executeVoting` is absent from the call union too.** Hard rule 3 as a type rather than a rule to remember: the form pipeline cannot express it, and the executor's own call type is disjoint. That means Phase 6's queue takes a union of two call types, and Phase 7 owes the second one.
 
 - ~~Typed allow-listed intent union: the eight `create*Voting` variants, `CastVote`, and explicit privileged configuration.~~ **Done** — eleven variants. The two threshold setters named here became **one** `CONFIGURE_ORGAN_THRESHOLDS` carrying all three values, because the base doubles as an enable flag and three intents would make a silent no-op the default outcome.
 - ~~`ExecuteVoting` is **not** a form intent.~~ **Done, by absence.** There is no variant to construct, so the form pipeline cannot reach it — enforcement rather than a rule to remember.
 - ~~Organ represented as a structured triple, not a label.~~ **Done**, and the form asks for a **subject code** which becomes an ordinal only through the region table.
 - ~~Schema validation separate from normalization separate from chain preflight.~~ **Done.** `buildIntent` does shape only — no chain read, no clock, no storage — so a validation result is reproducible and a failure is never an outage.
 - ~~Each variant maps to one `AuthorizationRule` from Phase 2.~~ **Done** in `intentAuthorization.ts`, exhaustive. The organ on a threshold intent is the *target*, not the authorizer, which is the one arm that would be wrong in the obvious way.
-- Exhaustive intent-to-adapter mapping with a `never` check so a new variant cannot silently fall through. `CONFIGURE_ORGAN_THRESHOLDS` is the only intent that is not one transaction — it expands to three, and the ordering is the dispatcher's decision.
-- `CallSimulator` grows an arm that takes an intent. It takes the **union**, never calldata: a port accepting bytes would put a hole in the form allow-list one layer below where anyone would look for it.
+- ~~Exhaustive intent-to-adapter mapping with a `never` check so a new variant cannot silently fall through. `CONFIGURE_ORGAN_THRESHOLDS` is the only intent that is not one transaction — it expands to three, and the ordering is the dispatcher's decision.~~ **Done.** The ordering is conditional on the target base, because eligibility is snapshotted at creation and the safe order for enabling a configuration is the unsafe one for resetting it. New subsection in `CONTRACT_DEFECTS.md`.
+- ~~`CallSimulator` grows an arm that takes an intent. It takes the **union**, never calldata: a port accepting bytes would put a hole in the form allow-list one layer below where anyone would look for it.~~ **Done** — `forIntent`, with a third result arm: `NOT_ATTEMPTED` keeps "this client could not build the call" apart from "the contract refused", and splits an organ read that failed from one that disagreed, because their retry behavior differs.
 
 ## Phase 4 — PDF form schema, issuance, and ingestion
 
