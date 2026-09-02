@@ -14,7 +14,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "ai:validate": "node __ai/scripts/validate-ai-package.mjs"
+    "ai:validate": "node __ai/scripts/validate-ai-package.mjs",
+    "wording:apply": "node scripts/apply-wording.mjs",
+    "wording:check": "node scripts/apply-wording.mjs --check"
   },
   "keywords": [],
   "author": {

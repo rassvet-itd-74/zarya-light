@@ -1,0 +1,272 @@
+# ЗАРЯ — ТЕКСТЫ ФОРМ (русский)
+# Zarya form wording. Fill in the right-hand side of each "key =" line.
+#
+# HOW TO FILL
+#   - Write only after the "=". Do not change a key, and do not reorder lines.
+#   - One line per entry. A line break inside a value is not supported.
+#   - "max" is the character count that fits at that size in PT Sans, measured
+#     against a Russian sample. Nothing wraps: a longer string runs off the page.
+#   - Lines starting with # are comments and are ignored.
+#   - Leave a value empty to keep the English placeholder for now.
+#
+# DO NOT TRANSLATE the stored option values (FOR, AGAINST, CATEGORICAL,
+# NUMERICAL) or any zarya.* field name. Only the printed text is Russian.
+#
+# 61 strings outstanding.
+
+
+# ========================================================================
+# 1. ЗАГОЛОВКИ ОПЕРАЦИЙ / operation titles
+# The heading at the top of each form.
+# max 81 characters
+# ========================================================================
+
+# en: create membership voting
+operationTitle.CREATE_MEMBERSHIP_VOTING = 
+
+# en: create membership revocation voting
+operationTitle.CREATE_MEMBERSHIP_REVOCATION_VOTING = 
+
+# en: create category voting
+operationTitle.CREATE_CATEGORY_VOTING = 
+
+# en: create decimals voting
+operationTitle.CREATE_DECIMALS_VOTING = 
+
+# en: create theme voting
+operationTitle.CREATE_THEME_VOTING = 
+
+# en: create statement voting
+operationTitle.CREATE_STATEMENT_VOTING = 
+
+# en: create categorical value voting
+operationTitle.CREATE_CATEGORICAL_VALUE_VOTING = 
+
+# en: create numerical value voting
+operationTitle.CREATE_NUMERICAL_VALUE_VOTING = 
+
+# en: cast vote
+operationTitle.CAST_VOTE = 
+
+# en: configure organ thresholds
+operationTitle.CONFIGURE_ORGAN_THRESHOLDS = 
+
+# en: transfer chairmanship
+operationTitle.TRANSFER_CHAIRMANSHIP = 
+
+
+# ========================================================================
+# 2. ПОДПИСИ ПОЛЕЙ / input field labels
+# Bold, above the field a member writes in.
+# max 118 characters
+# ========================================================================
+
+# en: member address
+input.member = 
+
+# en: voting duration
+input.duration = 
+
+# en: column (x)
+input.x = 
+
+# en: row (y)
+input.y = 
+
+# en: category number
+input.category = 
+
+# en: category name
+input.categoryName = 
+
+# en: decimal places
+input.decimals = 
+
+# en: which matrix
+input.matrix = 
+
+# en: theme
+input.theme = 
+
+# en: statement
+input.statement = 
+
+# en: value
+input.value = 
+
+# en: author of the value
+input.valueAuthor = 
+
+# en: your vote
+input.support = 
+
+# en: quorum
+input.quorum = 
+
+# en: approval threshold
+input.approvalPercentage = 
+
+# en: approval base
+input.approvalPercentageBase = 
+
+# en: new chairman
+input.newChairman = 
+
+
+# ========================================================================
+# 3. ПОЯСНЕНИЯ / field hints
+# Small grey line under a label. Only where a unit or source causes mistakes. hint.x and hint.y usually take the same text.
+# max 142 characters
+# ========================================================================
+
+# en: in seconds
+hint.duration = 
+
+# en: from the matrix reference report
+hint.x = 
+
+# en: from the matrix reference report
+hint.y = 
+
+# en: this cell allows a fixed number of decimal places
+hint.value = 
+
+# en: 0 to 255
+hint.decimals = 
+
+# en: an exact number of votes, not a percentage
+hint.quorum = 
+
+# en: in basis points
+hint.approvalPercentage = 
+
+# en: in basis points; 10000 means 100%
+hint.approvalPercentageBase = 
+
+# en: the name shown beside the category number
+hint.categoryName = 
+
+
+# ========================================================================
+# 4. ПОДПИСИ ВАРИАНТОВ / option labels
+# Printed beside the box. The stored value stays FOR / AGAINST / CATEGORICAL / NUMERICAL and is NOT translated.
+# max 114 characters
+# ========================================================================
+
+# en: for
+option.FOR = 
+
+# en: against
+option.AGAINST = 
+
+# en: categorical matrix
+option.CATEGORICAL = 
+
+# en: numerical matrix
+option.NUMERICAL = 
+
+
+# ========================================================================
+# 5. ПОДПИСИ КОНТЕКСТА / context labels
+# App-filled, read-only fields. Display and tamper check only.
+# max 118 characters
+# ========================================================================
+
+# en: network
+context.chainId = 
+
+# en: contract address
+context.contract = 
+
+# en: party organ
+context.organ = 
+
+# en: voting number
+context.votingId = 
+
+
+# ========================================================================
+# 6. ПОДПИСИ ОТМЕТКИ О ТРАНЗАКЦИИ / receipt labels
+# TIGHTEST LIMIT — these sit two per row, so each has only half the width.
+# max 57 characters
+# ========================================================================
+
+# en: transaction hash
+receipt.txHash = 
+
+# en: status
+receipt.status = 
+
+# en: block
+receipt.blockNumber = 
+
+# en: network
+receipt.chainId = 
+
+# en: confirmed at
+receipt.confirmedAt = 
+
+# en: signed by
+receipt.signer = 
+
+
+# ========================================================================
+# 7. ПОДПИСИ СЛУЖЕБНЫХ ПОЛЕЙ / metadata labels
+# All three share ONE line with their values, joined by " · ". Keep them very short — abbreviations are fine.
+# max 20 characters
+# ========================================================================
+
+# en: operation reference
+meta.operationRef = 
+
+# en: operation
+meta.operationType = 
+
+# en: form version
+meta.schemaVersion = 
+
+
+# ========================================================================
+# 8. ЗАГОЛОВКИ РАЗДЕЛОВ / section headings
+# Bold, above each of the three blocks.
+# max 101 characters
+# ========================================================================
+
+# en: completed by the application
+section.context = 
+
+# en: to be completed by the member
+section.input = 
+
+# en: transaction receipt
+section.receipt = 
+
+
+# ========================================================================
+# 9. ФРАЗЫ / sentences
+# ONE LINE EACH — nothing wraps. If it does not fit, it runs off the page.
+# max 133 characters
+# ========================================================================
+
+# en: Fill in only the member block, then return this file to the application.
+sentence.instruction = 
+
+# en: Values in the application block are not read from this file. Editing them changes nothing.
+sentence.tamperNotice = 
+
+# en: Coordinates come from the matrix reference report and are checked again when the form is submitted.
+sentence.coordinateDisclosure = 
+
+# en: The receipt block is filled in by the application after the transaction confirms.
+sentence.receiptNotice = 
+
+# ========================================================================
+# 10. НАЗВАНИЕ ПРИЛОЖЕНИЯ / application name
+# Drawn at the top of every form. Already supplied by the whitepaper.
+# max 46 characters
+# ========================================================================
+
+# en: Zarya
+brand = Заря
+
+# end — 62 entries
