@@ -5,21 +5,46 @@ import { OPERATION_TYPES, type GovernanceIntent } from '../../domain/intents/int
 import { INTENT_SAMPLES } from '../../domain/intents/testing/intentSamples';
 import { assembleFormInput } from './assembleFormInput';
 import { inputFieldName } from './formSchema';
+import { parseFormFields } from './pdfFormParser';
 import { filledForm, issuedOperation } from './testing/formSamples';
+import { formPdf } from './testing/pdfFixtures';
 
 /**
- * Form fields to a typed intent, for all eleven operations.
+ * Real PDF bytes to a typed intent, for all eleven operations.
  *
- * This is the check `zarya-pdf-forms` calls the strongest available one, minus
- * the PDF: fill a template's fields programmatically, run intake, build the
- * intent, and assert it equals the intent the intent layer is already tested
- * against. Until this existed, the two halves agreed by *reading* — Phase 3
- * recorded "nothing has ever built an intent from a real form" as unverified,
- * and this is what closes it.
+ * `zarya-pdf-forms` calls the round trip the strongest available test, and this
+ * is it: a field-bearing PDF is filled programmatically, parsed by the real
+ * parser, assembled against the operation record, validated, and the resulting
+ * intent is compared to the fixture the intent layer is already tested against.
+ * Phase 3 recorded "nothing has ever built an intent from a real form" as
+ * unverified; this closes it through the whole chain.
  *
- * The PDF library slice replaces `filledForm` with a real issue-and-parse and
- * keeps these assertions unchanged.
+ * The synchronous variant below runs the same assembly from a
+ * `Record<string, string>` rather than bytes, so a value-level question does not
+ * pay for a PDF round trip. Both paths meet at `assembleFormInput`.
+ *
+ * What is still missing is the **issuer**: these bytes come from a test fixture
+ * that writes field names and nothing else. Slice 3 replaces it, and these
+ * assertions should not change when it does.
  */
+
+const intentFromPdf = async (
+  type: (typeof OPERATION_TYPES)[number],
+): Promise<GovernanceIntent> => {
+  const parsed = await parseFormFields(await formPdf(type));
+  if (parsed.kind !== 'FIELDS') {
+    throw new Error(`${type} was rejected: ${JSON.stringify(parsed.rejections)}`);
+  }
+  const assembled = assembleFormInput(parsed.fields, issuedOperation(type));
+  if (assembled.kind !== 'INPUT') {
+    throw new Error(`${type} was refused: ${JSON.stringify(assembled.refusals)}`);
+  }
+  const built = buildIntent(assembled.operationType, assembled.input);
+  if (built.kind !== 'INTENT') {
+    throw new Error(`${type} failed validation: ${JSON.stringify(built.problems)}`);
+  }
+  return built.intent;
+};
 
 const intentFrom = (type: (typeof OPERATION_TYPES)[number]): GovernanceIntent => {
   const assembled = assembleFormInput(filledForm(type), issuedOperation(type));
@@ -32,6 +57,26 @@ const intentFrom = (type: (typeof OPERATION_TYPES)[number]): GovernanceIntent =>
   }
   return built.intent;
 };
+
+describe('a filled PDF becomes the intent it was issued for', () => {
+  it('reproduces every one of the eleven intent fixtures, through the real parser', async () => {
+    for (const type of OPERATION_TYPES) {
+      expect(await intentFromPdf(type), type).toEqual(INTENT_SAMPLES[type]);
+    }
+  });
+
+  it('carries Cyrillic governance text through the PDF unchanged', async () => {
+    // Two encodings and a parser between the member typing it and the intent.
+    // A theme that survives mangled would be voted on as something else.
+    const intent = await intentFromPdf('CREATE_THEME_VOTING');
+    expect(intent.type === 'CREATE_THEME_VOTING' && intent.theme).toBe('Жилищный вопрос');
+  });
+
+  it('takes a vote direction from the radio group’s export value', async () => {
+    const intent = await intentFromPdf('CAST_VOTE');
+    expect(intent.type === 'CAST_VOTE' && intent.direction).toBe('FOR');
+  });
+});
 
 describe('a filled form becomes the intent it was issued for', () => {
   it('reproduces every one of the eleven intent fixtures exactly', () => {

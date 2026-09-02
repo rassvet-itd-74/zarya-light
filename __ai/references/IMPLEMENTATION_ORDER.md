@@ -74,7 +74,7 @@ Two things settled in slice 2 that bind what follows:
 
 ## Phase 4 — PDF form schema, issuance, and ingestion
 
-Being built in slices. **Slice 1 (the field-name schema and the mapping onto domain keys) is done, 2026-09-02.** Remaining: the PDF library, issuance, real parsing, receipt field writing, hostile fixtures, and the matrix report.
+Being built in slices. **Slice 1** — the field-name schema and the mapping onto domain keys, 2026-09-02. **Slice 2** — the PDF library, the parser, and the hazard refusals, 2026-09-02. Remaining: issuance (with the embedded font and the logo), receipt field writing, and the matrix report.
 
 Settled in slice 1 and binding on the rest:
 
@@ -85,11 +85,11 @@ Settled in slice 1 and binding on the rest:
 
 - ~~Define the field-name schema and `schemaVersion` in one module all three directions import.~~ **Done** — `adapters/forms/formSchema.ts`, plus `assembleFormInput.ts` for the structural half of ingestion that needs no PDF library.
 - Issuance: template generation from chain context, logo drawn, empty `zarya.receipt.*` fields present, `operationRef` persisted before the file is emitted, reproducible output.
-- Ingestion: parse `zarya.input.*` only; recover app-authored context from storage; structural refusal for XFA, encryption, flattening, a populated receipt marker, unknown version or field.
-- Round-trip test as the primary check: issue → fill programmatically → ingest → assert the intent matches.
-- Hostile fixtures per `zarya-pdf-forms`.
+- ~~Ingestion: parse `zarya.input.*` only; recover app-authored context from storage; structural refusal for XFA, encryption, flattening, a populated receipt marker, unknown version or field.~~ **Done** across slices 1 and 2, plus duplicate names, unsupported field types, oversized values, and field-count bounds. Still missing: embedded-file and external-reference refusal, decompressed-size and object-depth bounds, and surfacing an appearance that disagrees with `/V`.
+- ~~Round-trip test as the primary check: issue → fill programmatically → ingest → assert the intent matches.~~ **Done for the ingest half** — real PDF bytes through the real parser to all eleven intents. The `issue` end is still a test fixture, not the application's issuer.
+- ~~Hostile fixtures per `zarya-pdf-forms`.~~ **Partly** — encrypted, XFA, flattened, truncated, non-PDF, empty, duplicate names, wrong field type, oversized value, JavaScript action, appearance disagreement, and no-AcroForm. Absent: compression bomb, embedded file, external reference, incremental-update *shadowing* beyond the newest-revision case.
 
-Pick a library that never executes PDF JavaScript and never fetches remote resources. Generation and parsing may use different ones.
+- ~~Pick a library that never executes PDF JavaScript and never fetches remote resources.~~ **pdf-lib 1.17.1**, chosen by probing rather than by documentation, with the two constraints it fails and their mitigations recorded in `DECISIONS.md`. Confined to `src/adapters/forms/` by ESLint, observed firing.
 
 Receipt stamping arrives with the transaction queue in Phase 6, since it needs a confirmed transaction — but define the `zarya.receipt.*` fields here so templates carry them from the start. Retrofitting them later invalidates every already-issued form.
 

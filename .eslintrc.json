@@ -71,6 +71,30 @@
           }
         ]
       }
+    },
+    {
+      // The PDF library is confined to the one adapter allowed to touch it.
+      // The domain rule above already forbids it there; this closes the other
+      // direction — a chain, store, or Electron module reaching for a PDF
+      // parser means untrusted file parsing has escaped its boundary.
+      //
+      // `src/domain/**` is excluded because a second override of the same rule
+      // replaces rather than merges, and the domain's own list is wider.
+      "files": ["src/**/*.ts"],
+      "excludedFiles": ["src/adapters/forms/**/*.ts", "src/domain/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["pdf-lib", "pdf-lib/*", "pdfjs-dist", "pdfjs-dist/*", "hummus", "pdfkit"],
+                "message": "Only src/adapters/forms/ may import a PDF library. Parsing untrusted documents stays behind that boundary."
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }
