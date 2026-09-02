@@ -97,9 +97,24 @@ The **matrix reference report** also belongs here: it needs only Phase 2 reads p
 
 ## Phase 5 — persistence
 
-Schema and migrations; issued-template records keyed by `operationRef`; form hashes and semantic operation identity; batch and item states; dependency representation; event cursor; resume and re-import tests. Unique constraint on `(chainId, contractAddress, votingId)` for execution jobs.
+Being built in slices. **Slice 1 (the engine, migrations, the issued-template record, and the durable cursor) is done, 2026-09-02** — taken ahead of Phase 4's matrix report, which is a printed Russian document and was blocked on wording that persistence does not need.
 
-Issuance depends on this to record an operation before emitting a file, so a minimal template record may need to land alongside Phase 4.
+Three things settled in slice 1 that bind the rest:
+
+- **`node:sqlite`, chosen by running Electron.** Electron 43.4.1 bundles Node 24.18.1 and `DatabaseSync` works there, so there is no native module to rebuild for two runtimes — which is what `better-sqlite3` would have cost, twice, plus `plugin-auto-unpack-natives`. The price is that it is experimental and that tests run on a different Node than production; both are recorded in `DECISIONS.md`.
+- **The worker owns the database and the main process never opens it.** `ARCHITECTURE.md` already puts the queue, reconciliation, and form work in the worker; a second handle in main would mean two processes writing one file for no gain. Status reaches the UI over the worker protocol.
+- **A form binds only against a record from the *same deployment*.** Nothing downstream reads the chain id or contract from a returned file, so the record is the only thing that says which deployment an operation belongs to — and two incompatible deployments exist. Without the check, repointing the app and importing an old form would build a valid intent for the wrong contract.
+
+- ~~Schema and migrations~~ **Done** — `PRAGMA user_version`, append-only list, each migration transactional with its own version bump; a newer schema is refused rather than migrated downwards.
+- ~~Issued-template records keyed by `operationRef`~~ **Done**, with the state machine from `STATE_MACHINES.md` enforced on every transition and uniqueness enforced by the primary key rather than an application check.
+- ~~Event cursor~~ **Done** — `SqliteCursorStore`, with `MemoryCursorStore` kept and both held to one shared contract suite. Block numbers are stored as TEXT because `node:sqlite` returns an INTEGER column as a `number`.
+- Form hashes and semantic operation identity; stored form bytes; receipt path and hash.
+- Batch and item states; dependency representation.
+- Transaction records: chain, contract, signer, assigned nonce, last known receipt and block, classified error and status.
+- Executor voting job, with the unique constraint on `(chainId, contractAddress, votingId)`. Deliberately absent so far rather than created as a table with no writer.
+- Resume and re-import tests; the five crash windows.
+
+Issuance already depends on this: the `operationRef` it takes is now resolvable, and `boundOperation.ts` is where a stored record becomes the context ingestion assembles against.
 
 ## Phase 6 — serialized transaction queue and receipt stamping
 

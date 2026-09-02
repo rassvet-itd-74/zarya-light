@@ -38,6 +38,23 @@ Only `src/adapters/forms/` may import it, enforced by ESLint and observed firing
 
 Two facts about the library that shape the code above it: a dotted field name is stored as a `/Parent` chain and composed back by pdf-lib's name accessor, so `zarya.input.member` is a node tree rather than a flat string; and a present-but-unfilled field reads as `undefined`, which the parser must turn into a blank rather than an absence.
 
+## Local storage is `node:sqlite`, owned by the worker — decided 2026-09-02
+
+Chosen by running Electron, not by reading release notes: **Electron 43.4.1 bundles Node 24.18.1**, and a probe created a table, inserted a row, and read it back inside a real Electron main process.
+
+`better-sqlite3` was rejected on build cost rather than on merit. It is a native module, so it needs an ABI rebuild against Electron's Node, a second build for the Node that runs the tests, and `plugin-auto-unpack-natives` in the packaged app. `node:sqlite` is in both runtimes already — nothing to compile, nothing to unpack, one API in tests and in production.
+
+Accepted costs, recorded rather than buried:
+
+- It is **experimental**. Node 22 emits an `ExperimentalWarning` and the API may change. Only `DatabaseSync`, `exec`, and `prepare`/`get`/`all`/`run` are used — the part any SQLite binding has — and the whole surface sits behind two ports, so a swap is two files.
+- **Version skew.** Tests run on the Node that runs vitest; production runs on Electron's Node 24.18. The same module name in two runtimes is not the same guarantee as the same module. It is still better than needing two compiled binaries.
+
+- **The worker owns the database; the main process never opens it.** `ARCHITECTURE.md` already places the transaction queue, reconciliation, and form work in the worker. A second handle in main would mean two processes writing one file for no gain, so UI status travels over the worker protocol instead.
+- **Only `src/adapters/store/` may import a database driver**, enforced by ESLint and observed firing from three other directories.
+- **Migrations are an append-only list keyed on `PRAGMA user_version`.** An existing entry is never edited — a database in the field has already run it. A schema from a newer build is refused, never migrated downwards.
+- **Block numbers are stored as TEXT.** `node:sqlite` returns an INTEGER column as a JavaScript `number`, which is exact for Sepolia's eleven million and silently wrong past 2^53.
+- **A returned form binds only against a record from the same deployment.** Nothing downstream reads the chain id or contract from the file, so the record is the sole authority on which deployment an operation belongs to, and two incompatible deployments exist.
+
 ## Matrix reference report
 
 - A UI button prints a read-only PDF listing the matrix contents, so voters can find the coordinates to write on a form. No signer, no chain write.

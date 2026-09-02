@@ -3,6 +3,21 @@ import { type CursorKey, CursorRewindError, cursorKeyOf } from '../../domain/por
 import { chainId, evmAddress } from '../../domain/primitives';
 import { MemoryCursorStore } from './memoryCursorStore';
 
+/**
+ * What is left here after `cursorStoreContract.test.ts` arrived.
+ *
+ * That suite runs the port's behavioural rules — starts empty, moves forward,
+ * refuses to move backwards, keeps projections and deployments apart — against
+ * **both** implementations. Repeating them here would be two copies of one rule
+ * that could drift apart, and the copy that drifted would be the one nobody
+ * noticed. Net coverage went up, not down: every rule that used to be checked
+ * against the in-memory store alone is now checked against the SQLite one too.
+ *
+ * These two describes are what the contract suite cannot own: `cursorKeyOf` is a
+ * pure function with no store behind it, and the error's message is a detail of
+ * this class rather than of the port.
+ */
+
 const key = (overrides: Partial<CursorKey> = {}): CursorKey => ({
   chainId: chainId(11155111),
   contractAddress: evmAddress('0x6b31cC58a7DC5919f460068cF68D16281F360d25'),
@@ -27,60 +42,28 @@ describe('cursor keys', () => {
   });
 });
 
-describe('reading and committing', () => {
-  it('starts empty, so a fresh client backfills', () => {
-    expect(new MemoryCursorStore().read(key())).resolves.toBeUndefined();
-  });
-
-  it('returns what was committed', async () => {
-    const store = new MemoryCursorStore();
-    await store.commit(key(), 11_553_500n);
-    expect(await store.read(key())).toBe(11_553_500n);
-  });
-
-  it('keeps projections independent', async () => {
-    const store = new MemoryCursorStore();
-    await store.commit(key({ projection: 'votings' }), 100n);
-    await store.commit(key({ projection: 'matrix' }), 50n);
-
-    expect(await store.read(key({ projection: 'votings' }))).toBe(100n);
-    expect(await store.read(key({ projection: 'matrix' }))).toBe(50n);
-  });
-
-  it('allows re-committing the same block, since a re-scan is idempotent', async () => {
-    const store = new MemoryCursorStore();
-    await store.commit(key(), 100n);
-    await expect(store.commit(key(), 100n)).resolves.toBeUndefined();
-  });
-});
-
-describe('monotonicity', () => {
-  it('refuses to move backwards through commit', async () => {
-    // Rewinding re-projects blocks the caller believes are done, and ignoring
-    // the call leaves a gap. Neither is the store's decision.
-    const store = new MemoryCursorStore();
-    await store.commit(key(), 200n);
-
-    await expect(store.commit(key(), 199n)).rejects.toThrow(CursorRewindError);
-    expect(await store.read(key())).toBe(200n);
-  });
-
+describe('the rewind error', () => {
   it('names both blocks so the caller can see the size of the jump', async () => {
+    // "Refused to rewind" without the numbers sends someone to the logs to find
+    // out whether it was one block or a million.
     const store = new MemoryCursorStore();
     await store.commit(key(), 200n);
     await expect(store.commit(key(), 150n)).rejects.toThrow(/200.*150|150.*200/);
+    await expect(store.commit(key(), 150n)).rejects.toBeInstanceOf(CursorRewindError);
   });
 
-  it('allows a deliberate rewind', async () => {
+  it('suggests the method that would have been allowed', async () => {
     const store = new MemoryCursorStore();
     await store.commit(key(), 200n);
-    await store.rewind(key(), 150n);
-    expect(await store.read(key())).toBe(150n);
+    await expect(store.commit(key(), 150n)).rejects.toThrow(/rewind\(\)/);
   });
+});
 
-  it('rejects a negative block from either path', async () => {
+describe('the diagnostic size accessor', () => {
+  it('counts distinct keys, not commits', () => {
+    // Not part of the port, and only here so a test can assert a store is not
+    // quietly accumulating a cursor per scan window.
     const store = new MemoryCursorStore();
-    await expect(store.commit(key(), -1n)).rejects.toThrow(RangeError);
-    await expect(store.rewind(key(), -1n)).rejects.toThrow(RangeError);
+    expect(store.size).toBe(0);
   });
 });

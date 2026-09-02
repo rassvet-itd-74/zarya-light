@@ -73,15 +73,19 @@
       }
     },
     {
-      // The PDF library is confined to the one adapter allowed to touch it.
-      // The domain rule above already forbids it there; this closes the other
-      // direction — a chain, store, or Electron module reaching for a PDF
-      // parser means untrusted file parsing has escaped its boundary.
+      // Each foreign library is confined to the one adapter allowed to touch it.
+      // The domain rule above already forbids all of them there; these close the
+      // other direction — a chain module reaching for a PDF parser means
+      // untrusted file parsing has escaped its boundary, and SQL outside
+      // store/ means the storage engine is no longer swappable.
       //
-      // `src/domain/**` is excluded because a second override of the same rule
-      // replaces rather than merges, and the domain's own list is wider.
+      // Three overrides rather than one, because a later override **replaces**
+      // this rule rather than merging with it. That is used deliberately: the
+      // two directory-specific blocks below restate the rules their own
+      // directory is still subject to, so exempting forms/ from the PDF rule
+      // does not also exempt it from the database rule.
       "files": ["src/**/*.ts"],
-      "excludedFiles": ["src/adapters/forms/**/*.ts", "src/domain/**/*.ts"],
+      "excludedFiles": ["src/domain/**/*.ts"],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -90,6 +94,50 @@
               {
                 "group": ["pdf-lib", "pdf-lib/*", "pdfjs-dist", "pdfjs-dist/*", "hummus", "pdfkit"],
                 "message": "Only src/adapters/forms/ may import a PDF library. Parsing untrusted documents stays behind that boundary."
+              },
+              {
+                "group": [
+                  "node:sqlite", "sqlite", "better-sqlite3", "sqlite3", "knex",
+                  "drizzle-orm", "drizzle-orm/*", "typeorm", "prisma", "@prisma/*"
+                ],
+                "message": "Only src/adapters/store/ may import a database driver. Everything else goes through a port, so the storage engine stays swappable and SQL stays in one directory."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      // The forms adapter may import a PDF library and nothing else foreign.
+      "files": ["src/adapters/forms/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "node:sqlite", "sqlite", "better-sqlite3", "sqlite3", "knex",
+                  "drizzle-orm", "drizzle-orm/*", "typeorm", "prisma", "@prisma/*"
+                ],
+                "message": "The forms adapter must not reach the database. It receives an operation record through a port; see boundOperation.ts."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      // The store adapter may import a database driver and nothing else foreign.
+      "files": ["src/adapters/store/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["pdf-lib", "pdf-lib/*", "pdfjs-dist", "pdfjs-dist/*", "hummus", "pdfkit"],
+                "message": "The store adapter must not parse documents. It persists bytes and rows; the forms adapter owns PDFs."
               }
             ]
           }
