@@ -109,7 +109,15 @@ The **matrix reference report** also belongs here: it needs only Phase 2 reads p
 - **A coordinate is never truncated.** Every other cell may be cut to its column — a statement's full wording is in the axis inventory, an author is recognised rather than copied — but a truncated coordinate addresses a *different real cell*. `uint256` allows 78 digits, so an oversized one is printed on its own full-width line above the row.
 - **One wording table for both documents.** The report's slots live in `SLOT_ENGLISH` beside the forms', so the party fills one file, `pendingLabels()` lists everything unworded, and one font-coverage check covers both.
 
-Remaining for the report: the party's Russian for the 37 outstanding slots, then `npm run wording:apply`; and the UI button with its IPC path plus the `PrintMatrixReport` application service that supplies `indexedThrough` (Phase 9).
+**Report slice 3 — the Russian — done 2026-09-03.** All 37 slots worded, so **both documents are now fully worded** (62 form + 37 report) and `pendingLabels()` is empty again. Twenty-three values were corrected on the way through; three mattered beyond style:
+
+- **`reportStatus.anyCategory` arrived as «любая категория»** — the inverse of what the slot means. It is printed when a categorical cell permits *no* category, so the wording would have told a member that a cell accepting nothing accepts everything. Now «Категории не заданы».
+- **`reportSentence.degraded` described the marks as «только для чтения»** — read-only, a permission — where the marker is «Не прочитано», a failure. Rewritten to quote the actual marker.
+- **`reportMeta.indexedThrough` said «в блоке»** — *in* block N — where the number is the boundary of what has been read. Now «События считаны до блока».
+
+Only the 70pt column headers were ever too long; the 193-character sentences came back with 23% headroom. Full account, including the two proposals still open, in the worklog.
+
+Remaining for the report: the UI button with its IPC path plus the `PrintMatrixReport` application service that supplies `indexedThrough` (Phase 9), and someone opening a sample in a real PDF viewer.
 
 **Not implementable, and it is the skill that is wrong:** `.claude/skills/zarya-matrix-report/SKILL.md` lists "an approval threshold renders against its own base — `5000` of `10000` shows as 50%" among the report's tests. No eligibility getter exists (`CONTRACT.md`, "Not exposed"), so a threshold cannot be read at all, and nothing in this report is a basis-point value. The basis-point rendering rule still applies where such a value *is* shown — the form hints — and has a test there.
 

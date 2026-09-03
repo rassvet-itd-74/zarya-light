@@ -312,10 +312,11 @@ describe('the wording', () => {
     // assertion inverts: a slot falling back to a bracketed placeholder now
     // means a regression rather than work in progress.
     //
-    // Scoped to the **forms** rather than to every slot, because the table now
-    // also carries the matrix report's wording, which has not arrived. A form
-    // slot going pending is a regression; a report slot being pending is the
-    // current state and is asserted in `formLabels.test.ts`.
+    // Scoped to the **forms** rather than to every slot even though the report's
+    // wording has now landed too, because this file is about issuance: a report
+    // slot going pending must not fail the template tests, and
+    // `formLabels.test.ts` owns the stronger claim that nothing at all is
+    // pending.
     expect(pendingLabels().filter((slot) => !slot.startsWith('report'))).toEqual([]);
   });
 

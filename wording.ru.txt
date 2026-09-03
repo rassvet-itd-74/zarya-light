@@ -659,7 +659,7 @@ brand = Заря
 #   Means   : Names the document. A member should be able to tell at a glance
 #             that this is the coordinate reference and not a form.
 #   English : matrix reference
-reportTitle.document =
+reportTitle.document = Отчёт по состоянию Зари
 
 
 # ##########################################################################
@@ -675,28 +675,28 @@ reportTitle.document =
 #   Means   : Heading over the whole axis section - which columns have a theme
 #             and which rows have a statement.
 #   English : axis inventory
-reportSection.axes =
+reportSection.axes = Оси
 
 # --------------------------------------------------------------------------
 # reportSection.themes
 #   Means   : Sub-heading over the table of themes. A theme belongs to a
 #             COLUMN, addressed by x.
 #   English : themes, by column
-reportSection.themes =
+reportSection.themes = Темы (столбцы)
 
 # --------------------------------------------------------------------------
 # reportSection.statements
 #   Means   : Sub-heading over the table of statements. A statement belongs to
 #             a ROW, addressed by y.
 #   English : statements, by row
-reportSection.statements =
+reportSection.statements = Вопросы или утверждения (строки)
 
 # --------------------------------------------------------------------------
 # reportSection.cells
 #   Means   : Heading over the main table - the coordinates that actually have
 #             something in them.
 #   English : populated cells
-reportSection.cells =
+reportSection.cells = Заполненные ячейки
 
 
 # ##########################################################################
@@ -716,27 +716,27 @@ reportSection.cells =
 #   Means   : The column coordinate. Also used in the group heading over each
 #             column's rows, as "<this word> 3 - <the theme>".
 #   English : column (x)
-reportColumn.x =
+reportColumn.x = Столбец (x)
 
 # --------------------------------------------------------------------------
 # reportColumn.y
 #   Means   : The row coordinate. The first column of the cell table.
 #   English : row (y)
-reportColumn.y =
+reportColumn.y = Строка (y)
 
 # --------------------------------------------------------------------------
 # reportColumn.statement
 #   Means   : Header over the statement of each row. The same concept as
 #             input.statement on a form.
 #   English : statement
-reportColumn.statement =
+reportColumn.statement = Вопрос
 
 # --------------------------------------------------------------------------
 # reportColumn.organ
 #   Means   : Header over the organ that owns a cell. Only that organ may write
 #             to it, permanently.
 #   English : owning organ
-reportColumn.organ =
+reportColumn.organ = Орган
 
 # --------------------------------------------------------------------------
 # reportColumn.constraints
@@ -744,46 +744,46 @@ reportColumn.organ =
 #             for a categorical cell, the number of decimal places for a
 #             numerical one.
 #   English : permitted values
-reportColumn.constraints =
+reportColumn.constraints = Допустимые значения
 
 # --------------------------------------------------------------------------
 # reportColumn.value
 #   Means   : Header over the value the cell holds now.
 #   English : current value
-reportColumn.value =
+reportColumn.value = Текущее значение
 
 # --------------------------------------------------------------------------
 # reportColumn.author
 #   Means   : Header over who wrote the current value. A shortened address.
 #   English : author
-reportColumn.author =
+reportColumn.author = Автор
 
 # --------------------------------------------------------------------------
 # reportColumn.recorded
 #   Means   : Header over when the current value was written.
 #   English : recorded
-reportColumn.recorded =
+reportColumn.recorded = Время записи
 
 # --------------------------------------------------------------------------
 # reportColumn.samples
 #   Means   : Header over how many values the cell has held in total, the
 #             current one included. Its history length.
 #   English : records
-reportColumn.samples =
+reportColumn.samples = Всего записей
 
 # --------------------------------------------------------------------------
 # reportColumn.label
 #   Means   : Header over the wording itself in the axis tables - the text of
 #             the theme or the statement.
 #   English : wording
-reportColumn.label =
+reportColumn.label = Формулировка
 
 # --------------------------------------------------------------------------
 # reportColumn.confirmation
 #   Means   : Header over whether the application's own record of a theme or
 #             statement still agrees with what the contract holds.
 #   English : checked against the contract
-reportColumn.confirmation =
+reportColumn.confirmation = Подтверждение
 
 
 # ##########################################################################
@@ -803,14 +803,14 @@ reportColumn.confirmation =
 #   Means   : Labels the block number the whole sheet was read at. This is the
 #             sheet's real date - everything on it describes that one block.
 #   English : block
-reportMeta.block =
+reportMeta.block = Блок
 
 # --------------------------------------------------------------------------
 # reportMeta.readAt
 #   Means   : Labels the time of that block, taken from the block itself and
 #             printed as "27.08.2026 14:00 UTC". Not the computer's clock.
 #   English : time of that block
-reportMeta.readAt =
+reportMeta.readAt = Время блока
 
 # --------------------------------------------------------------------------
 # reportMeta.indexedThrough
@@ -818,7 +818,7 @@ reportMeta.readAt =
 #             Printed ONLY when it is behind the block above, which means a
 #             cell created in between is missing from the sheet.
 #   English : events indexed through block
-reportMeta.indexedThrough =
+reportMeta.indexedThrough = События считаны до блока
 
 
 # ##########################################################################
@@ -842,34 +842,34 @@ reportMeta.indexedThrough =
 #             warning colour. The coordinates on the same row are still
 #             correct - only this one field is unknown.
 #   English : not read
-reportStatus.unread =
+reportStatus.unread = Не прочитано
 
 # --------------------------------------------------------------------------
 # reportStatus.unbound
 #   Means   : No organ owns this cell yet, so the first successful write will
 #             claim it permanently. A real state, not a failure.
 #   English : not bound
-reportStatus.unbound =
+reportStatus.unbound = Не прикреплено к органу
 
 # --------------------------------------------------------------------------
 # reportStatus.unset
 #   Means   : This row or column has no statement or theme. A real state.
 #   English : not set
-reportStatus.unset =
+reportStatus.unset = Не задано
 
 # --------------------------------------------------------------------------
 # reportStatus.noValue
 #   Means   : The cell exists but nothing has been written into it yet. A real
 #             state, and NOT the same as a value of zero.
 #   English : no value yet
-reportStatus.noValue =
+reportStatus.noValue = Без значений
 
 # --------------------------------------------------------------------------
 # reportStatus.confirmed
 #   Means   : The application's record of this theme or statement agrees with
 #             what the contract holds. The normal, reassuring case.
 #   English : confirmed
-reportStatus.confirmed =
+reportStatus.confirmed = Подтверждено
 
 # --------------------------------------------------------------------------
 # reportStatus.differs
@@ -877,14 +877,14 @@ reportStatus.confirmed =
 #             recorded. Printed as "<this>: <the contract's wording>". It means
 #             a later voting changed it. Warning colour.
 #   English : differs on the contract
-reportStatus.differs =
+reportStatus.differs = Изменено в Заре
 
 # --------------------------------------------------------------------------
 # reportStatus.absent
 #   Means   : The application recorded wording here but the contract has none.
 #             Warning colour.
 #   English : not on the contract
-reportStatus.absent =
+reportStatus.absent = Отсутствует в Заре
 
 # --------------------------------------------------------------------------
 # reportStatus.decimals
@@ -892,7 +892,7 @@ reportStatus.absent =
 #             "<this>: 2". A value with more decimal places than this is
 #             REFUSED, not rounded - the same warning as hint.value on a form.
 #   English : decimal places
-reportStatus.decimals =
+reportStatus.decimals = Знаки после запятой
 
 # --------------------------------------------------------------------------
 # reportStatus.anyCategory
@@ -900,7 +900,7 @@ reportStatus.decimals =
 #             can be written to it until a category voting passes. Printed
 #             instead of an empty cell, which would read as "anything goes".
 #   English : no category permitted yet
-reportStatus.anyCategory =
+reportStatus.anyCategory = Категории не заданы
 
 
 # ##########################################################################
@@ -924,7 +924,7 @@ reportStatus.anyCategory =
 #             a voting form, and nothing else. The organ, the value and the
 #             rest come from the form, not from here.
 #   English : Copy the coordinates from this sheet onto a voting form. Do not copy anything else.
-reportSentence.purpose =
+reportSentence.purpose = Скопируйте только координаты из этой таблицы в форму голосования.
 
 # --------------------------------------------------------------------------
 # reportSentence.staleness
@@ -932,7 +932,7 @@ reportSentence.purpose =
 #   Means   : Says why the sheet expires: the matrix changes whenever a voting
 #             is executed, so it describes only the block named at the top.
 #   English : The matrix changes whenever a voting is executed, so this sheet describes only the block named above.
-reportSentence.staleness =
+reportSentence.staleness = Матрица Зари изменяется каждый раз, когда голосование исполняется. Поэтому эта таблица описывает только состояние на блоке, указанном выше.
 
 # --------------------------------------------------------------------------
 # reportSentence.validation
@@ -943,7 +943,7 @@ reportSentence.staleness =
 #             application is broken. Without this a member reads a rejection as
 #             a fault and stops trusting the app.
 #   English : The application checks coordinates again when a form is submitted. A refusal there means the matrix has changed, not that something is broken.
-reportSentence.validation =
+reportSentence.validation = Координаты проверяются, когда форма отправлена. Отказ в обработке означает, что ячейка матрицы Зари была изменена и нужно исправить координаты формы.
 
 # --------------------------------------------------------------------------
 # reportSentence.notAuthoritative
@@ -951,7 +951,7 @@ reportSentence.validation =
 #   Means   : Says the sheet is a printout and the contract is the only
 #             authority. It is not evidence of anything.
 #   English : This is a printed reference, not a record. The contract is the only authority.
-reportSentence.notAuthoritative =
+reportSentence.notAuthoritative = Этот документ — слепок состояния Зари. Единственным авторитетным источником является внутреннее состояние контракта Зари.
 
 # --------------------------------------------------------------------------
 # reportSentence.emptyMatrix
@@ -960,7 +960,7 @@ reportSentence.notAuthoritative =
 #             the axis inventory to propose the first value. A normal state for
 #             a young matrix, not an error.
 #   English : No cell has been populated yet. Use the axis inventory to propose the first value.
-reportSentence.emptyMatrix =
+reportSentence.emptyMatrix = Ни одна ячейка ещё не была заполнена. Пожалуйста, воспользуйтесь разделом «Оси», чтобы предложить первое значение к записи.
 
 # --------------------------------------------------------------------------
 # reportSentence.noAxes
@@ -968,7 +968,7 @@ reportSentence.emptyMatrix =
 #   Means   : Says nothing can be proposed yet, and why: a value needs a theme
 #             in its column and a statement in its row before it can exist.
 #   English : No theme or statement has been set yet. A value cannot be proposed until a theme exists for its column and a statement for its row.
-reportSentence.noAxes =
+reportSentence.noAxes = Тема или вопрос ещё не заданы. Новое значение нельзя предложить, пока тема для столбца и вопрос для строки не установлены соответствующими голосованиями.
 
 # --------------------------------------------------------------------------
 # reportSentence.degraded
@@ -976,7 +976,7 @@ reportSentence.noAxes =
 #   Means   : Explains the "not read" marks - those fields could not be
 #             retrieved, but the coordinates beside them are still correct.
 #   English : Fields marked as not read could not be retrieved from the contract. The coordinates beside them are still correct.
-reportSentence.degraded =
+reportSentence.degraded = Поля, помеченные как «Не прочитано», не удалось считать из состояния Зари. Координаты в этих строках всё равно верны.
 
 # --------------------------------------------------------------------------
 # reportSentence.indexBehind
@@ -985,7 +985,7 @@ reportSentence.degraded =
 #   Means   : Warns that a cell created between the two block numbers is
 #             MISSING from the sheet.
 #   English : The event index has not caught up to the block above, so a cell created since then is missing from this sheet.
-reportSentence.indexBehind =
+reportSentence.indexBehind = События прочитаны не до указанного выше блока, поэтому ячейки, созданные позже, в этот отчёт не попали.
 
 # --------------------------------------------------------------------------
 # reportSentence.ambiguous
@@ -994,4 +994,4 @@ reportSentence.indexBehind =
 #             separate, so (3, 7) can exist in both, and nothing in the
 #             contract's records says which one a value was written to.
 #   English : A coordinate bound in both matrices is listed under each, because nothing distinguishes which one a value was written to.
-reportSentence.ambiguous =
+reportSentence.ambiguous = Координаты в категориальной и числовой матрицах могут совпадать, поэтому такая координата показана в каждой из них.

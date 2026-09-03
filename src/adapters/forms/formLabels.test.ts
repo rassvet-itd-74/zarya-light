@@ -146,20 +146,14 @@ describe('the applied wording', () => {
 });
 
 describe('a pending slot', () => {
-  it('is never a form slot — the forms are worded and must stay that way', () => {
-    // The claim that matters, and it survives the report's wording arriving.
-    // Asserted as a filter rather than by looping over `pendingLabels()`: an
-    // empty loop is a test that checks nothing, and this file had one the moment
-    // the form Russian landed.
-    expect(pendingLabels().filter((slot) => !isReportSlot(slot))).toEqual([]);
-  });
-
-  it('is currently every report slot, because that wording has not arrived', () => {
-    // Stated rather than left implicit, so that when the party fills the report
-    // section this test fails and gets tightened to an empty list — the same way
-    // the form half was.
-    expect(pendingLabels()).toHaveLength(37);
-    expect(pendingLabels().every(isReportSlot)).toBe(true);
+  it('is not something any slot currently is, in either document', () => {
+    // Both halves are worded now — the forms since 2026-09-02 and the report
+    // since 2026-09-03 — so a bracketed placeholder appearing on either is a
+    // regression rather than work in progress.
+    //
+    // Asserted directly rather than by looping over `pendingLabels()`: an empty
+    // loop is a test that checks nothing, and this file has had one twice.
+    expect(pendingLabels()).toEqual([]);
   });
 
   it('would render bracketed and never blank', () => {
