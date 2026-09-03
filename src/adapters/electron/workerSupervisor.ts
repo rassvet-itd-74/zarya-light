@@ -2,6 +2,7 @@ import {
   type WorkerHealth,
   type WorkerReply,
   type WorkerRequest,
+  type WorkerRequestSpec,
   isWorkerReply,
 } from './workerProtocol';
 
@@ -168,12 +169,13 @@ export class WorkerSupervisor {
    * hanging: an unanswered request is a degraded worker, and the caller needs to
    * be able to say so.
    */
-  async request(kind: WorkerRequest['kind']): Promise<WorkerReply> {
+  async request(spec: WorkerRequestSpec): Promise<WorkerReply> {
     const worker = this.worker;
     if (worker === undefined) {
       throw new Error('the background worker is not running');
     }
 
+    const { kind } = spec;
     const requestId = `req-${this.nextRequestId++}`;
     return await new Promise<WorkerReply>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -185,7 +187,7 @@ export class WorkerSupervisor {
       this.pending.set(requestId, { resolve, reject, timer });
 
       try {
-        worker.postMessage({ kind, requestId });
+        worker.postMessage({ ...spec, requestId });
       } catch (cause) {
         clearTimeout(timer);
         this.pending.delete(requestId);

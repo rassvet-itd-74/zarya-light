@@ -215,3 +215,38 @@ export const TEMPLATE_NAMESPACES = {
   CONTEXT_FIELDS,
   RECEIPT_FIELDS,
 };
+
+/**
+ * Fills the member-facing fields of an **already issued** document.
+ *
+ * Belongs here rather than beside the test that wants it, because pdf-lib is
+ * confined to this directory: an application-level test that reached for it
+ * would be untrusted document handling escaping the boundary that keeps it
+ * auditable, and lint says so. Nothing about the confinement is weakened by a
+ * test, so the helper moves instead of the rule.
+ *
+ * Distinct from `formPdf`, which *invents* a document. This one takes real
+ * issued bytes and writes into them, which is what a member's PDF viewer does.
+ */
+export async function fillIssuedForm(
+  bytes: Uint8Array,
+  values: Readonly<Record<string, string>>,
+): Promise<Uint8Array> {
+  const document = await PDFDocument.load(bytes, { updateMetadata: false });
+  const form = document.getForm();
+
+  for (const [domainKey, value] of Object.entries(values)) {
+    const name = inputFieldName(domainKey);
+    // The one option group a member fills. Its export value is what the parser
+    // reads, so it is selected rather than typed.
+    if (domainKey === 'support' || domainKey === 'matrix') {
+      form.getRadioGroup(name).select(value);
+      continue;
+    }
+    form.getTextField(name).setText(value);
+  }
+
+  // Not regenerated: the default font cannot encode Cyrillic, and issuance
+  // already generated every appearance with the embedded one.
+  return await document.save({ updateFieldAppearances: false });
+}

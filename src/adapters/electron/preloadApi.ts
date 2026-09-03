@@ -1,6 +1,8 @@
 import {
   IPC_CHANNELS,
   type AppStatus,
+  type IssueTemplateInput,
+  type IssueTemplateResult,
   type ZaryaDesktopApi,
 } from './ipcContract';
 import { type WorkerHealth, isWorkerHealth } from './workerProtocol';
@@ -27,6 +29,9 @@ export function createZaryaApi(ipc: RendererIpc): ZaryaDesktopApi {
   return {
     getAppStatus: async (): Promise<AppStatus> =>
       (await ipc.invoke(IPC_CHANNELS.getAppStatus)) as AppStatus,
+
+    issueTemplate: async (input: IssueTemplateInput): Promise<IssueTemplateResult> =>
+      (await ipc.invoke(IPC_CHANNELS.issueTemplate, input)) as IssueTemplateResult,
 
     onWorkerHealth: (listener: (health: WorkerHealth) => void): (() => void) => {
       const subscription = (_event: unknown, ...args: unknown[]): void => {

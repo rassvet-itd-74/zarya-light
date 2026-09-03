@@ -60,11 +60,13 @@ src/adapters/
   electron/          IPC contract and handlers, preload surface, dialogs,
                      window options, CSP, worker supervision and protocol
   config/            environment → PublicConfig + SecretConfig
-  platform/          IdGenerator over node:crypto
+  platform/          IdGenerator over node:crypto, FileSink over node:fs
 src/testing/         test support only, in no build entry — currently the
                      Solidity source parsers the derived-table tests compare against
 src/main.ts  src/preload.ts  src/renderer.ts  src/worker.ts
 ```
+
+**The worker is built for Node, and that has to be said explicitly.** `vite.worker.config.ts` externalizes `/^node:/`, because Vite derives its built-in list from `module.builtinModules` and `node:sqlite` is not in it on Node 22 — so it resolves to a browser stub and **no `worker.js` is emitted at all**. The symptom is a restart loop with no mention of a bundler. Nothing caught it until the worker gained its first `node:*` import in the issuance slice.
 
 `src/main.ts` is a composition root and decides nothing. Anything with a rule in it lives in the domain, a use case, or an adapter, where it is testable without launching Electron — which is why window options, the CSP, and the IPC handler bodies are pure functions with their Electron wiring kept separate.
 
@@ -97,7 +99,7 @@ Driven ports — the domain declares these, adapters implement them.
 | `ChainWriter` | submit, await confirmation, return a decoded outcome | chain |
 | `NetworkGuard` | chainId, contract code, eligibility fingerprint, and `castVote` arity — four distinct verdicts, plus `UNREACHABLE` for "could not tell" | chain — *implemented* |
 | `Clock` | **chain block time**, never workstation time | chain — *implemented* |
-| `TemplateWriter` | generate a pre-filled AcroForm | forms |
+| `TemplateWriter` | generate a pre-filled AcroForm, and say which context values an operation needs — derived from `FIELD_PLAN`, so a use case keeps no second list | forms — *implemented* |
 | `FormParser` | returned PDF → neutral parsed fields, or a structural rejection | forms |
 | `ReceiptStamper` | fill `zarya.receipt.*` and flatten | forms |
 | `MatrixReportWriter` | render the coordinate reference PDF — landscape, no form fields, font **subset** because there are no fields for a viewer to regenerate an appearance from. Takes the assembled model and nothing else, so no clock can reach the page | forms — *implemented* |
@@ -106,7 +108,7 @@ Driven ports — the domain declares these, adapters implement them.
 | `TransactionStore` | attempts, nonces, hashes, receipts, classified errors | store |
 | `CursorStore` | discovery block cursor, keyed by chain + address + projection; `commit` never moves backwards | store — *in memory until Phase 5* |
 | `Signer` | sign; never exposes key material | secrets |
-| `FileSink` | write a file to a user-chosen or configured location | electron |
+| `FileSink` | write bytes to an already-chosen path. **Choosing** is a save dialog and belongs to main, so it is not on this port — which is what keeps the issuance ordering testable without Electron | platform — *implemented* |
 | `IdGenerator` | `operationRef` creation | platform — *implemented* |
 
 Driving adapters call application services: IPC handlers, the executor's periodic trigger, the manual `Run now` action, and tests. All executor triggers converge on one `reconcile()` use case.

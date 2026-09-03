@@ -49,14 +49,34 @@ class FakeWorker implements WorkerHandle {
 
   /** Answers the last request as the real worker would. */
   pong(uptimeSeconds = 7): void {
-    const last = this.sent.at(-1);
-    if (last === undefined) throw new Error('nothing was sent');
     this.replied({
       kind: 'pong',
-      requestId: last.requestId,
+      requestId: this.lastRequestId(),
       protocolVersion: WORKER_PROTOCOL_VERSION,
       uptimeSeconds,
+      schemaVersion: 1,
     });
+  }
+
+  /**
+   * A `pong` as protocol v2 shaped it — no `schemaVersion`.
+   *
+   * The case the reply guard exists for: a fresh main process against a stale
+   * worker binary, which is what a partial upgrade looks like.
+   */
+  stalePong(): void {
+    this.replied({
+      kind: 'pong',
+      requestId: this.lastRequestId(),
+      protocolVersion: 2,
+      uptimeSeconds: 7,
+    });
+  }
+
+  private lastRequestId(): string {
+    const last = this.sent.at(-1);
+    if (last === undefined) throw new Error('nothing was sent');
+    return last.requestId;
   }
 }
 
@@ -223,7 +243,7 @@ describe('requests', () => {
     supervisor.start();
     latest().spawned();
 
-    const pending = supervisor.request('ping');
+    const pending = supervisor.request({ kind: 'ping' });
     expect(latest().sent).toHaveLength(1);
     latest().pong(11);
 
@@ -234,12 +254,30 @@ describe('requests', () => {
     });
   });
 
+  it('ignores a reply shaped by an older protocol, rather than trusting it', async () => {
+    // A fresh main process against a stale worker binary — what a partial
+    // upgrade looks like. A v2 `pong` carries no schemaVersion, and accepting it
+    // would report a database version this build never read.
+    const { supervisor, latest } = harness();
+    supervisor.start();
+    latest().spawned();
+
+    const pending = supervisor.request({ kind: 'ping' });
+    latest().stalePong();
+
+    // Unanswered as far as the supervisor is concerned, so it degrades on the
+    // timeout rather than resolving with a reply it could not validate.
+    vi.advanceTimersByTime(5_000);
+    await expect(pending).rejects.toThrow('did not answer');
+    expect(supervisor.currentHealth()).toBe('DEGRADED');
+  });
+
   it('rejects and degrades when the worker does not answer', async () => {
     const { supervisor, latest } = harness();
     supervisor.start();
     latest().spawned();
 
-    const pending = supervisor.request('ping');
+    const pending = supervisor.request({ kind: 'ping' });
     vi.advanceTimersByTime(5_000);
 
     await expect(pending).rejects.toThrow('did not answer');
@@ -251,7 +289,7 @@ describe('requests', () => {
     supervisor.start();
     latest().spawned();
 
-    const pending = supervisor.request('ping');
+    const pending = supervisor.request({ kind: 'ping' });
     latest().replied({ kind: 'pong' });
     latest().replied('nonsense');
     vi.advanceTimersByTime(5_000);
@@ -265,7 +303,7 @@ describe('requests', () => {
     supervisor.start();
     latest().spawned();
 
-    const pending = supervisor.request('ping');
+    const pending = supervisor.request({ kind: 'ping' });
     latest().exited();
 
     await expect(pending).rejects.toThrow('worker exited');
@@ -273,7 +311,7 @@ describe('requests', () => {
 
   it('refuses to send when nothing is running', async () => {
     const { supervisor } = harness();
-    await expect(supervisor.request('ping')).rejects.toThrow('not running');
+    await expect(supervisor.request({ kind: 'ping' })).rejects.toThrow('not running');
   });
 });
 
@@ -316,7 +354,7 @@ describe('shutdown', () => {
     supervisor.start();
     latest().spawned();
 
-    const pending = supervisor.request('ping');
+    const pending = supervisor.request({ kind: 'ping' });
     supervisor.stop();
 
     await expect(pending).rejects.toThrow('shutting down');

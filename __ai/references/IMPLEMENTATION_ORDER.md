@@ -142,6 +142,24 @@ Three things settled in slice 1 that bind the rest:
 
 Issuance already depends on this: the `operationRef` it takes is now resolvable, and `boundOperation.ts` is where a stored record becomes the context ingestion assembles against.
 
+## Vertical slice — issuance wired end to end — **done 2026-09-03**
+
+Taken out of order, deliberately, and out of Phase 9's UI work. Phases 2–5 had built a chain adapter, an intent model, a form pipeline and a storage engine that were **reachable only from tests**; `npm start` could report status and check the network and nothing else. Rather than stack a third untested layer on two others, one path was wired: a button, a save dialog, a recorded operation, a PDF on disk.
+
+`FileSink` and `TemplateWriter` are now declared and implemented, `issueOperationTemplate` is the first application service that changes anything, and the worker protocol is at v3.
+
+Three things running the app found that no test would have:
+
+- **The worker was never being built for Node.** Vite derives its built-in list from `module.builtinModules`, which on Node 22 does **not** contain `node:sqlite`, so it resolved to a browser stub and `worker.js` was never emitted — presenting as a restart loop. It had been latent since Phase 1 because the worker had no `node:*` import until it opened a database.
+- **A startup error on every launch since Phase 1.** `pushWorkerHealth` sends before the first frame commits; `isDestroyed()` is false and `send` throws anyway. Electron logs it itself, so a `try`/`catch` silences nothing — main now tracks `did-finish-load`.
+- **The worker's console output never reaches the terminal in dev**, despite `stdio: 'inherit'`. An observability gap, not a malfunction; the database had to be verified by opening the file.
+
+**Found by trying to issue one:** `CREATE_NUMERICAL_VALUE_VOTING` cannot be issued at all. `FIELD_PLAN` calls its `decimals` bound — "the scale the cell had when the template was issued" — while listing that operation's `x` and `y` as member-filled, so at issuance there is no cell to read a scale from. Both statements are in the same file. Which one gives is a **product decision**; the code refuses with `BOUND_VALUE_UNAVAILABLE` rather than inventing a scale. The other ten issue.
+
+Evidence is five rows in the real database at `%APPDATA%/zarya-light/zarya.db`, all `EMITTED`, with organ identifiers the deployed contract rendered (`15.0.СОВ`, `15.КОН`) and subject codes — never ordinals — in `boundValues`.
+
+Still unwired: import, preflight, and the matrix report button.
+
 ## Phase 6 — serialized transaction queue and receipt stamping
 
 Signer abstraction; send/wait/receipt flow; nonce-safe sequential writes; crash-state reconciliation across the five crash windows. Optional signed outbox only after the basic lifecycle is stable.

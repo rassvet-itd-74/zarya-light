@@ -69,6 +69,60 @@
       #network[data-severity='blocked'] {
         border-color: #cf222e;
       }
+      section {
+        margin: 2rem 0 0;
+        padding-top: 1.5rem;
+        border-top: 1px solid rgba(128, 128, 128, 0.3);
+      }
+      h2 {
+        font-size: 1rem;
+        margin: 0 0 1rem;
+      }
+      .field {
+        display: grid;
+        grid-template-columns: 11rem 1fr;
+        align-items: center;
+        gap: 0.5rem 1rem;
+        margin: 0 0 0.6rem;
+        font-size: 0.875rem;
+        max-width: 34rem;
+      }
+      label {
+        opacity: 0.8;
+      }
+      select,
+      input {
+        font: inherit;
+        padding: 0.3rem 0.4rem;
+      }
+      /* Hidden rather than removed: an operation with no organ still has the
+         same form, so the layout does not jump as the selection changes. */
+      .field[hidden] {
+        display: none;
+      }
+      #issue-result {
+        margin: 1rem 0 0;
+        padding: 0.5rem 0.75rem;
+        border-left: 3px solid;
+        font-size: 0.875rem;
+        max-width: 46rem;
+        word-break: break-all;
+      }
+      #issue-result[hidden] {
+        display: none;
+      }
+      #issue-result[data-outcome='ISSUED'] {
+        border-color: #1a7f37;
+      }
+      #issue-result[data-outcome='CANCELLED'] {
+        border-color: #57606a;
+      }
+      #issue-result[data-outcome='REFUSED'] {
+        border-color: #9a6700;
+      }
+      #issue-result[data-outcome='FAILED'] {
+        border-color: #cf222e;
+      }
     </style>
   </head>
   <body>
@@ -79,6 +133,33 @@
     <p id="network" data-severity="pending">Checking the network…</p>
     <dl id="status"></dl>
     <button id="refresh" type="button">Refresh</button>
+
+    <section>
+      <h2>Issue a blank form</h2>
+      <div class="field">
+        <label for="operation-type">Operation</label>
+        <select id="operation-type"></select>
+      </div>
+      <div class="field" id="field-organ-type">
+        <label for="organ-type">Organ</label>
+        <select id="organ-type"></select>
+      </div>
+      <div class="field" id="field-region">
+        <label for="region">Region</label>
+        <select id="region"></select>
+      </div>
+      <div class="field" id="field-organ-number">
+        <label for="organ-number">Organ number</label>
+        <input id="organ-number" type="number" min="0" step="1" value="0" />
+      </div>
+      <div class="field" id="field-voting-id">
+        <label for="voting-id">Voting number</label>
+        <input id="voting-id" type="number" min="1" step="1" />
+      </div>
+      <button id="issue" type="button">Choose a location and issue…</button>
+      <p id="issue-result" hidden></p>
+    </section>
+
     <script type="module" src="/src/renderer.ts"></script>
   </body>
 </html>

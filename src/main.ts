@@ -12,7 +12,10 @@ import { pushWorkerHealth, registerIpcHandlers } from './adapters/electron/ipcHa
 import { buildWindowPlan } from './adapters/electron/windowOptions';
 import { createUtilityProcessSpawner } from './adapters/electron/workerHost';
 import { WorkerSupervisor } from './adapters/electron/workerSupervisor';
-import type { WorkerHealth } from './adapters/electron/workerProtocol';
+import type {
+  IssueTemplatePayload,
+  WorkerHealth,
+} from './adapters/electron/workerProtocol';
 import type { WorkerProbe } from './app/getAppStatus';
 
 /**
@@ -62,7 +65,11 @@ try {
 }
 
 const supervisor = new WorkerSupervisor({
-  spawn: createUtilityProcessSpawner(config.publicConfig.appVersion),
+  spawn: createUtilityProcessSpawner({
+    appVersion: config.publicConfig.appVersion,
+    // Electron creates this directory; the worker only has to open a file in it.
+    userDataPath: app.getPath('userData'),
+  }),
   onRestart: (reason) => {
     // Phase 7 wires reconcile() here. Every trigger — startup, restart,
     // reconnect, and the UI's Run now — must converge on that one path.
@@ -73,11 +80,33 @@ const supervisor = new WorkerSupervisor({
   },
 });
 
+/**
+ * Windows whose renderer is actually listening.
+ *
+ * `isDestroyed()` is not enough, and a real run is what showed it: the worker
+ * reports `HEALTHY` within milliseconds of `app.ready`, well before the first
+ * frame has committed, and `webContents.send` then fails with `Render frame was
+ * disposed before WebFrameMain could be accessed`. Electron **logs that itself**,
+ * so a `try`/`catch` around the send silences nothing — the only fix is not to
+ * send.
+ *
+ * Membership is the renderer's own signal rather than a timer: `did-finish-load`
+ * means the preload ran and the listener is registered. Missing a push costs
+ * nothing anyway — the renderer reads the same health from `getAppStatus` on
+ * every refresh — so the conservative direction is to send too rarely.
+ */
+const readyWindows = new Set<Electron.WebContents>();
+
+const trackReadiness = (contents: Electron.WebContents): void => {
+  contents.on('did-finish-load', () => readyWindows.add(contents));
+  // A reload disposes the old frame and builds a new one, so readiness has to be
+  // withdrawn and re-earned rather than latched once.
+  contents.on('did-start-loading', () => readyWindows.delete(contents));
+  contents.on('destroyed', () => readyWindows.delete(contents));
+};
+
 supervisor.onHealthChange((health: WorkerHealth) => {
-  pushWorkerHealth(
-    BrowserWindow.getAllWindows().map((window) => window.webContents),
-    health,
-  );
+  pushWorkerHealth([...readyWindows], health);
 });
 
 const workerProbe: WorkerProbe = {
@@ -85,7 +114,7 @@ const workerProbe: WorkerProbe = {
   probe: async () => {
     if (!supervisor.isRunning()) return null;
     try {
-      const reply = await supervisor.request('ping');
+      const reply = await supervisor.request({ kind: 'ping' });
       return reply.kind === 'pong'
         ? { protocolVersion: reply.protocolVersion, uptimeSeconds: reply.uptimeSeconds }
         : null;
@@ -98,7 +127,7 @@ const workerProbe: WorkerProbe = {
   network: async () => {
     if (!supervisor.isRunning()) return null;
     try {
-      const reply = await supervisor.request('checkNetwork');
+      const reply = await supervisor.request({ kind: 'checkNetwork' });
       return reply.kind === 'network' ? reply.status : null;
     } catch {
       // Same rule: unasked is not the same as failed. The renderer shows
@@ -106,6 +135,35 @@ const workerProbe: WorkerProbe = {
       return null;
     }
   },
+};
+
+/**
+ * Issuance, from main's side: pick a destination, then delegate.
+ *
+ * The dialog is here because it belongs to the window. Everything after it is the
+ * worker's — the record, the document, the file — so this object is the whole of
+ * main's involvement in producing a governance form.
+ *
+ * `defaultPath` starts in Documents rather than at the last-used directory:
+ * there is no last-used directory to remember yet, and guessing the app's own
+ * installation folder would be worse than a familiar default.
+ */
+const issuanceGateway = {
+  chooseDestination: async (suggestedName: string): Promise<string | null> => {
+    const parent = BrowserWindow.getAllWindows()[0];
+    const result = await dialog.showSaveDialog(parent, {
+      title: 'Zarya',
+      defaultPath: path.join(app.getPath('documents'), suggestedName),
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      // The dialog does the overwrite confirmation, which is why FileSink does
+      // not: asking twice would overrule an answer we just received.
+      properties: ['createDirectory', 'showOverwriteConfirmation'],
+    });
+    return result.canceled || result.filePath.length === 0 ? null : result.filePath;
+  },
+
+  issue: async (payload: IssueTemplatePayload) =>
+    await supervisor.request({ kind: 'issueTemplate', payload }),
 };
 
 const createWindow = (): void => {
@@ -121,6 +179,8 @@ const createWindow = (): void => {
 
   // The app never opens a second window or an external one.
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+  trackReadiness(mainWindow.webContents);
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
@@ -152,6 +212,7 @@ app.on('ready', () => {
   registerIpcHandlers({
     ipcMain,
     deps: { publicConfig: config.publicConfig, worker: workerProbe },
+    issuance: issuanceGateway,
     onError: (channel, error) => {
       // The unsanitized error stops here. The renderer received a generic one.
       console.error(`[main] ${channel}:`, error);

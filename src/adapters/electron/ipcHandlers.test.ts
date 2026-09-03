@@ -92,6 +92,20 @@ describe('handleGetAppStatus', () => {
 });
 
 describe('registerIpcHandlers', () => {
+  /**
+   * A gateway that would issue if asked. These tests are about registration and
+   * error sanitizing, so it exists to be present rather than to be exercised —
+   * the issuance path has its own tests below.
+   */
+  const stubIssuance = () => ({
+    chooseDestination: async () => null,
+    issue: async () => ({
+      kind: 'failure' as const,
+      requestId: 'r1',
+      message: 'not used here',
+    }),
+  });
+
   const fakeIpcMain = () => {
     const handlers = new Map<
       string,
@@ -109,8 +123,11 @@ describe('registerIpcHandlers', () => {
 
   it('registers exactly the channels in the contract', () => {
     const { handlers, ipcMain } = fakeIpcMain();
-    registerIpcHandlers({ ipcMain, deps: deps() });
-    expect([...handlers.keys()]).toEqual([IPC_CHANNELS.getAppStatus]);
+    registerIpcHandlers({ ipcMain, deps: deps(), issuance: stubIssuance() });
+    expect([...handlers.keys()]).toEqual([
+      IPC_CHANNELS.getAppStatus,
+      IPC_CHANNELS.issueTemplate,
+    ]);
   });
 
   it('sanitizes an unexpected failure and reports the real one to main only', async () => {
@@ -125,6 +142,7 @@ describe('registerIpcHandlers', () => {
           throw boom;
         },
       }),
+      issuance: stubIssuance(),
       onError,
     });
 
@@ -137,7 +155,7 @@ describe('registerIpcHandlers', () => {
 
   it('passes our own validation message through, since we wrote it', async () => {
     const { handlers, ipcMain } = fakeIpcMain();
-    registerIpcHandlers({ ipcMain, deps: deps() });
+    registerIpcHandlers({ ipcMain, deps: deps(), issuance: stubIssuance() });
 
     const handler = handlers.get(IPC_CHANNELS.getAppStatus);
     await expect(handler?.(null, 'unexpected')).rejects.toThrow('takes no arguments');
@@ -153,5 +171,23 @@ describe('pushWorkerHealth', () => {
 
     expect(live.send).toHaveBeenCalledWith(IPC_CHANNELS.workerHealth, 'DEGRADED');
     expect(dead.send).not.toHaveBeenCalled();
+  });
+
+  it('survives a window that goes away between the check and the send', () => {
+    // Observed in a real run: a window reports itself alive while its render
+    // frame is already gone, and `send` throws. This push is best-effort UI —
+    // the renderer reads the same health from `getAppStatus` — so a throw here
+    // must not escape into a supervisor event handler with no caller to catch it.
+    const vanishing = {
+      isDestroyed: () => false,
+      send: () => {
+        throw new Error('Render frame was disposed before WebFrameMain could be accessed');
+      },
+    };
+    const live = { isDestroyed: () => false, send: vi.fn() };
+
+    expect(() => pushWorkerHealth([vanishing, live], 'HEALTHY')).not.toThrow();
+    // And the windows after it still get their push.
+    expect(live.send).toHaveBeenCalledWith(IPC_CHANNELS.workerHealth, 'HEALTHY');
   });
 });
