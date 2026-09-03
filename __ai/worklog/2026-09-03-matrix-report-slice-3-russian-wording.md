@@ -6,6 +6,18 @@
 way part one was: correct what is wrong or too long, report what was changed, and say which changes
 are proposals rather than fixes.
 
+## Changes
+
+`wording.ru.txt` holds the party's 37 report values with 23 of them corrected, and
+`formLabels.ru.ts` was regenerated from it by `npm run wording:apply` — so every label on the matrix
+reference now prints Russian and `pendingLabels()` is empty for the first time since the report work
+began. Two tests were tightened back to that empty claim. No source module changed: the renderer, the
+composer and the layout were already reading these slots through `labelText`, which is what made the
+wording a data change rather than a code change.
+
+The rest of this entry is what was corrected and why. Three of the corrections change what the page
+would *tell a member*, not how it reads, and those come first.
+
 ## Two hard refusals from the checker, and one of them needed the party's own vocabulary
 
 `wording:check` refused to write, which is what it is for:
