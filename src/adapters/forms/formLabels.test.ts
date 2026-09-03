@@ -14,6 +14,12 @@ import {
   pendingLabels,
   textFor,
 } from './formLabels';
+import {
+  CONTENT_WIDTH as REPORT_CONTENT_WIDTH,
+  LOGO as REPORT_LOGO,
+  NARROWEST_COLUMN,
+  TYPE as REPORT_TYPE,
+} from './reportLayout';
 import { CONTENT_WIDTH, HALF_WIDTH, LOGO, ROW, TYPE } from './templateLayout';
 
 /**
@@ -42,7 +48,23 @@ const GEOMETRY: Readonly<Record<string, { face: 'regular' | 'bold'; size: number
     section: { face: 'bold', size: TYPE.sectionHeading, width: CONTENT_WIDTH },
     sentence: { face: 'regular', size: TYPE.sentence, width: CONTENT_WIDTH },
     brand: { face: 'bold', size: TYPE.brand, width: CONTENT_WIDTH - LOGO.size - 12 },
+
+    // The matrix reference. Landscape, and its column headers are bounded by the
+    // narrowest column rather than by the page.
+    reportTitle: {
+      face: 'bold',
+      size: REPORT_TYPE.title,
+      width: REPORT_CONTENT_WIDTH - REPORT_LOGO.size - 12,
+    },
+    reportSection: { face: 'bold', size: REPORT_TYPE.sectionHeading, width: REPORT_CONTENT_WIDTH },
+    reportColumn: { face: 'bold', size: REPORT_TYPE.columnHeader, width: NARROWEST_COLUMN },
+    reportMeta: { face: 'regular', size: REPORT_TYPE.stamp, width: REPORT_CONTENT_WIDTH / 3 - 90 },
+    reportStatus: { face: 'regular', size: REPORT_TYPE.cell, width: 85 },
+    reportSentence: { face: 'regular', size: REPORT_TYPE.sentence, width: REPORT_CONTENT_WIDTH },
   };
+
+/** Slots belonging to the report rather than to a form. */
+const isReportSlot = (slot: string) => slot.startsWith('report');
 
 let widthOf: (text: string, face: 'regular' | 'bold', size: number) => number;
 
@@ -82,8 +104,13 @@ describe('the slot table', () => {
   });
 
   it('reports what is still outstanding', () => {
-    expect(LABEL_SLOT_COUNT).toBe(62);
-    expect(pendingLabels().length).toBe(62 - Object.keys(appliedWording()).length);
+    // A tripwire on the count, split by document so that adding a slot to one
+    // does not quietly look like wording arriving for the other.
+    const slots = Object.keys(SLOT_ENGLISH);
+    expect(slots.filter((slot) => !isReportSlot(slot))).toHaveLength(62);
+    expect(slots.filter(isReportSlot)).toHaveLength(37);
+    expect(LABEL_SLOT_COUNT).toBe(99);
+    expect(pendingLabels().length).toBe(99 - Object.keys(appliedWording()).length);
   });
 });
 
@@ -119,11 +146,20 @@ describe('the applied wording', () => {
 });
 
 describe('a pending slot', () => {
-  it('is not something any slot currently is', () => {
-    // Asserted directly rather than by looping over `pendingLabels()`: an empty
-    // loop is a test that checks nothing, and this file had one the moment the
-    // Russian landed.
-    expect(pendingLabels()).toEqual([]);
+  it('is never a form slot — the forms are worded and must stay that way', () => {
+    // The claim that matters, and it survives the report's wording arriving.
+    // Asserted as a filter rather than by looping over `pendingLabels()`: an
+    // empty loop is a test that checks nothing, and this file had one the moment
+    // the form Russian landed.
+    expect(pendingLabels().filter((slot) => !isReportSlot(slot))).toEqual([]);
+  });
+
+  it('is currently every report slot, because that wording has not arrived', () => {
+    // Stated rather than left implicit, so that when the party fills the report
+    // section this test fails and gets tightened to an empty list — the same way
+    // the form half was.
+    expect(pendingLabels()).toHaveLength(37);
+    expect(pendingLabels().every(isReportSlot)).toBe(true);
   });
 
   it('would render bracketed and never blank', () => {
@@ -153,15 +189,20 @@ describe('the build script and the layout agree', () => {
       return Function(
         `"use strict"; const CONTENT_WIDTH=${CONTENT_WIDTH}, HALF_WIDTH=${HALF_WIDTH}, OPTION_WIDTH=${
           CONTENT_WIDTH - ROW.optionSize - 7
-        }; return (${match?.[1]});`,
+        }, REPORT_CONTENT_WIDTH=${REPORT_CONTENT_WIDTH}, NARROWEST_COLUMN=${NARROWEST_COLUMN}; return (${match?.[1]});`,
       )() as number;
     };
     for (const [prefix, geometry] of Object.entries(GEOMETRY)) {
       expect(literal(prefix), prefix).toBeCloseTo(geometry.width, 6);
     }
-    // And the page constants the script restates.
+    // And the page constants the script restates, for both orientations.
     expect(script).toContain('595.28 - 42 * 2');
     expect(CONTENT_WIDTH).toBeCloseTo(595.28 - 42 * 2, 6);
+    expect(script).toContain('841.89 - 42 * 2');
+    expect(REPORT_CONTENT_WIDTH).toBeCloseTo(841.89 - 42 * 2, 6);
+    // The narrowest column is a number in two places and a wrong one there would
+    // let a header through the checker that overruns its neighbour on paper.
+    expect(script).toContain(`NARROWEST_COLUMN = ${NARROWEST_COLUMN}`);
   });
 });
 

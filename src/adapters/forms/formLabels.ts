@@ -2,12 +2,19 @@ import { OPERATION_TYPES, type OperationType } from '../../domain/intents/intent
 import { RU_WORDING } from './formLabels.ru';
 
 /**
- * Every piece of printed text on a template, in one module.
+ * Every piece of printed text this application draws, in one module.
  *
- * The forms are Russian-only. Nothing here is generated, inferred, or
- * translated by this codebase: governance wording is the party's, and a label
- * that says something slightly different from what the party means is a member
- * filling in the wrong thing.
+ * Both documents, not just the forms. The matrix reference is a different shape
+ * of page with a different geometry, and its wording still belongs here: one
+ * table means the party fills in **one** file, one `pendingLabels()` lists
+ * everything still unworded, and one font-coverage check proves PT Sans can draw
+ * all of it. A second parallel pipeline for the report would be a second thing to
+ * forget.
+ *
+ * The forms and the report are Russian-only. Nothing here is generated,
+ * inferred, or translated by this codebase: governance wording is the party's,
+ * and a label that says something slightly different from what the party means
+ * is a member filling in the wrong thing.
  *
  * ## One flat table of slots, and the Russian in a generated file beside it
  *
@@ -117,6 +124,76 @@ export const SLOT_ENGLISH: Readonly<Record<string, string>> = {
 
   /** The application's own name, which the whitepaper already supplies. */
   brand: 'Zarya',
+
+  // ---------------------------------------------------------------------------
+  // The matrix reference report. A different document: no fields, landscape, and
+  // the one page a voter reads *before* filling anything in.
+  // ---------------------------------------------------------------------------
+
+  'reportTitle.document': 'matrix reference',
+
+  'reportSection.axes': 'axis inventory',
+  'reportSection.themes': 'themes, by column',
+  'reportSection.statements': 'statements, by row',
+  'reportSection.cells': 'populated cells',
+
+  /**
+   * Column headers, drawn at 7pt in the narrowest column on the page. Short
+   * nouns only — `wording:check` refuses anything wider, because at this size a
+   * header running into its neighbour reads as one meaningless word.
+   */
+  'reportColumn.x': 'column (x)',
+  'reportColumn.y': 'row (y)',
+  'reportColumn.statement': 'statement',
+  'reportColumn.organ': 'owning organ',
+  'reportColumn.constraints': 'permitted values',
+  'reportColumn.value': 'current value',
+  'reportColumn.author': 'author',
+  'reportColumn.recorded': 'recorded',
+  'reportColumn.samples': 'records',
+  /**
+   * The axis tables reuse `reportColumn.x` and `.y` for their coordinate
+   * column rather than having a generic word of their own: a member reading
+   * «столбец» in the theme table and something else in the cell table would
+   * have to work out that they are the same axis.
+   */
+  'reportColumn.label': 'wording',
+  'reportColumn.confirmation': 'checked against the contract',
+
+  /** The staleness stamp, drawn as `label: value` so no text is interpolated. */
+  'reportMeta.block': 'block',
+  'reportMeta.readAt': 'time of that block',
+  'reportMeta.indexedThrough': 'events indexed through block',
+
+  /** The words that stand in a table cell where a value could not be stated. */
+  'reportStatus.unread': 'not read',
+  'reportStatus.unbound': 'not bound',
+  'reportStatus.unset': 'not set',
+  'reportStatus.noValue': 'no value yet',
+  'reportStatus.confirmed': 'confirmed',
+  'reportStatus.differs': 'differs on the contract',
+  'reportStatus.absent': 'not on the contract',
+  'reportStatus.decimals': 'decimal places',
+  'reportStatus.anyCategory': 'no category permitted yet',
+
+  'reportSentence.purpose':
+    'Copy the coordinates from this sheet onto a voting form. Do not copy anything else.',
+  'reportSentence.staleness':
+    'The matrix changes whenever a voting is executed, so this sheet describes only the block named above.',
+  'reportSentence.validation':
+    'The application checks coordinates again when a form is submitted. A refusal there means the matrix has changed, not that something is broken.',
+  'reportSentence.notAuthoritative':
+    'This is a printed reference, not a record. The contract is the only authority.',
+  'reportSentence.emptyMatrix':
+    'No cell has been populated yet. Use the axis inventory to propose the first value.',
+  'reportSentence.noAxes':
+    'No theme or statement has been set yet. A value cannot be proposed until a theme exists for its column and a statement for its row.',
+  'reportSentence.degraded':
+    'Fields marked as not read could not be retrieved from the contract. The coordinates beside them are still correct.',
+  'reportSentence.indexBehind':
+    'The event index has not caught up to the block above, so a cell created since then is missing from this sheet.',
+  'reportSentence.ambiguous':
+    'A coordinate bound in both matrices is listed under each, because nothing distinguishes which one a value was written to.',
 };
 
 export class UnknownLabelSlotError extends Error {
@@ -221,6 +298,14 @@ export const SENTENCES = {
 } as const;
 
 export const BRAND = labelFor('brand');
+
+/** The matrix reference's own groups. Same derivation, different document. */
+export const REPORT_TITLE = labelFor('reportTitle.document');
+export const REPORT_SECTIONS = group('reportSection');
+export const REPORT_COLUMNS = group('reportColumn');
+export const REPORT_META = group('reportMeta');
+export const REPORT_STATUS = group('reportStatus');
+export const REPORT_SENTENCES = group('reportSentence');
 
 export const LABEL_SLOT_COUNT = Object.keys(SLOT_ENGLISH).length;
 

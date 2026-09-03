@@ -102,7 +102,14 @@ The **matrix reference report** also belongs here: it needs only Phase 2 reads p
 - **Degradation is per field, total failure is nearly never.** A failed read marks its own field and keeps the row, since the coordinate is what a voter transcribes. The report fails only when it would consist of nothing but empty rows — the axis inventory comes from the events themselves and survives an outage.
 - **`ValueAdded`'s missing `isCategorical` is resolved by reading both cells**, and an `AMBIGUOUS` coordinate prints **twice** rather than being guessed at once.
 
-Remaining for the report: the `MatrixReportWriter` port and its landscape pdf-lib renderer, the `report.*` wording slots (a fresh fill-in file of Russian strings), and the UI button with its IPC path.
+**Report slice 2 — the document — done 2026-09-03.** The `MatrixReportWriter` port, the landscape layout, composition, the pdf-lib renderer, and 37 new wording slots handed to the party as `wording.ru.txt` part two. Four things settled:
+
+- **Composition is separated from rendering**, because a subset embedded font writes glyph identifiers rather than characters — so once a string is in a content stream there is no way to assert it is the string that was meant. Every claim about what the page *says* is tested against `composeMatrixReport`; the renderer only positions.
+- **The font is subset here and whole on a form.** A form has fields a viewer regenerates appearances for, so a subset would show a member blanks where their own Cyrillic belongs. A report has none, so only the drawn glyphs are needed: 29–81 KB against a form's 327 KB.
+- **A coordinate is never truncated.** Every other cell may be cut to its column — a statement's full wording is in the axis inventory, an author is recognised rather than copied — but a truncated coordinate addresses a *different real cell*. `uint256` allows 78 digits, so an oversized one is printed on its own full-width line above the row.
+- **One wording table for both documents.** The report's slots live in `SLOT_ENGLISH` beside the forms', so the party fills one file, `pendingLabels()` lists everything unworded, and one font-coverage check covers both.
+
+Remaining for the report: the party's Russian for the 37 outstanding slots, then `npm run wording:apply`; and the UI button with its IPC path plus the `PrintMatrixReport` application service that supplies `indexedThrough` (Phase 9).
 
 **Not implementable, and it is the skill that is wrong:** `.claude/skills/zarya-matrix-report/SKILL.md` lists "an approval threshold renders against its own base — `5000` of `10000` shows as 50%" among the report's tests. No eligibility getter exists (`CONTRACT.md`, "Not exposed"), so a threshold cannot be read at all, and nothing in this report is a basis-point value. The basis-point rendering rule still applies where such a value *is* shown — the form hints — and has a test there.
 

@@ -50,6 +50,18 @@ const CONTENT_WIDTH = 595.28 - 42 * 2;
 const HALF_WIDTH = (CONTENT_WIDTH - 14) / 2;
 const OPTION_WIDTH = CONTENT_WIDTH - 12 - 7;
 
+/**
+ * The report is landscape, so it has its own content width — and a table, so its
+ * headers are bounded by the **narrowest column** rather than by the page.
+ *
+ * `NARROWEST_COLUMN` is restated from `reportLayout.ts` for the same reason the
+ * form geometry is: this is a build script and importing TypeScript would mean a
+ * compile step to check a text file. `formLabels.test.ts` asserts these against
+ * the real modules, so a divergence fails the suite.
+ */
+const REPORT_CONTENT_WIDTH = 841.89 - 42 * 2;
+const NARROWEST_COLUMN = 70;
+
 /** prefix -> { face, size, width } for the slot's drawn position. */
 const GEOMETRY = {
   operationTitle: { face: 'bold', size: 13, width: CONTENT_WIDTH },
@@ -63,6 +75,17 @@ const GEOMETRY = {
   section: { face: 'bold', size: 10.5, width: CONTENT_WIDTH },
   sentence: { face: 'regular', size: 8, width: CONTENT_WIDTH },
   brand: { face: 'bold', size: 16, width: CONTENT_WIDTH - 36 - 12 },
+
+  // The report. Landscape, so its sentences have real room — unlike a form's,
+  // where every string is squeezed against a 511pt column.
+  reportTitle: { face: 'bold', size: 12, width: REPORT_CONTENT_WIDTH - 30 - 12 },
+  reportSection: { face: 'bold', size: 10, width: REPORT_CONTENT_WIDTH },
+  reportColumn: { face: 'bold', size: 7, width: NARROWEST_COLUMN },
+  // Three label/value pairs share the stamp line.
+  reportMeta: { face: 'regular', size: 7.5, width: REPORT_CONTENT_WIDTH / 3 - 90 },
+  // Drawn inside a table cell; the narrowest one that shows a status is `value`.
+  reportStatus: { face: 'regular', size: 7.5, width: 85 },
+  reportSentence: { face: 'regular', size: 8, width: REPORT_CONTENT_WIDTH },
 };
 
 const KEY_LINE = /^([A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9_]+)?)\s*=\s*(.*)$/;

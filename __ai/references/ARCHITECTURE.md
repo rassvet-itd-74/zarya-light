@@ -100,7 +100,7 @@ Driven ports — the domain declares these, adapters implement them.
 | `TemplateWriter` | generate a pre-filled AcroForm | forms |
 | `FormParser` | returned PDF → neutral parsed fields, or a structural rejection | forms |
 | `ReceiptStamper` | fill `zarya.receipt.*` and flatten | forms |
-| `MatrixReportWriter` | render the coordinate reference PDF — no form fields | forms |
+| `MatrixReportWriter` | render the coordinate reference PDF — landscape, no form fields, font **subset** because there are no fields for a viewer to regenerate an appearance from. Takes the assembled model and nothing else, so no clock can reach the page | forms — *implemented* |
 | `OperationStore` | issued templates keyed by `operationRef`, with authoritative context | store |
 | `BatchStore` | batches, items, dependency edges | store |
 | `TransactionStore` | attempts, nonces, hashes, receipts, classified errors | store |

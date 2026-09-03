@@ -613,3 +613,385 @@ sentence.receiptNotice = Блок полей проверки заполняет
 brand = Заря
 
 # end - 62 entries
+
+
+# ##########################################################################
+# ##########################################################################
+#
+#  PART TWO - THE MATRIX REFERENCE REPORT
+#
+#  A SECOND, DIFFERENT DOCUMENT. Not a form: it has no fields and nobody
+#  writes on it. It is the printed sheet a member reads BEFORE filling in a
+#  voting form, to find out which coordinates (x, y) exist and what is in
+#  them - because the contract cannot be asked what the matrix contains.
+#
+#  LANDSCAPE A4, one or more pages, top to bottom:
+#    header    application name, document title, one grey line: block number
+#              and chain time. Repeated on EVERY page.
+#    notices   four grey lines of prose: what to do with the sheet, why it
+#              expires, that a later refusal is expected, that it is not a
+#              record
+#    axes      "axis inventory" - the themes (by column) and statements (by
+#              row) that exist. This is what a member needs in order to
+#              propose a value where there is no cell yet
+#    cells     "populated cells" - a table, grouped by column. The theme is a
+#              heading over its column's rows; each row is one (x, y)
+#
+#  Because the page is landscape, the SENTENCES here have far more room than
+#  the ones on a form - 193 characters instead of 133.
+#
+# ##########################################################################
+# ##########################################################################
+
+
+# ##########################################################################
+# 10. DOCUMENT TITLE
+#
+# Element: The document's own title, directly under the application name, on
+#          every page. The report's equivalent of a form's title.
+# Style  : 12pt bold, full width beside the logo
+# Limit  : 121 characters
+# ##########################################################################
+
+# --------------------------------------------------------------------------
+# reportTitle.document
+#   Appears : every page of the report
+#   Means   : Names the document. A member should be able to tell at a glance
+#             that this is the coordinate reference and not a form.
+#   English : matrix reference
+reportTitle.document =
+
+
+# ##########################################################################
+# 11. SECTION HEADINGS
+#
+# Element: Bold heading introducing one of the report's sections or sub-tables.
+# Style  : 10pt bold, full width
+# Limit  : 153 characters
+# ##########################################################################
+
+# --------------------------------------------------------------------------
+# reportSection.axes
+#   Means   : Heading over the whole axis section - which columns have a theme
+#             and which rows have a statement.
+#   English : axis inventory
+reportSection.axes =
+
+# --------------------------------------------------------------------------
+# reportSection.themes
+#   Means   : Sub-heading over the table of themes. A theme belongs to a
+#             COLUMN, addressed by x.
+#   English : themes, by column
+reportSection.themes =
+
+# --------------------------------------------------------------------------
+# reportSection.statements
+#   Means   : Sub-heading over the table of statements. A statement belongs to
+#             a ROW, addressed by y.
+#   English : statements, by row
+reportSection.statements =
+
+# --------------------------------------------------------------------------
+# reportSection.cells
+#   Means   : Heading over the main table - the coordinates that actually have
+#             something in them.
+#   English : populated cells
+reportSection.cells =
+
+
+# ##########################################################################
+# 12. TABLE COLUMN HEADERS
+#
+# SHORT NOUNS ONLY. 20 characters. These sit at 7pt above a 70pt column, and a
+# longer one runs into the next column - which at that size reads as one
+# meaningless word. The checker refuses anything wider.
+#
+# Element: Column header in a table, on a shaded band.
+# Style  : 7pt bold
+# Limit  : 20 characters
+# ##########################################################################
+
+# --------------------------------------------------------------------------
+# reportColumn.x
+#   Means   : The column coordinate. Also used in the group heading over each
+#             column's rows, as "<this word> 3 - <the theme>".
+#   English : column (x)
+reportColumn.x =
+
+# --------------------------------------------------------------------------
+# reportColumn.y
+#   Means   : The row coordinate. The first column of the cell table.
+#   English : row (y)
+reportColumn.y =
+
+# --------------------------------------------------------------------------
+# reportColumn.statement
+#   Means   : Header over the statement of each row. The same concept as
+#             input.statement on a form.
+#   English : statement
+reportColumn.statement =
+
+# --------------------------------------------------------------------------
+# reportColumn.organ
+#   Means   : Header over the organ that owns a cell. Only that organ may write
+#             to it, permanently.
+#   English : owning organ
+reportColumn.organ =
+
+# --------------------------------------------------------------------------
+# reportColumn.constraints
+#   Means   : Header over what a cell will accept - the permitted categories
+#             for a categorical cell, the number of decimal places for a
+#             numerical one.
+#   English : permitted values
+reportColumn.constraints =
+
+# --------------------------------------------------------------------------
+# reportColumn.value
+#   Means   : Header over the value the cell holds now.
+#   English : current value
+reportColumn.value =
+
+# --------------------------------------------------------------------------
+# reportColumn.author
+#   Means   : Header over who wrote the current value. A shortened address.
+#   English : author
+reportColumn.author =
+
+# --------------------------------------------------------------------------
+# reportColumn.recorded
+#   Means   : Header over when the current value was written.
+#   English : recorded
+reportColumn.recorded =
+
+# --------------------------------------------------------------------------
+# reportColumn.samples
+#   Means   : Header over how many values the cell has held in total, the
+#             current one included. Its history length.
+#   English : records
+reportColumn.samples =
+
+# --------------------------------------------------------------------------
+# reportColumn.label
+#   Means   : Header over the wording itself in the axis tables - the text of
+#             the theme or the statement.
+#   English : wording
+reportColumn.label =
+
+# --------------------------------------------------------------------------
+# reportColumn.confirmation
+#   Means   : Header over whether the application's own record of a theme or
+#             statement still agrees with what the contract holds.
+#   English : checked against the contract
+reportColumn.confirmation =
+
+
+# ##########################################################################
+# 13. THE STAMP
+#
+# Three "label: value" pairs on one grey line at the top of EVERY page. They
+# say which block the sheet describes. The values are numbers and a date; only
+# the labels are here.
+#
+# Element: Label on the grey line under the document title.
+# Style  : 7.5pt grey
+# Limit  : 44 characters
+# ##########################################################################
+
+# --------------------------------------------------------------------------
+# reportMeta.block
+#   Means   : Labels the block number the whole sheet was read at. This is the
+#             sheet's real date - everything on it describes that one block.
+#   English : block
+reportMeta.block =
+
+# --------------------------------------------------------------------------
+# reportMeta.readAt
+#   Means   : Labels the time of that block, taken from the block itself and
+#             printed as "27.08.2026 14:00 UTC". Not the computer's clock.
+#   English : time of that block
+reportMeta.readAt =
+
+# --------------------------------------------------------------------------
+# reportMeta.indexedThrough
+#   Means   : Labels how far the application has read the event history.
+#             Printed ONLY when it is behind the block above, which means a
+#             cell created in between is missing from the sheet.
+#   English : events indexed through block
+reportMeta.indexedThrough =
+
+
+# ##########################################################################
+# 14. STATUS WORDS
+#
+# These stand INSIDE a table cell, in place of a value. Short - 23 characters.
+#
+# The most important distinction in this group is between "not read" and the
+# words for genuine emptiness. "not read" means the application could not
+# retrieve the value; the others mean the contract really holds nothing there.
+# A member must not confuse the two.
+#
+# Element: A word in a table cell where a value would be.
+# Style  : 7.5pt
+# Limit  : 23 characters
+# ##########################################################################
+
+# --------------------------------------------------------------------------
+# reportStatus.unread
+#   Means   : The application could NOT read this field. It is printed in a
+#             warning colour. The coordinates on the same row are still
+#             correct - only this one field is unknown.
+#   English : not read
+reportStatus.unread =
+
+# --------------------------------------------------------------------------
+# reportStatus.unbound
+#   Means   : No organ owns this cell yet, so the first successful write will
+#             claim it permanently. A real state, not a failure.
+#   English : not bound
+reportStatus.unbound =
+
+# --------------------------------------------------------------------------
+# reportStatus.unset
+#   Means   : This row or column has no statement or theme. A real state.
+#   English : not set
+reportStatus.unset =
+
+# --------------------------------------------------------------------------
+# reportStatus.noValue
+#   Means   : The cell exists but nothing has been written into it yet. A real
+#             state, and NOT the same as a value of zero.
+#   English : no value yet
+reportStatus.noValue =
+
+# --------------------------------------------------------------------------
+# reportStatus.confirmed
+#   Means   : The application's record of this theme or statement agrees with
+#             what the contract holds. The normal, reassuring case.
+#   English : confirmed
+reportStatus.confirmed =
+
+# --------------------------------------------------------------------------
+# reportStatus.differs
+#   Means   : The contract holds DIFFERENT wording than the application
+#             recorded. Printed as "<this>: <the contract's wording>". It means
+#             a later voting changed it. Warning colour.
+#   English : differs on the contract
+reportStatus.differs =
+
+# --------------------------------------------------------------------------
+# reportStatus.absent
+#   Means   : The application recorded wording here but the contract has none.
+#             Warning colour.
+#   English : not on the contract
+reportStatus.absent =
+
+# --------------------------------------------------------------------------
+# reportStatus.decimals
+#   Means   : Labels a numerical cell's fixed precision, printed as
+#             "<this>: 2". A value with more decimal places than this is
+#             REFUSED, not rounded - the same warning as hint.value on a form.
+#   English : decimal places
+reportStatus.decimals =
+
+# --------------------------------------------------------------------------
+# reportStatus.anyCategory
+#   Means   : A categorical cell that permits no category at all, so no value
+#             can be written to it until a category voting passes. Printed
+#             instead of an empty cell, which would read as "anything goes".
+#   English : no category permitted yet
+reportStatus.anyCategory =
+
+
+# ##########################################################################
+# 15. SENTENCES
+#
+# ONE LINE EACH, but with real room - 193 characters, because the page is
+# landscape. Nothing wraps: a longer sentence runs off the page.
+#
+# The first four are printed on every report, in this order. The last five
+# appear only when they apply.
+#
+# Element: One grey line of prose under the header. Instructional text.
+# Style  : 8pt, full width, ONE line
+# Limit  : 193 characters
+# ##########################################################################
+
+# --------------------------------------------------------------------------
+# reportSentence.purpose
+#   Appears : always, first, and in black rather than grey
+#   Means   : Says what to do with the sheet - take the coordinates off it onto
+#             a voting form, and nothing else. The organ, the value and the
+#             rest come from the form, not from here.
+#   English : Copy the coordinates from this sheet onto a voting form. Do not copy anything else.
+reportSentence.purpose =
+
+# --------------------------------------------------------------------------
+# reportSentence.staleness
+#   Appears : always, second
+#   Means   : Says why the sheet expires: the matrix changes whenever a voting
+#             is executed, so it describes only the block named at the top.
+#   English : The matrix changes whenever a voting is executed, so this sheet describes only the block named above.
+reportSentence.staleness =
+
+# --------------------------------------------------------------------------
+# reportSentence.validation
+#   Appears : always, third
+#   Means   : THE MOST IMPORTANT SENTENCE ON THE PAGE. Says that the
+#             application checks coordinates again when a form is submitted, so
+#             a refusal there means the matrix changed - not that the
+#             application is broken. Without this a member reads a rejection as
+#             a fault and stops trusting the app.
+#   English : The application checks coordinates again when a form is submitted. A refusal there means the matrix has changed, not that something is broken.
+reportSentence.validation =
+
+# --------------------------------------------------------------------------
+# reportSentence.notAuthoritative
+#   Appears : always, fourth
+#   Means   : Says the sheet is a printout and the contract is the only
+#             authority. It is not evidence of anything.
+#   English : This is a printed reference, not a record. The contract is the only authority.
+reportSentence.notAuthoritative =
+
+# --------------------------------------------------------------------------
+# reportSentence.emptyMatrix
+#   Appears : only when no cell has a value yet
+#   Means   : Says the matrix has no populated cells, and points a member at
+#             the axis inventory to propose the first value. A normal state for
+#             a young matrix, not an error.
+#   English : No cell has been populated yet. Use the axis inventory to propose the first value.
+reportSentence.emptyMatrix =
+
+# --------------------------------------------------------------------------
+# reportSentence.noAxes
+#   Appears : only when no theme and no statement exist at all
+#   Means   : Says nothing can be proposed yet, and why: a value needs a theme
+#             in its column and a statement in its row before it can exist.
+#   English : No theme or statement has been set yet. A value cannot be proposed until a theme exists for its column and a statement for its row.
+reportSentence.noAxes =
+
+# --------------------------------------------------------------------------
+# reportSentence.degraded
+#   Appears : only when some field could not be read. Warning colour.
+#   Means   : Explains the "not read" marks - those fields could not be
+#             retrieved, but the coordinates beside them are still correct.
+#   English : Fields marked as not read could not be retrieved from the contract. The coordinates beside them are still correct.
+reportSentence.degraded =
+
+# --------------------------------------------------------------------------
+# reportSentence.indexBehind
+#   Appears : only when the application has not read the whole event history up
+#             to the block at the top. Warning colour.
+#   Means   : Warns that a cell created between the two block numbers is
+#             MISSING from the sheet.
+#   English : The event index has not caught up to the block above, so a cell created since then is missing from this sheet.
+reportSentence.indexBehind =
+
+# --------------------------------------------------------------------------
+# reportSentence.ambiguous
+#   Appears : only when one coordinate is listed under both matrices
+#   Means   : Explains a coordinate appearing twice. The two matrices are
+#             separate, so (3, 7) can exist in both, and nothing in the
+#             contract's records says which one a value was written to.
+#   English : A coordinate bound in both matrices is listed under each, because nothing distinguishes which one a value was written to.
+reportSentence.ambiguous =

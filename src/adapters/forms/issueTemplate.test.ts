@@ -5,7 +5,7 @@ import { buildIntent } from '../../domain/intents/buildIntent';
 import { OPERATION_TYPES, type OperationType } from '../../domain/intents/intent';
 import { INTENT_SAMPLES } from '../../domain/intents/testing/intentSamples';
 import { assembleFormInput } from './assembleFormInput';
-import { LABEL_SLOT_COUNT, pendingLabels } from './formLabels';
+import { pendingLabels } from './formLabels';
 import { META_FIELDS, RECEIPT_FIELDS, inputFieldName, templateFieldNames } from './formSchema';
 import { parseFormFields } from './pdfFormParser';
 import { type TemplateAssets, contextValuesFor, issueTemplate } from './issueTemplate';
@@ -311,8 +311,12 @@ describe('the wording', () => {
     // This used to assert 61 outstanding. The Russian has landed, so the
     // assertion inverts: a slot falling back to a bracketed placeholder now
     // means a regression rather than work in progress.
-    expect(LABEL_SLOT_COUNT).toBe(62);
-    expect(pendingLabels()).toEqual([]);
+    //
+    // Scoped to the **forms** rather than to every slot, because the table now
+    // also carries the matrix report's wording, which has not arrived. A form
+    // slot going pending is a regression; a report slot being pending is the
+    // current state and is asserted in `formLabels.test.ts`.
+    expect(pendingLabels().filter((slot) => !slot.startsWith('report'))).toEqual([]);
   });
 
   it('titles a form in Russian, in the document metadata as well as on the page', async () => {
