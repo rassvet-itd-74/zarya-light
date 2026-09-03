@@ -30,6 +30,15 @@ export interface ContractCallOptions {
    * simulation without it answers a question about the zero address.
    */
   readonly from?: EvmAddress;
+  /**
+   * Pins the read to one block. Omitted, it reads the head.
+   *
+   * Preflight wants the head — it is predicting what happens if a transaction is
+   * sent now. A **report** wants a pin, because a document assembled across
+   * moving state can show a pairing that never existed on chain, with nothing on
+   * the page able to reveal it. See `MatrixSnapshotReader`.
+   */
+  readonly blockNumber?: bigint;
 }
 
 export async function callContract(
@@ -53,6 +62,7 @@ export async function callContract(
       to: address,
       data,
       ...(options.from === undefined ? {} : { account: options.from }),
+      ...(options.blockNumber === undefined ? {} : { blockNumber: options.blockNumber }),
     });
     if (result === undefined || result === '0x') {
       return { kind: 'FAILURE', failure: { kind: 'UNKNOWN', reason: 'EMPTY_REVERT' } };

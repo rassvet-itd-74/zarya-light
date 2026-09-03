@@ -89,8 +89,9 @@ Driven ports — the domain declares these, adapters implement them.
 | `VotingReader` | active, finalized, results, `hasVoted`, `highestVotingId`, `exists` — every method returns `undefined` rather than a plausible `false` when it could not read | chain — *implemented* |
 | `MembershipReader` | `isMember`, which is also the Chairman check | chain — *implemented* |
 | `OrganResolver` | triple → `bytes32` for calls via the `pure` helpers, verified against `getPartyOrganIdentifier` on every resolution; `bytes32` → label from a locally enumerated table, bounded at local organ number 99 and returning `undefined` rather than guessing | chain — *implemented* |
-| `MatrixReader` | cell binding, allowed categories, decimals, themes, statements — the metadata preflight needs. The checkpoint readers belong to the report and are deliberately absent | chain — *implemented* |
-| `MatrixIndex` | which coordinates exist, projected from the event stream. The applied half — `ValueAdded` and `CategoryAdded` — scans now; the gated half is Phase 4 | chain — *partial* |
+| `MatrixReader` | cell binding, allowed categories, decimals, themes, statements — the metadata preflight needs, read at the **head**. The checkpoint readers belong to the report and are deliberately absent | chain — *implemented* |
+| `MatrixIndex` | scans one window for everything the coordinate index folds: the applied pair (`ValueAdded`, `CategoryAdded`) and the gated three (decimals, theme, statement creation) joined to `VotingFinalized`. Scans a window, never decides which, and never gates — `foldMatrixIndexWindow` owns the gating | chain — *implemented* |
+| `MatrixSnapshotReader` | every read the report needs, **pinned to one block**: cells, axis labels, per-cell category names, latest checkpoint values. Separate from `MatrixReader` because a document assembled across the moving head can show a pairing that never existed on chain | chain — *implemented* |
 | `CallSimulator` | `eth_call` with a sender, for `castVote` and `executeVoting`. Named calls, never raw calldata, so the form pipeline's allow-list has no hole below it | chain — *implemented* |
 | `VotingDiscovery` | `VotingCreated` indexing joined to the six organ-bearing detail events; scans a window, never decides which | chain — *implemented* |
 | `ChainWriter` | submit, await confirmation, return a decoded outcome | chain |
@@ -153,6 +154,9 @@ discover voting -> check deadline and finalized -> enqueue execution
 **Matrix report** — a read-only reference PDF with no form fields, so it cannot re-enter the form pipeline. No signer, no chain write. The coordinate index is a second projection over the cursor `VotingDiscovery` already maintains, not an independent sweep.
 
 ```text
-MatrixIndex projection + per-cell reads + organ reverse table
-  -> report model (domain) -> MatrixReportWriter -> FileSink
+MatrixIndex scan -> foldMatrixIndexWindow -> CoordinateIndex
+  + MatrixSnapshotReader (pinned) + organ reverse table
+  -> assembleMatrixReport (domain) -> MatrixReportWriter -> FileSink
 ```
+
+The reads are pinned to `head - confirmations` rather than to the index cursor: a cursor mid-backfill needs archive state a public endpoint does not serve, while the confirmed head is both reorg-safe and always available. When the cursor is behind that block the model reports `indexBehindBy` rather than absorbing the gap. A read that fails degrades its own field and keeps the row, since the coordinate is what a voter transcribes; the report fails outright only when it would be nothing but empty rows — the axis inventory is event-derived and survives an outage.

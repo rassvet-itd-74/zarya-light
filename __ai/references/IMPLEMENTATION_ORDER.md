@@ -95,6 +95,17 @@ Receipt stamping arrives with the transaction queue in Phase 6, since it needs a
 
 The **matrix reference report** also belongs here: it needs only Phase 2 reads plus a PDF library, and it is the document a voter reads before filling anything. It carries no form fields, so it adds nothing to the ingestion surface.
 
+**Report slice 1 — the read model — done 2026-09-03.** The coordinate index, the pinned snapshot reads, and the report model, with no PDF involved. Four things settled here:
+
+- **The gated half of the index is ordered by finalization, not creation.** `setTheme`, `setStatement` and `setDecimals` emit nothing when they run, so they are observable only as a creation event joined to `VotingFinalized(success = true)` — and because the mutation happens inside `executeVoting`, a theme proposed first and executed last is the one that survives. The fold therefore carries unmatched proposals across windows and resolves "last one wins" by the finalization log's position, `logIndex` included.
+- **The report's reads are pinned to one block, `MatrixReader`'s are not.** Two ports rather than one: preflight predicts against the head, a document describes a block. The pin is `head - confirmations`, not the index cursor, because reading state at a mid-backfill cursor needs an archive node.
+- **Degradation is per field, total failure is nearly never.** A failed read marks its own field and keeps the row, since the coordinate is what a voter transcribes. The report fails only when it would consist of nothing but empty rows — the axis inventory comes from the events themselves and survives an outage.
+- **`ValueAdded`'s missing `isCategorical` is resolved by reading both cells**, and an `AMBIGUOUS` coordinate prints **twice** rather than being guessed at once.
+
+Remaining for the report: the `MatrixReportWriter` port and its landscape pdf-lib renderer, the `report.*` wording slots (a fresh fill-in file of Russian strings), and the UI button with its IPC path.
+
+**Not implementable, and it is the skill that is wrong:** `.claude/skills/zarya-matrix-report/SKILL.md` lists "an approval threshold renders against its own base — `5000` of `10000` shows as 50%" among the report's tests. No eligibility getter exists (`CONTRACT.md`, "Not exposed"), so a threshold cannot be read at all, and nothing in this report is a basis-point value. The basis-point rendering rule still applies where such a value *is* shown — the form hints — and has a test there.
+
 ## Phase 5 — persistence
 
 Being built in slices. **Slice 1 (the engine, migrations, the issued-template record, and the durable cursor) is done, 2026-09-02** — taken ahead of Phase 4's matrix report, which is a printed Russian document and was blocked on wording that persistence does not need.

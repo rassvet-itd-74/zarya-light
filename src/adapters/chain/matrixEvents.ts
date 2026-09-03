@@ -1,12 +1,22 @@
 import { type Abi, type AbiEvent, toEventSelector } from 'viem';
-import { type MatrixCoordinate, matrixCoordinate } from '../../domain/matrix/matrix';
-import { type EvmAddress, evmAddress } from '../../domain/primitives';
+import { matrixCoordinate } from '../../domain/matrix/matrix';
+import type { LogPosition, MatrixIndexEvent } from '../../domain/matrix/matrixIndex';
+import type { MatrixIndex, ScannedIndexWindow } from '../../domain/ports/MatrixIndex';
+import { type EvmAddress, bytes32, evmAddress } from '../../domain/primitives';
+import { matrixKindOf } from './matrixReader';
 import type { ZaryaPublicClient } from './publicClient';
 import { AbiContractError, ZARYA_ABI, requireEvent } from './zaryaAbi';
 
 /**
- * The two events that record a matrix change **as applied**, and the one
- * hand-written ABI fragment in this client.
+ * Every log the coordinate index is built from, and the one hand-written ABI
+ * fragment in this client.
+ *
+ * Six fragments in two families. **Applied** — `ValueAdded` and `CategoryAdded`,
+ * which fire from inside `_executeApprovedSuggestion` and are therefore their own
+ * evidence that a voting passed. **Gated** — the decimals, theme and statement
+ * creation events plus `VotingFinalized`, because those three mutations emit
+ * nothing when they run and can only be observed as a proposal joined to its
+ * verdict.
  *
  * `CategoryAdded` is in the contract's ABI. `ValueAdded` is not, and the reason
  * is worth stating precisely, because it is not "the ABI is incomplete":
@@ -56,7 +66,39 @@ export const VALUE_ADDED_TOPIC =
 /** From the ABI, because this one is in it. */
 export const CATEGORY_ADDED_EVENT = requireEvent('CategoryAdded', 3);
 
-export const MATRIX_EVENT_ABI: Abi = [VALUE_ADDED_EVENT, CATEGORY_ADDED_EVENT];
+/**
+ * The gated half, and the verdict that releases it.
+ *
+ * `Matricies.setDecimals`, `setTheme` and `setStatement` emit **nothing** when
+ * they run, so unlike a value or a category there is no applied event to
+ * subscribe to. The only evidence a theme changed is its creation event joined to
+ * `VotingFinalized(success = true)` — which is why these four fragments are here
+ * rather than in `votingDiscovery`, whose join answers a different question.
+ *
+ * All four are in the ABI: the `Votings` library's functions are `internal`, so
+ * solc inlines them and their events survive into it. Only `Matricies`' events
+ * go missing.
+ */
+export const DECIMALS_VOTING_CREATED_EVENT = requireEvent('DecimalsVotingCreated', 5);
+export const THEME_VOTING_CREATED_EVENT = requireEvent('ThemeVotingCreated', 4);
+export const STATEMENT_VOTING_CREATED_EVENT = requireEvent('StatementVotingCreated', 5);
+export const VOTING_FINALIZED_EVENT = requireEvent('VotingFinalized', 4);
+
+/**
+ * One filter for all six.
+ *
+ * `votingDiscovery` splits its requests to keep unrelated traffic out; here
+ * every fragment is one the index reads, so splitting would buy nothing and cost
+ * a round trip. Distinct `topic0` values make it a single OR filter.
+ */
+export const MATRIX_EVENT_ABI: Abi = [
+  VALUE_ADDED_EVENT,
+  CATEGORY_ADDED_EVENT,
+  DECIMALS_VOTING_CREATED_EVENT,
+  THEME_VOTING_CREATED_EVENT,
+  STATEMENT_VOTING_CREATED_EVENT,
+  VOTING_FINALIZED_EVENT,
+];
 
 /**
  * Asserted at load, next to the ABI's own contract check.
@@ -81,55 +123,21 @@ export const abiCarriesValueAdded = (abi: Abi = ZARYA_ABI): boolean =>
   abi.some((item) => item.type === 'event' && item.name === 'ValueAdded');
 
 /**
- * A matrix change that has already been applied.
- *
- * Only applied changes appear here. `ValueAdded` and `CategoryAdded` fire from
- * inside `_executeApprovedSuggestion`, so their presence *is* the evidence that a
- * voting passed and its mutation landed — no gating on `VotingFinalized` needed.
- * Decimals, themes and statements emit nothing at all and must be projected from
- * creation events gated on finalization instead; that is the matrix report's
- * problem (Phase 4), not this module's.
- */
-export type MatrixChange =
-  | {
-      readonly kind: 'VALUE_ADDED';
-      readonly at: MatrixCoordinate;
-      readonly value: bigint;
-      readonly author: EvmAddress;
-      readonly blockNumber: bigint;
-      /**
-       * Absent by construction. `ValueAdded` carries no `isCategorical`, so which
-       * matrix this landed in is decided by reading the cells at `at` and
-       * applying `attributeValue` — never by this record.
-       */
-    }
-  | {
-      readonly kind: 'CATEGORY_ADDED';
-      readonly at: MatrixCoordinate;
-      readonly category: bigint;
-      readonly blockNumber: bigint;
-    };
-
-export interface ScannedMatrixWindow {
-  readonly fromBlock: bigint;
-  readonly toBlock: bigint;
-  readonly changes: readonly MatrixChange[];
-}
-
-/**
- * Scans one block window for applied matrix changes.
+ * Scans one block window for everything the coordinate index folds.
  *
  * Deliberately not a projection: it takes the window it is given and reports what
  * is in it, exactly as `ZaryaVotingDiscovery.scan` does, so both consume the one
- * cursor `planDiscovery` advances rather than sweeping independently.
+ * cursor `planDiscovery` advances rather than sweeping independently. The gating
+ * — which proposals became real — happens in `foldMatrixIndexWindow`, where it
+ * can be tested without a chain.
  */
-export class ZaryaMatrixEvents {
+export class ZaryaMatrixEvents implements MatrixIndex {
   constructor(
     private readonly client: ZaryaPublicClient,
     private readonly address: EvmAddress,
   ) {}
 
-  async scan(fromBlock: bigint, toBlock: bigint): Promise<ScannedMatrixWindow> {
+  async scan(fromBlock: bigint, toBlock: bigint): Promise<ScannedIndexWindow> {
     if (toBlock < fromBlock) {
       throw new RangeError(`empty scan window: ${fromBlock}..${toBlock}`);
     }
@@ -145,12 +153,12 @@ export class ZaryaMatrixEvents {
       strict: true,
     });
 
-    const changes: MatrixChange[] = [];
+    const events: MatrixIndexEvent[] = [];
     for (const log of logs) {
-      const change = toChange(log as DecodedMatrixLog);
-      if (change !== undefined) changes.push(change);
+      const event = toIndexEvent(log as DecodedMatrixLog);
+      if (event !== undefined) events.push(event);
     }
-    return { fromBlock, toBlock, changes };
+    return { fromBlock, toBlock, events };
   }
 }
 
@@ -162,37 +170,137 @@ interface DecodedMatrixLog {
   readonly eventName?: string;
   readonly args?: unknown;
   readonly blockNumber?: bigint | null;
+  readonly logIndex?: number | null;
 }
 
-const toChange = (log: DecodedMatrixLog): MatrixChange | undefined => {
-  const { blockNumber } = log;
+/**
+ * A log's total-order position.
+ *
+ * `logIndex` is required, not defaulted to zero. Two theme votings executed in
+ * one block are ordered by it and nothing else, and a default would silently
+ * make them a tie that the fold resolves arbitrarily.
+ */
+const positionOf = (log: DecodedMatrixLog): LogPosition | undefined => {
+  const { blockNumber, logIndex } = log;
   if (blockNumber === null || blockNumber === undefined) return undefined;
+  if (typeof logIndex !== 'number' || !Number.isInteger(logIndex) || logIndex < 0) return undefined;
+  return { blockNumber, logIndex };
+};
 
-  const args = log.args as
-    | { x?: unknown; y?: unknown; value?: unknown; author?: unknown; category?: unknown }
-    | undefined;
-  if (typeof args?.x !== 'bigint' || typeof args.y !== 'bigint') return undefined;
+interface MatrixLogArgs {
+  readonly x?: unknown;
+  readonly y?: unknown;
+  readonly value?: unknown;
+  readonly author?: unknown;
+  readonly category?: unknown;
+  readonly votingId?: unknown;
+  readonly organ?: unknown;
+  readonly decimals?: unknown;
+  readonly isCategorical?: unknown;
+  readonly theme?: unknown;
+  readonly statement?: unknown;
+  readonly success?: unknown;
+}
+
+/**
+ * One decoded log to one index event, or nothing.
+ *
+ * Every arm drops rather than repairs. A partial coordinate reads as "not yet
+ * indexed", which a later rescan fixes; a repaired one reads as a fact on a page
+ * a voter transcribes from.
+ */
+const toIndexEvent = (log: DecodedMatrixLog): MatrixIndexEvent | undefined => {
+  const position = positionOf(log);
+  if (position === undefined) return undefined;
+  const args = log.args as MatrixLogArgs | undefined;
+  if (args === undefined) return undefined;
 
   try {
-    const at = matrixCoordinate(args.x, args.y);
-    if (log.eventName === 'ValueAdded') {
-      if (typeof args.value !== 'bigint' || typeof args.author !== 'string') return undefined;
-      return {
-        kind: 'VALUE_ADDED',
-        at,
-        value: args.value,
-        author: evmAddress(args.author),
-        blockNumber,
-      };
+    switch (log.eventName) {
+      case 'ValueAdded': {
+        if (typeof args.x !== 'bigint' || typeof args.y !== 'bigint') return undefined;
+        if (typeof args.value !== 'bigint' || typeof args.author !== 'string') return undefined;
+        return {
+          kind: 'VALUE_ADDED',
+          at: matrixCoordinate(args.x, args.y),
+          value: args.value,
+          author: evmAddress(args.author),
+          position,
+        };
+      }
+
+      case 'CategoryAdded': {
+        if (typeof args.x !== 'bigint' || typeof args.y !== 'bigint') return undefined;
+        if (typeof args.category !== 'bigint') return undefined;
+        return {
+          kind: 'CATEGORY_ADDED',
+          at: matrixCoordinate(args.x, args.y),
+          category: args.category,
+          position,
+        };
+      }
+
+      case 'DecimalsVotingCreated': {
+        if (typeof args.votingId !== 'bigint' || typeof args.organ !== 'string') return undefined;
+        if (typeof args.x !== 'bigint' || typeof args.y !== 'bigint') return undefined;
+        if (typeof args.decimals !== 'number') return undefined;
+        return {
+          kind: 'DECIMALS_PROPOSED',
+          votingId: args.votingId,
+          organ: bytes32(args.organ),
+          at: matrixCoordinate(args.x, args.y),
+          decimals: args.decimals,
+          position,
+        };
+      }
+
+      case 'ThemeVotingCreated': {
+        if (typeof args.votingId !== 'bigint' || typeof args.isCategorical !== 'boolean') {
+          return undefined;
+        }
+        if (typeof args.x !== 'bigint' || typeof args.theme !== 'string') return undefined;
+        return {
+          kind: 'THEME_PROPOSED',
+          votingId: args.votingId,
+          matrix: matrixKindOf(args.isCategorical),
+          x: args.x,
+          text: args.theme,
+          position,
+        };
+      }
+
+      case 'StatementVotingCreated': {
+        if (typeof args.votingId !== 'bigint' || typeof args.isCategorical !== 'boolean') {
+          return undefined;
+        }
+        // The event's `x` is read and discarded: `setStatement` uses it only to
+        // require a theme there and then writes by `y`. See the note on
+        // `STATEMENT_PROPOSED`.
+        if (typeof args.y !== 'bigint' || typeof args.statement !== 'string') return undefined;
+        return {
+          kind: 'STATEMENT_PROPOSED',
+          votingId: args.votingId,
+          matrix: matrixKindOf(args.isCategorical),
+          y: args.y,
+          text: args.statement,
+          position,
+        };
+      }
+
+      case 'VotingFinalized': {
+        if (typeof args.votingId !== 'bigint' || typeof args.success !== 'boolean') return undefined;
+        return {
+          kind: 'VOTING_FINALIZED',
+          votingId: args.votingId,
+          success: args.success,
+          position,
+        };
+      }
+
+      default:
+        return undefined;
     }
-    if (log.eventName === 'CategoryAdded') {
-      if (typeof args.category !== 'bigint') return undefined;
-      return { kind: 'CATEGORY_ADDED', at, category: args.category, blockNumber };
-    }
-    return undefined;
   } catch {
-    // Dropped rather than projected as a partial change: an absent coordinate
-    // reads as "not yet indexed", a wrong one reads as a fact.
     return undefined;
   }
 };

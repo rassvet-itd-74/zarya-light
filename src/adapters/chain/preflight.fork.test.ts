@@ -214,15 +214,21 @@ describe.skipIf(RPC_URL === undefined)('matrix reads against a Sepolia fork', ()
     ]);
   }, MINUTE);
 
-  it('finds no applied matrix change in the whole deployment history', async () => {
+  it('finds no matrix event of any kind in the whole deployment history', async () => {
     // Consistent with the cell reads above, and it exercises the hand-written
     // ValueAdded fragment against a live provider: a filter built on a wrong
     // topic would return exactly this — nothing — which is why the topic is
     // pinned by hash rather than trusted here.
+    //
+    // The six-fragment filter makes this a wider claim than it was. Nothing has
+    // been applied *and* nothing has been proposed: no decimals, theme or
+    // statement voting exists, and the one voting that does exist is a
+    // membership voting that never finalized — so not even a VotingFinalized
+    // log is here to gate anything with.
     const client = createZaryaPublicClient({ rpcUrl: anvil.url });
     const head = await client.getBlockNumber();
 
     const window = await events.scan(BigInt(CONFIG.deploymentBlock), head);
-    expect(window.changes).toEqual([]);
+    expect(window.events).toEqual([]);
   }, 2 * MINUTE);
 });

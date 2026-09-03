@@ -32,10 +32,23 @@ import type { ZaryaPublicClient } from './publicClient';
  * answers `UNBOUND` and an empty axis answers `UNSET`.
  */
 export class ZaryaMatrixReader implements MatrixReader {
+  /**
+   * `blockNumber` pins every read on this instance.
+   *
+   * Absent — the default, and what preflight uses — the reads follow the head.
+   * The matrix report constructs a pinned one so that a whole document describes
+   * a single block; see `ZaryaMatrixSnapshot`, which composes this rather than
+   * repeating its decoding.
+   */
   constructor(
     private readonly client: ZaryaPublicClient,
     private readonly address: EvmAddress,
+    private readonly blockNumber?: bigint,
   ) {}
+
+  private get pin(): { readonly blockNumber?: bigint } {
+    return this.blockNumber === undefined ? {} : { blockNumber: this.blockNumber };
+  }
 
   /**
    * One call, not three. `getCategoricalCellInfo` returns the organ, the allowed
@@ -45,10 +58,13 @@ export class ZaryaMatrixReader implements MatrixReader {
    * produce a pair that never existed on chain.
    */
   async categoricalCell(at: MatrixCoordinate): Promise<CategoricalCell | undefined> {
-    const outcome = await callContract(this.client, this.address, 'getCategoricalCellInfo', [
-      at.x,
-      at.y,
-    ]);
+    const outcome = await callContract(
+      this.client,
+      this.address,
+      'getCategoricalCellInfo',
+      [at.x, at.y],
+      this.pin,
+    );
     if (outcome.kind !== 'VALUE' || !Array.isArray(outcome.value)) return undefined;
 
     const [organ, categories, sampleLength] = outcome.value as unknown[];
@@ -75,10 +91,13 @@ export class ZaryaMatrixReader implements MatrixReader {
   }
 
   async numericalCell(at: MatrixCoordinate): Promise<NumericalCell | undefined> {
-    const outcome = await callContract(this.client, this.address, 'getNumericalCellInfo', [
-      at.x,
-      at.y,
-    ]);
+    const outcome = await callContract(
+      this.client,
+      this.address,
+      'getNumericalCellInfo',
+      [at.x, at.y],
+      this.pin,
+    );
     if (outcome.kind !== 'VALUE' || !Array.isArray(outcome.value)) return undefined;
 
     const [organ, decimals, sampleLength] = outcome.value as unknown[];
@@ -106,11 +125,13 @@ export class ZaryaMatrixReader implements MatrixReader {
     return this.readLabel('getStatement', [isCategoricalOf(kind), y]);
   }
 
-  private async readLabel(
-    functionName: string,
-    args: readonly unknown[],
-  ): Promise<AxisLabel | undefined> {
-    const outcome = await callContract(this.client, this.address, functionName, args);
+  /**
+   * Shared by `getTheme`, `getStatement` and `getCategoryName` — three getters
+   * that return a `string` whose empty value means "not set" rather than "an
+   * empty name", so all three go through {@link axisLabel}.
+   */
+  async readLabel(functionName: string, args: readonly unknown[]): Promise<AxisLabel | undefined> {
+    const outcome = await callContract(this.client, this.address, functionName, args, this.pin);
     return outcome.kind === 'VALUE' && typeof outcome.value === 'string'
       ? axisLabel(outcome.value)
       : undefined;
@@ -131,3 +152,15 @@ export function isCategoricalOf(kind: MatrixKind): boolean {
       return false;
   }
 }
+
+/**
+ * The same translation the other way, for logs rather than for calls.
+ *
+ * `ThemeVotingCreated` and `StatementVotingCreated` carry the raw
+ * `bool isCategorical`, so the index needs the inverse of {@link isCategoricalOf}
+ * — and it belongs here, beside it, because this module is where the boolean is
+ * allowed to exist and a second conversion elsewhere is a second chance to
+ * invert it.
+ */
+export const matrixKindOf = (isCategorical: boolean): MatrixKind =>
+  isCategorical ? 'CATEGORICAL' : 'NUMERICAL';

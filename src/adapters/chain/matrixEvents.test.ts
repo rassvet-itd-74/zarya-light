@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { MATRICIES_SOL, eventParameters, hasSoliditySource } from '../../testing/soliditySource';
 import {
   CATEGORY_ADDED_EVENT,
+  MATRIX_EVENT_ABI,
   VALUE_ADDED_EVENT,
   VALUE_ADDED_TOPIC,
+  VOTING_FINALIZED_EVENT,
   ZaryaMatrixEvents,
   abiCarriesValueAdded,
   assertMatrixEventContract,
@@ -91,11 +93,31 @@ describe.skipIf(!hasSoliditySource(MATRICIES_SOL))('against Matricies.sol', () =
 const clientReturning = (logs: readonly unknown[]): ZaryaPublicClient =>
   ({ getLogs: async () => logs }) as unknown as ZaryaPublicClient;
 
+describe('the filter covers both routes into the index', () => {
+  it('carries all six fragments, so no window needs a second request', () => {
+    expect(MATRIX_EVENT_ABI.map((item) => (item as { name: string }).name)).toEqual([
+      'ValueAdded',
+      'CategoryAdded',
+      'DecimalsVotingCreated',
+      'ThemeVotingCreated',
+      'StatementVotingCreated',
+      'VotingFinalized',
+    ]);
+  });
+
+  it('includes VotingFinalized, without which the gated half can never be released', () => {
+    // setDecimals, setTheme and setStatement emit nothing. Drop this fragment
+    // and every theme and statement stays pending forever, which reads as an
+    // unlabelled matrix rather than as a broken filter.
+    expect(VOTING_FINALIZED_EVENT.inputs).toHaveLength(4);
+  });
+});
+
 describe('scanning a window', () => {
   const events = (logs: readonly unknown[]) =>
     new ZaryaMatrixEvents(clientReturning(logs), ADDRESS);
 
-  it('decodes both event shapes and keeps the block they sat in', async () => {
+  it('decodes the applied pair and keeps the position they sat at', async () => {
     const window = await events([
       {
         eventName: 'ValueAdded',
@@ -106,42 +128,190 @@ describe('scanning a window', () => {
           author: '0x57eb63d0aab5822EFCd7A9B56775F772D3e03CfD',
         },
         blockNumber: 100n,
+        logIndex: 0,
       },
       {
         eventName: 'CategoryAdded',
         args: { x: 3n, y: 7n, category: 2n },
         blockNumber: 101n,
+        logIndex: 4,
       },
     ]).scan(1n, 200n);
 
     expect(window).toEqual({
       fromBlock: 1n,
       toBlock: 200n,
-      changes: [
+      events: [
         {
           kind: 'VALUE_ADDED',
           at: { x: 3n, y: 7n },
           value: 42n,
           author: '0x57eb63d0aab5822EFCd7A9B56775F772D3e03CfD',
-          blockNumber: 100n,
+          position: { blockNumber: 100n, logIndex: 0 },
         },
-        { kind: 'CATEGORY_ADDED', at: { x: 3n, y: 7n }, category: 2n, blockNumber: 101n },
+        {
+          kind: 'CATEGORY_ADDED',
+          at: { x: 3n, y: 7n },
+          category: 2n,
+          position: { blockNumber: 101n, logIndex: 4 },
+        },
       ],
     });
+  });
+
+  it('decodes the gated three plus the verdict that releases them', async () => {
+    const window = await events([
+      {
+        eventName: 'DecimalsVotingCreated',
+        args: { votingId: 1n, organ: `0x${'11'.repeat(32)}`, x: 4n, y: 9n, decimals: 2 },
+        blockNumber: 100n,
+        logIndex: 0,
+      },
+      {
+        eventName: 'ThemeVotingCreated',
+        args: { votingId: 2n, isCategorical: true, x: 4n, theme: 'Бюджет' },
+        blockNumber: 101n,
+        logIndex: 1,
+      },
+      {
+        eventName: 'StatementVotingCreated',
+        args: { votingId: 3n, isCategorical: false, x: 4n, y: 9n, statement: 'Расходы' },
+        blockNumber: 102n,
+        logIndex: 2,
+      },
+      {
+        eventName: 'VotingFinalized',
+        args: { votingId: 2n, success: true, forVotes: 5n, againstVotes: 0n },
+        blockNumber: 500n,
+        logIndex: 3,
+      },
+    ]).scan(1n, 600n);
+
+    expect(window.events).toEqual([
+      {
+        kind: 'DECIMALS_PROPOSED',
+        votingId: 1n,
+        organ: `0x${'11'.repeat(32)}`,
+        at: { x: 4n, y: 9n },
+        decimals: 2,
+        position: { blockNumber: 100n, logIndex: 0 },
+      },
+      {
+        kind: 'THEME_PROPOSED',
+        votingId: 2n,
+        matrix: 'CATEGORICAL',
+        x: 4n,
+        text: 'Бюджет',
+        position: { blockNumber: 101n, logIndex: 1 },
+      },
+      {
+        kind: 'STATEMENT_PROPOSED',
+        votingId: 3n,
+        matrix: 'NUMERICAL',
+        y: 9n,
+        text: 'Расходы',
+        position: { blockNumber: 102n, logIndex: 2 },
+      },
+      {
+        kind: 'VOTING_FINALIZED',
+        votingId: 2n,
+        success: true,
+        position: { blockNumber: 500n, logIndex: 3 },
+      },
+    ]);
+  });
+
+  it('translates isCategorical through the one conversion, not by hand', async () => {
+    // A bare bool is wrong silently — it addresses the other real matrix rather
+    // than failing — so the mapping is asserted in both directions.
+    const window = await events([
+      {
+        eventName: 'ThemeVotingCreated',
+        args: { votingId: 1n, isCategorical: false, x: 0n, theme: 'ч' },
+        blockNumber: 1n,
+        logIndex: 0,
+      },
+      {
+        eventName: 'ThemeVotingCreated',
+        args: { votingId: 2n, isCategorical: true, x: 0n, theme: 'к' },
+        blockNumber: 1n,
+        logIndex: 1,
+      },
+    ]).scan(1n, 2n);
+
+    expect(window.events.map((event) => (event as { matrix: string }).matrix)).toEqual([
+      'NUMERICAL',
+      'CATEGORICAL',
+    ]);
+  });
+
+  it('drops the statement event’s x, which is a gate and not an address', async () => {
+    // setStatement validates a theme at x and then writes statements[kind][y].
+    // Carrying the x would split one statement row into several.
+    const window = await events([
+      {
+        eventName: 'StatementVotingCreated',
+        args: { votingId: 1n, isCategorical: true, x: 77n, y: 9n, statement: 'Расходы' },
+        blockNumber: 1n,
+        logIndex: 0,
+      },
+    ]).scan(1n, 2n);
+
+    expect(window.events[0]).not.toHaveProperty('x');
+    expect(window.events[0]).toMatchObject({ y: 9n });
   });
 
   it('drops a malformed log rather than projecting a partial coordinate', async () => {
     // An absent coordinate reads as "not yet indexed". A wrong one reads as a
     // fact, and a coordinate index is a document voters consult.
     const window = await events([
-      { eventName: 'ValueAdded', args: { x: 3n, y: 7n, value: 42n }, blockNumber: 100n },
-      { eventName: 'ValueAdded', args: { x: 3n, y: 7n, value: 42n, author: 'not-an-address' }, blockNumber: 100n },
+      {
+        eventName: 'ValueAdded',
+        args: { x: 3n, y: 7n, value: 42n },
+        blockNumber: 100n,
+        logIndex: 0,
+      },
+      {
+        eventName: 'ValueAdded',
+        args: { x: 3n, y: 7n, value: 42n, author: 'not-an-address' },
+        blockNumber: 100n,
+        logIndex: 1,
+      },
       { eventName: 'CategoryAdded', args: { x: 3n, y: 7n, category: 2n }, blockNumber: null },
-      { eventName: 'VoteCasted', args: { x: 1n, y: 1n }, blockNumber: 100n },
-      { eventName: 'ValueAdded', args: undefined, blockNumber: 100n },
+      { eventName: 'VoteCasted', args: { x: 1n, y: 1n }, blockNumber: 100n, logIndex: 2 },
+      { eventName: 'ValueAdded', args: undefined, blockNumber: 100n, logIndex: 3 },
+      // A theme voting whose isCategorical did not decode: which matrix it
+      // belongs to is unknowable, and defaulting would label the wrong one.
+      {
+        eventName: 'ThemeVotingCreated',
+        args: { votingId: 1n, x: 0n, theme: 'Бюджет' },
+        blockNumber: 100n,
+        logIndex: 4,
+      },
     ]).scan(1n, 200n);
 
-    expect(window.changes).toEqual([]);
+    expect(window.events).toEqual([]);
+  });
+
+  it('drops a log with no usable logIndex rather than calling it zero', async () => {
+    // Defaulting would turn two executions in one block into a tie the fold
+    // resolves arbitrarily — and the fold's whole job at that point is to say
+    // which of two themes survived.
+    const window = await events([
+      {
+        eventName: 'CategoryAdded',
+        args: { x: 3n, y: 7n, category: 2n },
+        blockNumber: 100n,
+        logIndex: null,
+      },
+      {
+        eventName: 'CategoryAdded',
+        args: { x: 3n, y: 8n, category: 2n },
+        blockNumber: 100n,
+      },
+    ]).scan(1n, 200n);
+
+    expect(window.events).toEqual([]);
   });
 
   it('refuses an inverted window rather than scanning nothing quietly', async () => {

@@ -145,7 +145,11 @@ runtime.
   path or hash, no transaction record, no nonce, no batch or item state, no dependency edges, and no
   executor job table — so the `UNIQUE (chainId, contractAddress, votingId)` constraint the plan calls
   for is still absent. It is deliberately not a table with no writer.
-- **`IdGenerator` is still unimplemented**, so every `operationRef` in a test is a literal. Nothing
-  has generated one, and the uniqueness the primary key enforces has never met a real generator.
+- ~~**`IdGenerator` is still unimplemented**, so every `operationRef` in a test is a literal.~~
+  **Wrong, corrected 2026-09-03.** `adapters/platform/cryptoIdGenerator.ts` has been in the tree since
+  Phase 1 (`1584b21`) with a CSPRNG implementation *and* a sequential test one. The literals in these
+  tests are a choice, not an absence. What stands is the narrower claim: no `operationRef` written to
+  the database has come from `CryptoIdGenerator`, so the primary key's uniqueness has never met the
+  real generator.
 - **Nothing is wired to the worker, IPC, or the renderer.** `npm start` was not run; worker protocol
   stays at v2.
