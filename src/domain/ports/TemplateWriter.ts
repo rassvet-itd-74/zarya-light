@@ -43,15 +43,19 @@ export interface ContextRequirements {
   readonly votingId: boolean;
   /**
    * Values the record must carry that issuance **cannot know**, keyed by domain
-   * key. Empty for ten of the eleven operations.
+   * key. **Empty for all eleven operations**, and kept because it once was not.
    *
-   * `CREATE_NUMERICAL_VALUE_VOTING` is the exception and it is a genuine
-   * contradiction in the schema rather than a gap here: its `decimals` is bound —
-   * "the scale the cell had when the template was issued" — while its `x` and `y`
-   * are member-filled, so at issuance there is no cell to read a scale from. One
-   * of those two decisions has to give, and which one is a product question. Until
-   * it is answered, a use case can at least refuse clearly instead of recording a
-   * scale it invented.
+   * `CREATE_NUMERICAL_VALUE_VOTING` was the exception: its `decimals` was bound
+   * — "the scale the cell had when the template was issued" — while its `x` and
+   * `y` were member-filled, so at issuance there was no cell to read a scale
+   * from and the operation could not be issued at all. This reporting the key is
+   * how that surfaced as a readable refusal rather than an invented scale.
+   *
+   * The schema now puts `decimals` in a third category, `resolved`, read from
+   * the cell at import. So nothing is unavailable at issuance today, and a use
+   * case that consults this is asking a question with a known answer — which is
+   * the point. The next bound key added without an issuance-time source gets a
+   * refusal instead of `undefined`.
    */
   readonly unavailableBoundKeys: readonly string[];
 }

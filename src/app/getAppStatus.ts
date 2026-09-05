@@ -1,10 +1,28 @@
-import {
-  NOT_CHECKED,
-  type NetworkStatusView,
-} from '../adapters/chain/networkStatusView';
+import type { NetworkStatusView } from '../adapters/chain/networkStatusView';
 import type { PublicConfig } from '../adapters/config/appConfig';
 import type { WorkerHealth } from '../adapters/electron/workerProtocol';
 import { PERMITTED_NETWORK_NAME } from '../domain/network/networkPolicy';
+
+/**
+ * What this service reports when the worker could not be asked at all.
+ *
+ * Here rather than beside `NetworkStatusView`, because the chain never produces
+ * it: `toNetworkStatusView` converts verdicts the provider actually returned,
+ * and "nobody asked" is not one of them. It is this use case's answer, so it is
+ * this use case's constant.
+ *
+ * `transient: true` and `usable: false` together are the distinction that
+ * matters — unchecked must never render as *rejected*, or a worker still
+ * starting looks like a misconfigured client.
+ */
+const NOT_CHECKED: NetworkStatusView = {
+  status: 'NOT_CHECKED',
+  detail: 'The network has not been checked yet.',
+  chainId: null,
+  blockNumber: null,
+  transient: true,
+  usable: false,
+};
 
 /**
  * What the app can say about itself without touching the chain.

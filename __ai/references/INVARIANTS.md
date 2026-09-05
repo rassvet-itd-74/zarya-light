@@ -42,12 +42,13 @@ Template generation writes to the user's filesystem and must never require a sig
 
 ## Receipts
 
-After a transaction confirms, the app stamps the returned form into a receipt by filling `zarya.receipt.*` fields and flattening.
+After a transaction confirms, the app stamps the returned form into a receipt: the form is flattened, then a mark carrying the transaction's facts is drawn onto the page.
 
 - **Stamp on confirmation, not on broadcast.** A "sent" record that later turns out false is worse than no record. A provisional artifact must say `PENDING` and be superseded.
 - **A confirmed transaction is not an accepted proposal.** Keep transaction outcome and governance outcome as separate statements. `executeVoting` succeeding says nothing about whether the proposal passed.
-- **Overwrite receipt fields unconditionally** from the transaction record. Never merge or preserve what a user typed into them.
-- **A watermark is not a security control.** Anyone can add one to any PDF. The chain is the verification; never accept a watermarked PDF as evidence.
+- **The receipt is ink, not fields.** `zarya.receipt.*` names what a stamp states; no template carries them as widgets, so there is nothing for a member to type a plausible transaction hash into and nothing to overwrite. A returned file carrying one has been edited and is refused.
+- **Flatten before stamping.** Flattening appends the field appearances to the page's content, so a stamp drawn first would end up underneath the values it is stamping.
+- **A stamp is not a security control.** Anyone can add one to any PDF, and an official-looking one is easier to forge than a plain one. The chain is the verification, reachable from the hash the stamp prints; never accept a stamped PDF as evidence.
 - **A receipt is a rendering, not a record.** It is reproducible from the stored form plus transaction record. Never parse one to recover data the database holds.
 - **No secret material in output.** Signer address only.
 

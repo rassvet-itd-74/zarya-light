@@ -168,21 +168,44 @@ export class WorkerSupervisor {
    * Sends a request and resolves with the reply. Rejects on timeout rather than
    * hanging: an unanswered request is a degraded worker, and the caller needs to
    * be able to say so.
+   *
+   * ## Why the timeout is per request
+   *
+   * The default is a **liveness** figure. `ping` and `checkNetwork` are one call
+   * each and ten seconds is already generous; a request still unanswered after
+   * that is evidence of a worker in trouble, which is why the timeout also marks
+   * it `DEGRADED`.
+   *
+   * A matrix report is not that kind of request. It projects the contract's whole
+   * event history — eighteen `eth_getLogs` windows on the current deployment,
+   * measured at about a second against Sepolia — and then reads two or three
+   * values per cell it found, which is the part that grows with the matrix. The
+   * projection alone already scales with the chain's height rather than with
+   * anything this client controls. Sharing one timeout would mean either
+   * declaring a working worker degraded partway through a report, or waiting
+   * minutes to notice a dead one.
+   *
+   * So the caller states what it is waiting for. The default stays honest for
+   * everything that should be quick, and only the one long request opts out.
    */
-  async request(spec: WorkerRequestSpec): Promise<WorkerReply> {
+  async request(
+    spec: WorkerRequestSpec,
+    options: { readonly timeoutMs?: number } = {},
+  ): Promise<WorkerReply> {
     const worker = this.worker;
     if (worker === undefined) {
       throw new Error('the background worker is not running');
     }
 
+    const timeoutMs = options.timeoutMs ?? this.requestTimeoutMs;
     const { kind } = spec;
     const requestId = `req-${this.nextRequestId++}`;
     return await new Promise<WorkerReply>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
         this.setHealth('DEGRADED');
-        reject(new Error(`worker did not answer ${kind} within ${this.requestTimeoutMs}ms`));
-      }, this.requestTimeoutMs);
+        reject(new Error(`worker did not answer ${kind} within ${timeoutMs}ms`));
+      }, timeoutMs);
 
       this.pending.set(requestId, { resolve, reject, timer });
 

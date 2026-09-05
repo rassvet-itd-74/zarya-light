@@ -108,6 +108,33 @@
       }
     },
     {
+      // Application services orchestrate ports. ARCHITECTURE.md puts them above
+      // the domain core, which owns the interfaces, which the driven adapters
+      // implement — so a use case importing an adapter by path skips the layer
+      // that is supposed to be between them and makes the concrete
+      // implementation impossible to substitute.
+      //
+      // `allowTypeImports` because a type carries no runtime coupling and
+      // getAppStatus legitimately names DTOs the IPC contract owns. A *value*
+      // import is the binding this forbids.
+      "files": ["src/app/**/*.ts"],
+      "excludedFiles": ["src/app/**/*.test.ts"],
+      "rules": {
+        "@typescript-eslint/no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/adapters/*", "**/adapters/**"],
+                "allowTypeImports": true,
+                "message": "An application service must orchestrate a port, not an adapter. Declare the interface in src/domain/ports/ and let the composition root supply the implementation — see ReturnedFormReader and TemplateWriter."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       // The forms adapter may import a PDF library and nothing else foreign.
       "files": ["src/adapters/forms/**/*.ts"],
       "rules": {

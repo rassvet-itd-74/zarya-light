@@ -290,12 +290,20 @@ function categoricalValue(read: FieldReader): BuildIntentResult {
 /**
  * The one builder that scales.
  *
- * `decimals` is app-authored — it comes from the cell as it was read when the
- * template was issued, not from something the member typed — and it travels into
- * the intent so preflight can compare it against the cell's decimals now. A
- * template issued against a two-decimal cell and returned after a decimals
- * voting changed it to four would otherwise submit a number a hundred times too
- * small, and nothing on chain would notice.
+ * `decimals` is app-authored, and specifically it is **`resolved`** in
+ * `FIELD_PLAN`'s sense: the caller reads it from the cell the form addressed, at
+ * import, and puts it in this map. It is not typed by the member and not
+ * recovered from the operation record — at issuance there is no cell, so there
+ * was never a scale to record. A form allowed to state its own scale could
+ * submit a number a hundred times too small and nothing on chain would notice,
+ * because `addValue` has no argument for it.
+ *
+ * The scale travels on into the intent, and the reason is narrower than it used
+ * to claim. It is **not** currently compared against anything: it is the record
+ * of which precision produced `value`, so that a submission-time check *can*
+ * compare it against the cell once a submission path exists. Reading it at
+ * import already removes the long window — a scale that went stale while the
+ * form sat on a member's desk for a week — and leaves only import → mined.
  */
 function numericalValue(read: FieldReader): BuildIntentResult {
   const triple = organ(read);

@@ -84,8 +84,13 @@ export type IssueRefusalCode =
   /** The contract renders this triple differently from the local mirror. */
   | 'ORGAN_MISMATCH'
   /**
-   * The record would need a value issuance cannot know. Only
-   * `CREATE_NUMERICAL_VALUE_VOTING` reaches this — see `ContextRequirements`.
+   * The record would need a value issuance cannot know. **Unreachable today**,
+   * and kept as a guard: `CREATE_NUMERICAL_VALUE_VOTING` used to reach it,
+   * because its `decimals` was bound to a cell the member had not chosen yet.
+   * The schema now resolves that from the cell at import, and
+   * `formSchema.test.ts` asserts every bound key has an issuance-time source —
+   * so this arm fires only if that invariant is broken. See
+   * `ContextRequirements`.
    */
   | 'BOUND_VALUE_UNAVAILABLE';
 
@@ -121,8 +126,9 @@ export async function issueOperationTemplate(
     return refused(
       'BOUND_VALUE_UNAVAILABLE',
       `a ${operationType} record needs ${requirements.unavailableBoundKeys.join(', ')}, ` +
-        'which issuance cannot know: the value is bound to a cell whose coordinates the ' +
-        'member fills in. This needs a schema decision, not a default.',
+        'which issuance cannot know. A bound value with no issuance-time source needs a ' +
+        'schema decision — whether the member supplies it, or the application reads it ' +
+        'when the form comes back — not a default invented here.',
     );
   }
 

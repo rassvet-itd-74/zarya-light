@@ -100,9 +100,11 @@ Driven ports — the domain declares these, adapters implement them.
 | `NetworkGuard` | chainId, contract code, eligibility fingerprint, and `castVote` arity — four distinct verdicts, plus `UNREACHABLE` for "could not tell" | chain — *implemented* |
 | `Clock` | **chain block time**, never workstation time | chain — *implemented* |
 | `TemplateWriter` | generate a pre-filled AcroForm, and say which context values an operation needs — derived from `FIELD_PLAN`, so a use case keeps no second list | forms — *implemented* |
-| `FormParser` | returned PDF → neutral parsed fields, or a structural rejection | forms |
-| `ReceiptStamper` | fill `zarya.receipt.*` and flatten | forms |
-| `MatrixReportWriter` | render the coordinate reference PDF — landscape, no form fields, font **subset** because there are no fields for a viewer to regenerate an appearance from. Takes the assembled model and nothing else, so no clock can reach the page | forms — *implemented* |
+| `ReturnedFormReader` | returned PDF → the `operationRef` it claims, then, against that record, a domain-keyed `IntentInput` plus the keys the caller must read from chain. The mirror of `TemplateWriter`: form vocabulary stays behind it, so no field name reaches an application service | forms — *implemented* |
+| `MatrixSnapshotSource` | pins a block and hands back a reader fixed at it; `undefined` when no block could be read, because a report with no stamp is no report | chain — *implemented* |
+| `FileSource` | read bytes from an already-chosen path. **Choosing** is an open dialog and belongs to main, exactly as `FileSink` splits it | platform — *implemented* |
+| `ReceiptStamper` | flatten the form, then stamp the transaction's facts onto the page | forms |
+| `MatrixReportWriter` | render the coordinate reference PDF — landscape, no form fields, font embedded **whole** (subsetting dropped most of the Cyrillic; see `DECISIONS.md`). Takes the assembled model and nothing else, so no clock can reach the page | forms — *implemented* |
 | `OperationStore` | issued templates keyed by `operationRef`, with authoritative context | store |
 | `BatchStore` | batches, items, dependency edges | store |
 | `TransactionStore` | attempts, nonces, hashes, receipts, classified errors | store |

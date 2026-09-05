@@ -44,6 +44,27 @@ describe('getAppStatus', () => {
   });
 });
 
+describe('generateMatrixReport', () => {
+  it('invokes its own channel with no arguments', async () => {
+    // The report is not addressed, and the handler asserts the same thing on
+    // arrival. Passing anything here would make that assertion fire against our
+    // own surface.
+    const { ipc, invoke } = fakeIpc();
+    await createZaryaApi(ipc).generateMatrixReport();
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.generateMatrixReport);
+  });
+});
+
+describe('importForm', () => {
+  it('invokes its own channel with no arguments', async () => {
+    // The path is the dialog's answer. A renderer that could name one could name
+    // any path, and this is the channel where the path gets *read*.
+    const { ipc, invoke } = fakeIpc();
+    await createZaryaApi(ipc).importForm();
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.importForm);
+  });
+});
+
 describe('onWorkerHealth', () => {
   it('delivers a known health value', () => {
     const { ipc, emit } = fakeIpc();

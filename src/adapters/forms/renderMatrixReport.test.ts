@@ -1,5 +1,6 @@
+import fontkit from '@pdf-lib/fontkit';
 import { readFileSync } from 'node:fs';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDict, PDFDocument, PDFName, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import type { MatrixKind } from '../../domain/matrix/matrix';
 import type { AxisInventory, MatrixReport, ReportRow } from '../../domain/matrix/matrixReport';
@@ -14,11 +15,18 @@ import { PAGE } from './reportLayout';
  * The mechanism: real font, real logo, real bytes.
  *
  * What the document *says* is asserted in `composeMatrixReport.test.ts`, because
- * a subset embedded font writes glyph identifiers and a content stream cannot be
+ * an embedded custom font writes glyph identifiers and a content stream cannot be
  * read back as text. What is left to prove here is what only a real PDF can
  * show: that it has no fields, that this application's own ingestion refuses it,
- * that PT Sans encodes the party's Cyrillic without throwing, and that
- * subsetting actually produces a small file.
+ * that PT Sans encodes the party's Cyrillic without throwing, and — since
+ * 2026-09-05 — that the font as **embedded** still carries the letters it
+ * encoded.
+ *
+ * That last one is the lesson of this file. Every check here was an "it did not
+ * throw", and a report went out unreadable with all of them green: pdf-lib's
+ * subset dropped most of the Cyrillic, and a missing glyph draws as nothing
+ * rather than failing. Encoding a letter and being able to draw it are two
+ * different claims, and only the second one matters to a voter.
  */
 
 const ASSETS: TemplateAssets = {
@@ -28,6 +36,10 @@ const ASSETS: TemplateAssets = {
 };
 
 const renderer = new MatrixReportRenderer(ASSETS);
+
+/** Both cases, «ё» included — the letters the party's own words are made of. */
+const RUSSIAN_ALPHABET =
+  'абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ';
 
 const ORGAN = bytes32(`0x${'11'.repeat(32)}`);
 const AUTHOR = evmAddress('0x57eb63d0aab5822EFCd7A9B56775F772D3e03CfD');
@@ -143,17 +155,22 @@ describe('Cyrillic that comes from the chain, not from the label table', () => {
   });
 
   it('draws the whole Russian alphabet in both cases, «ё» included', async () => {
-    const alphabet = 'абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ';
-
+    // Note what this does and does not prove. Rendering resolving means the font
+    // *encoded* every letter; it does not mean a reader will see one. A missing
+    // glyph draws as blank and throws nothing — which is how the 2026-09-05
+    // subsetting defect passed this exact test. The glyph coverage of the
+    // embedded font is asserted further down.
     await expect(
       renderer.render(
         report({
-          rows: [row({ theme: { kind: 'SET', text: alphabet } })],
+          rows: [row({ theme: { kind: 'SET', text: RUSSIAN_ALPHABET } })],
           empty: false,
           axes: {
             ...emptyAxes(),
             CATEGORICAL: {
-              themes: [{ coordinate: 3n, text: alphabet, confirmation: { kind: 'MATCHES' } }],
+              themes: [
+                { coordinate: 3n, text: RUSSIAN_ALPHABET, confirmation: { kind: 'MATCHES' } },
+              ],
               statements: [],
             },
           },
@@ -197,14 +214,72 @@ describe('Cyrillic that comes from the chain, not from the label table', () => {
   });
 });
 
-describe('the font is subset here, unlike on a form', () => {
-  it('produces a document far smaller than a whole-font template', async () => {
-    // A form embeds PT Sans whole at ~327 KB because a viewer regenerates a
-    // field's appearance from it. A report has no fields, so nothing will ever
-    // regenerate anything and only the drawn glyphs are needed.
+describe('the embedded font can actually draw the party’s alphabet', () => {
+  /**
+   * The font files, pulled back out of the finished PDF.
+   *
+   * A TrueType face reaches a PDF as the stream its descriptor points at through
+   * `FontFile2`. Read from the document rather than from `ASSETS`, because what
+   * has to be checked is the font **as embedded** — the source file on disk is
+   * obviously fine, and was fine while the report was unreadable.
+   */
+  const embeddedFonts = async (bytes: Uint8Array): Promise<Uint8Array[]> => {
+    const document = await PDFDocument.load(bytes);
+    const files: Uint8Array[] = [];
+
+    for (const [, object] of document.context.enumerateIndirectObjects()) {
+      if (!(object instanceof PDFDict)) continue;
+      const reference = object.get(PDFName.of('FontFile2'));
+      if (reference === undefined) continue;
+
+      const stream = document.context.lookup(reference);
+      if (stream instanceof PDFRawStream) files.push(decodePDFRawStream(stream).decode());
+    }
+    return files;
+  };
+
+  /** Which letters this embedded face cannot be shown to carry. */
+  const lettersMissingFrom = (file: Uint8Array): string[] => {
+    const font = fontkit.create(Buffer.from(file));
+    try {
+      return [...RUSSIAN_ALPHABET].filter(
+        (letter) => !font.hasGlyphForCodePoint(letter.codePointAt(0) as number),
+      );
+    } catch {
+      // A subset carries no `cmap` — the PDF's own encoding stands in for it —
+      // so fontkit cannot be asked about a code point at all and throws rather
+      // than answering false. That is the shape this defect takes, so it counts
+      // as every letter missing rather than as a crash in a test.
+      return [...RUSSIAN_ALPHABET];
+    }
+  };
+
+  it('carries every Russian letter in both faces', async () => {
+    // The test this replaces asserted the document was **small** — which is the
+    // symptom of the defect it should have caught. On 2026-09-05 the first
+    // report a person ever produced came out unreadable, pdf-lib's subset having
+    // dropped most of the Cyrillic, and every test in this file passed: each one
+    // asserts only that rendering did not throw. Rendering never throws. A
+    // missing glyph draws as nothing at all.
+    //
+    // So this asks the embedded font, which is the only artifact that knows.
+    const rendered = await renderer.render(report({ rows: [row()], empty: false }));
+    const fonts = await embeddedFonts(rendered.bytes);
+
+    // Regular and bold. Both are drawn on every page.
+    expect(fonts).toHaveLength(2);
+    for (const file of fonts) {
+      expect(lettersMissingFrom(file)).toEqual([]);
+    }
+  });
+
+  it('costs what a whole font costs, which is the price of being legible', async () => {
+    // ~326 KB, the same order as a form. Recorded so that a change — including
+    // re-enabling subsetting — is visible rather than silent.
     const rendered = await renderer.render(report({ rows: [row()], empty: false }));
 
-    expect(rendered.bytes.byteLength).toBeLessThan(120_000);
+    expect(rendered.bytes.byteLength).toBeGreaterThan(200_000);
+    expect(rendered.bytes.byteLength).toBeLessThan(700_000);
   });
 });
 

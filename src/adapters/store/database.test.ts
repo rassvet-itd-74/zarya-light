@@ -1,3 +1,7 @@
+import { randomUUID } from 'node:crypto';
+import { rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 import { SchemaTooNewError, inTransaction, migrate, openDatabase } from './database';
@@ -37,6 +41,44 @@ describe('opening a database', () => {
     const handle = openDatabase(':memory:');
     expect(handle.db.prepare('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 });
     handle.close();
+  });
+
+  it('carries an existing database forward without losing its rows', () => {
+    // The path that matters in the field and that a fresh-database test cannot
+    // reach: a client already holding issued operations at an older version.
+    // A migration that recreated the table instead of altering it would pass
+    // every other test here and quietly detach every emitted form from its
+    // context.
+    const file = join(tmpdir(), `zarya-upgrade-${randomUUID()}.db`);
+    try {
+      const old = new DatabaseSync(file);
+      // Version 1 exactly as it shipped, from the migration list itself rather
+      // than from a copy of the DDL that could drift away from it.
+      const first = MIGRATIONS.find((migration) => migration.version === 1);
+      for (const statement of first?.statements ?? []) old.exec(statement);
+      old.exec('PRAGMA user_version = 1');
+      old.prepare(
+        `INSERT INTO operations
+           (operation_ref, operation_type, chain_id, contract_address,
+            state, bound_values, displayed_context, recorded_at)
+         VALUES ('zar-old', 'CAST_VOTE', 11155111, '0xabc', 'EMITTED', '{}', '{}', 1)`,
+      ).run();
+      old.close();
+
+      const upgraded = openDatabase(file);
+      expect(upgraded.version).toBe(SCHEMA_VERSION);
+
+      const row = upgraded.db
+        .prepare('SELECT operation_ref, state, identity_key FROM operations')
+        .get() as Record<string, unknown>;
+      expect(row.operation_ref).toBe('zar-old');
+      expect(row.state).toBe('EMITTED');
+      // The new column exists and is null — never imported, which is true.
+      expect(row.identity_key).toBeNull();
+      upgraded.db.close();
+    } finally {
+      rmSync(file, { force: true });
+    }
   });
 
   it('is idempotent, so a second open migrates nothing', () => {

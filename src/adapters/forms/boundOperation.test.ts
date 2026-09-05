@@ -12,7 +12,7 @@ import { bindOperation } from './boundOperation';
 import { FIELD_PLAN, inputFieldName } from './formSchema';
 import { type TemplateAssets, contextValuesFor, issueTemplate } from './issueTemplate';
 import { parseFormFields } from './pdfFormParser';
-import { filledForm } from './testing/formSamples';
+import { filledForm, resolvedValues } from './testing/formSamples';
 
 /**
  * The whole loop, with the database in it.
@@ -119,8 +119,18 @@ describe('issue, record, fill, ingest', () => {
       expect(assembled.kind, `${type} assemble: ${JSON.stringify(assembled)}`).toBe('INPUT');
       if (assembled.kind !== 'INPUT') continue;
 
-      const built = buildIntent(assembled.operationType, assembled.input);
-      expect(built.kind, `${type} build`).toBe('INTENT');
+      // The record supplies the bound half and the chain the resolved half. The
+      // scale is deliberately *not* in `boundValues` above — a numerical value
+      // template is issued before any cell is chosen, so there is nothing to
+      // record — and the fixture stands in for reading it at import.
+      const built = buildIntent(assembled.operationType, {
+        ...assembled.input,
+        ...resolvedValues(type),
+      });
+      // The problems, never the intent: an intent holds bigints and
+      // JSON.stringify refuses them.
+      const why = built.kind === 'PROBLEMS' ? JSON.stringify(built.problems) : '';
+      expect(built.kind, `${type} build ${why}`).toBe('INTENT');
       if (built.kind !== 'INTENT') continue;
 
       expect(built.intent, type).toEqual(INTENT_SAMPLES[type]);
@@ -154,16 +164,19 @@ describe('issue, record, fill, ingest', () => {
     expect(record && bindOperation(record, SCOPE).kind).toBe('BOUND');
   });
 
-  it('uses the record’s organ, not the file’s displayed label', async () => {
-    // The form shows `95.СОВ` for a human to check. The ordinal that reaches a
-    // transaction comes from the record's subject code through the region table.
+  it('uses the record’s organ, and a file cannot offer a different one', async () => {
+    // The form *prints* `95.СОВ-7` for a human to check, as page text. Since
+    // 2026-09-06 there is no field to retype it into: a member with a PDF
+    // viewer has no way to make this document claim another organ.
+    //
+    // The old version of this test edited `zarya.context.organ` and asserted
+    // that the edit was reported and then ignored. Adding that field back by
+    // hand is now a refusal, which is the stronger outcome — so what is left to
+    // check is that the organ reaching a transaction comes from the row.
     const type = 'CREATE_MEMBERSHIP_VOTING';
-    const bytes = await issueAndRecord(type);
-    const document = await PDFDocument.load(bytes);
-    document.getForm().getTextField('zarya.context.organ').setText('74.СОВ');
-    const tampered = await fill(type, await document.save({ updateFieldAppearances: false }));
+    const filled = await fill(type, await issueAndRecord(type));
 
-    const parsed = await parseFormFields(tampered);
+    const parsed = await parseFormFields(filled);
     const record = await store.find(operationRef('op_test_0001'));
     const bound = record === undefined ? undefined : bindOperation(record, SCOPE);
     const assembled =
@@ -172,11 +185,10 @@ describe('issue, record, fill, ingest', () => {
         : undefined;
 
     expect(assembled?.kind).toBe('INPUT');
-    // Reported...
-    expect(assembled?.kind === 'INPUT' && assembled.warnings.map((w) => w.field)).toEqual([
+    expect(parsed.kind === 'FIELDS' && Object.keys(parsed.fields)).not.toContain(
       'zarya.context.organ',
-    ]);
-    // ...and ignored: Chechnya's code, from the row.
+    );
+    // Chechnya's code, from the row, through the region table.
     expect(assembled?.kind === 'INPUT' && assembled.input.regionSubjectCode).toBe('95');
   });
 });

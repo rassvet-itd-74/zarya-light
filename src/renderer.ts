@@ -214,9 +214,183 @@ const issue = async (): Promise<void> => {
   }
 };
 
+// ---------------------------------------------------------- matrix report
+
+/**
+ * The coordinate reference.
+ *
+ * One button and no inputs, because a report is not addressed: there is one
+ * matrix, and the document is all of it as of one block.
+ *
+ * The wait is the part this panel has to handle honestly. Generating a report
+ * projects the contract's whole event history and then reads every cell it
+ * found — tens of seconds against a public endpoint — with no progress channel
+ * behind it yet. So the button disables for the duration and says what is
+ * happening, rather than looking like a press that did nothing.
+ */
+const showReportResult = (outcome: string, message: string): void => {
+  const target = el('report-result');
+  target.hidden = false;
+  target.dataset.outcome = outcome;
+  target.textContent = message;
+};
+
+/** Chain time, from the pinned block. Never `Date.now()`. */
+const blockTime = (readAt: number): string => new Date(readAt * 1000).toISOString();
+
+const generateReport = async (): Promise<void> => {
+  const button = el('generate-report') as HTMLButtonElement;
+  button.disabled = true;
+  // One message covering both waits, because the renderer cannot tell them
+  // apart: the dialog and the whole projection are a single await. Saying so is
+  // better than a "waiting for a location" that stays on screen for a minute
+  // after the location was chosen.
+  showReportResult(
+    'WORKING',
+    'Choose a location, then the matrix is read from the beginning of the ' +
+      'contract — this can take a while.',
+  );
+
+  try {
+    const result = await window.zarya.generateMatrixReport();
+
+    switch (result.kind) {
+      case 'REPORTED': {
+        // `degradedRows` is reported rather than folded into the success line: a
+        // report can be written *and* incomplete, and the page marks those rows
+        // — so saying "done" alone would be the one summary the document itself
+        // contradicts.
+        const scope = result.empty
+          ? 'no coordinates yet — the axis inventory only'
+          : `${result.rows} coordinate${result.rows === 1 ? '' : 's'}` +
+            (result.degradedRows > 0
+              ? `, ${result.degradedRows} with fields that did not read`
+              : '');
+        showReportResult(
+          'REPORTED',
+          `Saved to ${result.path} — ${result.pageCount} page${result.pageCount === 1 ? '' : 's'}, ` +
+            `${scope}. Read at block ${result.blockNumber} (${blockTime(result.readAt)}).`,
+        );
+        break;
+      }
+      case 'CANCELLED':
+        showReportResult('CANCELLED', 'Nothing was written.');
+        break;
+      case 'REFUSED':
+        showReportResult('REFUSED', `${result.code}: ${result.message}`);
+        break;
+      case 'FAILED':
+        showReportResult('FAILED', result.message);
+        break;
+    }
+  } catch (error) {
+    showReportResult(
+      'FAILED',
+      error instanceof Error ? error.message : 'the application could not read the matrix',
+    );
+  } finally {
+    button.disabled = false;
+  }
+};
+
+// --------------------------------------------------------------- import
+
+/**
+ * The return half.
+ *
+ * The panel's job is to show **what the application understood**, not to
+ * decide anything. A returned form is untrusted (hard rule 4), the values it
+ * authored come from the local record, and this is where a member sees the
+ * result of that before anything is submitted — which is the whole reason the
+ * intent is rendered field by field rather than summarised in a sentence.
+ *
+ * Warnings are drawn even on success, and separately from the outcome line.
+ * A context field edited in the file and an appearance that disagrees with its
+ * value are both tamper evidence; neither changes the intent, which is exactly
+ * why neither may be folded away into a green result.
+ */
+const showImportResult = (outcome: string, message: string): void => {
+  const target = el('import-result');
+  target.hidden = false;
+  target.dataset.outcome = outcome;
+  target.textContent = message;
+};
+
+const renderImportWarnings = (
+  warnings: readonly { code: string; field?: string; message: string }[],
+): void => {
+  const target = el('import-warnings');
+  target.hidden = warnings.length === 0;
+  target.replaceChildren(
+    ...warnings.map((warning) => {
+      const item = document.createElement('li');
+      item.textContent =
+        warning.field === undefined
+          ? warning.message
+          : `${warning.field} — ${warning.message}`;
+      return item;
+    }),
+  );
+};
+
+const clearImport = (): void => {
+  el('import-fields').hidden = true;
+  el('import-warnings').hidden = true;
+};
+
+const importForm = async (): Promise<void> => {
+  const button = el('import-form') as HTMLButtonElement;
+  button.disabled = true;
+  clearImport();
+  showImportResult('WORKING', 'Choose a filled form…');
+
+  try {
+    const result = await window.zarya.importForm();
+
+    switch (result.kind) {
+      case 'IMPORTED': {
+        showImportResult(
+          'IMPORTED',
+          `${result.operationType}, recorded as ${result.operationRef}. ` +
+            'Nothing has been submitted — there is no submission path yet.',
+        );
+        const fields = el('import-fields');
+        fields.hidden = false;
+        setRows(
+          fields,
+          result.fields.map((field) => [field.label, field.value] as [string, string]),
+        );
+        renderImportWarnings(result.warnings);
+        break;
+      }
+      case 'CANCELLED':
+        showImportResult('CANCELLED', 'Nothing was imported.');
+        break;
+      case 'REFUSED':
+        // The reason is the point here: every refusal names something a member
+        // can act on — a wrong deployment, a form already imported, a field that
+        // does not validate.
+        showImportResult('REFUSED', `${result.code}: ${result.message}`);
+        break;
+      case 'FAILED':
+        showImportResult('FAILED', result.message);
+        break;
+    }
+  } catch (error) {
+    showImportResult(
+      'FAILED',
+      error instanceof Error ? error.message : 'the application could not import that form',
+    );
+  } finally {
+    button.disabled = false;
+  }
+};
+
 select('operation-type').addEventListener('change', syncFields);
 select('organ-type').addEventListener('change', syncFields);
 el('issue').addEventListener('click', () => void issue());
+el('generate-report').addEventListener('click', () => void generateReport());
+el('import-form').addEventListener('click', () => void importForm());
 syncFields();
 
 window.zarya.onWorkerHealth(renderHealth);

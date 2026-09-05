@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { type OperationType, isOperationType } from '../../domain/intents/intent';
 import {
@@ -10,6 +11,7 @@ import {
   type NewOperationRecord,
   type OperationRecord,
   type OperationStore,
+  type ReturnedFormRecord,
   UnknownOperationRefError,
 } from '../../domain/ports/OperationStore';
 import {
@@ -116,6 +118,72 @@ export class SqliteOperationStore implements OperationStore {
       .all(scope.chainId as number, scope.contractAddress.toLowerCase(), state);
     return rows.map((row) => rowToRecord(row));
   }
+
+  async formBytes(ref: OperationRef): Promise<Uint8Array | undefined> {
+    const row = this.db
+      .prepare('SELECT form_bytes FROM operations WHERE operation_ref = ?')
+      .get(ref) as { form_bytes?: unknown } | undefined;
+
+    const bytes = row?.form_bytes;
+    if (bytes === null || bytes === undefined) return undefined;
+    // `node:sqlite` hands a BLOB back as a Uint8Array. Checked rather than cast:
+    // this is about to be parsed as a PDF.
+    if (!(bytes instanceof Uint8Array)) {
+      throw new TypeError(`operation ${ref} has a non-blob form_bytes`);
+    }
+    return bytes;
+  }
+
+  async findByIdentity(
+    scope: { readonly chainId: ChainId; readonly contractAddress: EvmAddress },
+    identityKey: string,
+  ): Promise<readonly OperationRecord[]> {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM operations
+          WHERE chain_id = ? AND contract_address = ? AND identity_key = ?
+          ORDER BY recorded_at ASC, operation_ref ASC`,
+      )
+      .all(scope.chainId as number, scope.contractAddress.toLowerCase(), identityKey);
+    return rows.map((row) => rowToRecord(row));
+  }
+
+  async recordReturn(input: ReturnedFormRecord): Promise<void> {
+    // The digest is computed here rather than accepted, so no caller can store a
+    // hash that does not describe the bytes beside it.
+    const digest = createHash('sha256').update(input.formBytes).digest('hex');
+
+    inTransaction(this.db, () => {
+      const row = this.db
+        .prepare('SELECT state FROM operations WHERE operation_ref = ?')
+        .get(input.operationRef) as { state?: unknown } | undefined;
+      if (row === undefined) throw new UnknownOperationRefError(input.operationRef);
+
+      const current = row.state;
+      if (typeof current !== 'string' || !isIssuedTemplateState(current)) {
+        throw new TypeError(`operation ${input.operationRef} holds an unrecognised state`);
+      }
+      // The same state machine `advance` enforces. Inside the transaction, so a
+      // refusal leaves the row untouched — no bytes written under a state that
+      // never moved.
+      assertTransition(current, 'RETURNED');
+
+      this.db
+        .prepare(
+          `UPDATE operations
+              SET state = ?, identity_key = ?, vote_direction = ?, form_hash = ?, form_bytes = ?
+            WHERE operation_ref = ?`,
+        )
+        .run(
+          'RETURNED' satisfies IssuedTemplateState,
+          input.identityKey,
+          input.voteDirection ?? null,
+          digest,
+          input.formBytes,
+          input.operationRef,
+        );
+    });
+  }
 }
 
 /**
@@ -163,8 +231,20 @@ function rowToRecord(row: StoredRow): OperationRecord {
     boundValues: parseStringMap(row.bound_values, ref, 'bound_values'),
     displayedContext: parseStringMap(row.displayed_context, ref, 'displayed_context'),
     recordedAt: row.recorded_at,
+    // Absent until a form comes back. `null` from the driver becomes an absent
+    // property rather than an empty string, so "never imported" stays
+    // distinguishable from "imported and empty".
+    ...optionalText(row.identity_key, 'identityKey'),
+    ...optionalText(row.vote_direction, 'voteDirection'),
+    ...optionalText(row.form_hash, 'formHash'),
   };
 }
+
+const optionalText = (value: unknown, key: string): Record<string, string> => {
+  if (value === null || value === undefined) return {};
+  if (typeof value !== 'string') throw new TypeError(`column ${key} is not text`);
+  return { [key]: value };
+};
 
 const expectString = (value: unknown, column: string): string => {
   if (typeof value !== 'string') throw new TypeError(`column ${column} is not text`);

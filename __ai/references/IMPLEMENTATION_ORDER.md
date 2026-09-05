@@ -72,26 +72,30 @@ Two things settled in slice 2 that bind what follows:
 - ~~Exhaustive intent-to-adapter mapping with a `never` check so a new variant cannot silently fall through. `CONFIGURE_ORGAN_THRESHOLDS` is the only intent that is not one transaction — it expands to three, and the ordering is the dispatcher's decision.~~ **Done.** The ordering is conditional on the target base, because eligibility is snapshotted at creation and the safe order for enabling a configuration is the unsafe one for resetting it. New subsection in `CONTRACT_DEFECTS.md`.
 - ~~`CallSimulator` grows an arm that takes an intent. It takes the **union**, never calldata: a port accepting bytes would put a hole in the form allow-list one layer below where anyone would look for it.~~ **Done** — `forIntent`, with a third result arm: `NOT_ATTEMPTED` keeps "this client could not build the call" apart from "the contract refused", and splits an organ read that failed from one that disagreed, because their retry behavior differs.
 
-## Phase 4 — PDF form schema, issuance, and ingestion
+## Phase 4 — PDF form schema, issuance, and ingestion — **done 2026-09-05**
 
-Being built in slices. **Slice 1** — the field-name schema and the mapping onto domain keys, 2026-09-02. **Slice 2** — the PDF library, the parser, and the hazard refusals, 2026-09-02. **Slice 3** — issuance, the embedded font, and the end-to-end round trip, 2026-09-02. Remaining: the Russian wording (61 slots, enumerated by `pendingLabels()`), receipt field writing (Phase 6, needs a confirmed transaction), and the matrix report.
+Built in slices. **Slice 1** — the field-name schema and the mapping onto domain keys, 2026-09-02. **Slice 2** — the PDF library, the parser, and the hazard refusals, 2026-09-02. **Slice 3** — issuance, the embedded font, and the end-to-end round trip, 2026-09-02. **The Russian wording** — 2026-09-02 and 2026-09-03, 99 slots across both documents, `pendingLabels()` empty. **The matrix report** — three slices, 2026-09-03, with its button on 2026-09-05. **Ingestion hardening and the import path** — 2026-09-05, below.
+
+~~**Receipt field writing is the one thing deliberately outside this phase.** It needs a confirmed transaction, so it belongs with the queue in Phase 6; the `zarya.receipt.*` fields are defined and issued empty from the start, because retrofitting them would invalidate every form already handed out.~~
+
+**Superseded 2026-09-06 (Phase 6 slice 3).** The reasoning was right while the receipt *was* fields — and it stopped holding the moment the receipt became a mark drawn onto the returned page, because a drawn mark needs nothing reserved for it at issuance. There is no longer anything to retrofit. Receipt stamping still belongs in Phase 6, and it still needs a confirmed transaction.
 
 Settled in slice 1 and binding on the rest:
 
 - **The `zarya.input.*` suffix *is* the domain key.** `zarya.input.member` carries `member`, so the form-to-domain mapping is a prefix strip with no table to fall out of date. A hand-maintained map fails silently when a key is renamed on one side; this fails at compile time.
-- **`FIELD_PLAN` is hard rule 4 expressed per operation** — which keys a human fills and which the app recovers from its record. The two entries that matter are `decimals` on a numerical value proposal and `votingId` on a vote; both are bound, and the form's copies are compared rather than used.
+- **`FIELD_PLAN` is hard rule 4 expressed per operation** — which keys a human fills, which the app recovers from its record, and which it reads from chain when the form comes back. `votingId` on a vote is the bound entry that matters: the form's copy is compared rather than used. `decimals` on a numerical value proposal is the sole **`resolved`** entry, read from the cell the member addressed at import — see the 2026-09-04 note below.
 - **Bound forms only.** No `operationRef` is a refusal, not a generic blank form. An unbound form would have to take the organ triple from the file, which is what the bound half exists to prevent.
 - **The plan is verified against the builder, not against a list.** A `Proxy` records every key `buildIntent` touches and the test asserts the plan provides all of them, so a key added to a builder cannot become a form that can never be completed.
 
 - ~~Define the field-name schema and `schemaVersion` in one module all three directions import.~~ **Done** — `adapters/forms/formSchema.ts`, plus `assembleFormInput.ts` for the structural half of ingestion that needs no PDF library.
 - ~~Issuance: template generation from chain context, logo drawn, empty `zarya.receipt.*` fields present, `operationRef` persisted before the file is emitted, reproducible output.~~ **Done** except the persistence, which is Phase 5's — issuance takes an `operationRef` and the caller is responsible for having recorded it. PT Sans is embedded **whole rather than subset**: a subset carries only the glyphs the issuer draws, and a viewer regenerating a field appearance from it would show a member blanks where their own Cyrillic should be. Costs ~327 KB per template and is reasoned, not observed — see the worklog.
-- ~~Ingestion: parse `zarya.input.*` only; recover app-authored context from storage; structural refusal for XFA, encryption, flattening, a populated receipt marker, unknown version or field.~~ **Done** across slices 1 and 2, plus duplicate names, unsupported field types, oversized values, and field-count bounds. Still missing: embedded-file and external-reference refusal, decompressed-size and object-depth bounds, and surfacing an appearance that disagrees with `/V`.
+- ~~Ingestion: parse `zarya.input.*` only; recover app-authored context from storage; structural refusal for XFA, encryption, flattening, a populated receipt marker, unknown version or field.~~ **Done** across slices 1 and 2, plus duplicate names, unsupported field types, oversized values, and field-count bounds. ~~Still missing: embedded-file and external-reference refusal, decompressed-size and object-depth bounds, and surfacing an appearance that disagrees with `/V`.~~ **All done 2026-09-05** — `pdfHazards.ts` and `fieldAppearance.ts`.
 - ~~Round-trip test as the primary check: issue → fill programmatically → ingest → assert the intent matches.~~ **Done for the ingest half** — real PDF bytes through the real parser to all eleven intents. The `issue` end is still a test fixture, not the application's issuer.
-- ~~Hostile fixtures per `zarya-pdf-forms`.~~ **Partly** — encrypted, XFA, flattened, truncated, non-PDF, empty, duplicate names, wrong field type, oversized value, JavaScript action, appearance disagreement, and no-AcroForm. Absent: compression bomb, embedded file, external reference, incremental-update *shadowing* beyond the newest-revision case.
+- ~~Hostile fixtures per `zarya-pdf-forms`.~~ **Done 2026-09-05** — encrypted, XFA, flattened, truncated, non-PDF, empty, duplicate names, wrong field type, oversized value, JavaScript action, appearance disagreement, no-AcroForm, and now compression bomb, embedded file, external reference (both `SubmitForm` and `URI`), and incremental-update shadowing.
 
 - ~~Pick a library that never executes PDF JavaScript and never fetches remote resources.~~ **pdf-lib 1.17.1**, chosen by probing rather than by documentation, with the two constraints it fails and their mitigations recorded in `DECISIONS.md`. Confined to `src/adapters/forms/` by ESLint, observed firing.
 
-Receipt stamping arrives with the transaction queue in Phase 6, since it needs a confirmed transaction — but define the `zarya.receipt.*` fields here so templates carry them from the start. Retrofitting them later invalidates every already-issued form.
+Receipt stamping arrives with the transaction queue in Phase 6, since it needs a confirmed transaction. ~~Define the `zarya.receipt.*` fields here so templates carry them from the start.~~ **Superseded 2026-09-06:** templates carry no receipt fields; the receipt is drawn onto the returned page.
 
 The **matrix reference report** also belongs here: it needs only Phase 2 reads plus a PDF library, and it is the document a voter reads before filling anything. It carries no form fields, so it adds nothing to the ingestion surface.
 
@@ -104,8 +108,8 @@ The **matrix reference report** also belongs here: it needs only Phase 2 reads p
 
 **Report slice 2 — the document — done 2026-09-03.** The `MatrixReportWriter` port, the landscape layout, composition, the pdf-lib renderer, and 37 new wording slots handed to the party as `wording.ru.txt` part two. Four things settled:
 
-- **Composition is separated from rendering**, because a subset embedded font writes glyph identifiers rather than characters — so once a string is in a content stream there is no way to assert it is the string that was meant. Every claim about what the page *says* is tested against `composeMatrixReport`; the renderer only positions.
-- **The font is subset here and whole on a form.** A form has fields a viewer regenerates appearances for, so a subset would show a member blanks where their own Cyrillic belongs. A report has none, so only the drawn glyphs are needed: 29–81 KB against a form's 327 KB.
+- **Composition is separated from rendering**, because an embedded custom font writes glyph identifiers rather than characters — so once a string is in a content stream there is no way to assert it is the string that was meant. Every claim about what the page *says* is tested against `composeMatrixReport`; the renderer only positions.
+- ~~**The font is subset here and whole on a form.**~~ **Reversed 2026-09-05**: the report embeds PT Sans whole too, at ~326 KB. The reasoning for subsetting was sound — a report has no fields, so nothing regenerates an appearance and only the drawn glyphs are needed — and pdf-lib's subsetter simply did not produce them, dropping most of the Cyrillic and shipping an unreadable page. Size was never the constraint worth optimising here.
 - **A coordinate is never truncated.** Every other cell may be cut to its column — a statement's full wording is in the axis inventory, an author is recognised rather than copied — but a truncated coordinate addresses a *different real cell*. `uint256` allows 78 digits, so an oversized one is printed on its own full-width line above the row.
 - **One wording table for both documents.** The report's slots live in `SLOT_ENGLISH` beside the forms', so the party fills one file, `pendingLabels()` lists everything unworded, and one font-coverage check covers both.
 
@@ -117,7 +121,7 @@ The **matrix reference report** also belongs here: it needs only Phase 2 reads p
 
 Only the 70pt column headers were ever too long; the 193-character sentences came back with 23% headroom. Full account, including the two proposals still open, in the worklog.
 
-Remaining for the report: the UI button with its IPC path plus the `PrintMatrixReport` application service that supplies `indexedThrough` (Phase 9), and someone opening a sample in a real PDF viewer.
+~~Remaining for the report: the UI button with its IPC path plus the `PrintMatrixReport` application service that supplies `indexedThrough` (Phase 9), and someone opening a sample in a real PDF viewer.~~ **Both done 2026-09-05** — `generateMatrixReport` and its button, and a person produced a report from it and read it. Doing so found the font-subsetting defect recorded above.
 
 **Not implementable, and it is the skill that is wrong:** `.claude/skills/zarya-matrix-report/SKILL.md` lists "an approval threshold renders against its own base — `5000` of `10000` shows as 50%" among the report's tests. No eligibility getter exists (`CONTRACT.md`, "Not exposed"), so a threshold cannot be read at all, and nothing in this report is a basis-point value. The basis-point rendering rule still applies where such a value *is* shown — the form hints — and has a test there.
 
@@ -134,13 +138,25 @@ Three things settled in slice 1 that bind the rest:
 - ~~Schema and migrations~~ **Done** — `PRAGMA user_version`, append-only list, each migration transactional with its own version bump; a newer schema is refused rather than migrated downwards.
 - ~~Issued-template records keyed by `operationRef`~~ **Done**, with the state machine from `STATE_MACHINES.md` enforced on every transition and uniqueness enforced by the primary key rather than an application check.
 - ~~Event cursor~~ **Done** — `SqliteCursorStore`, with `MemoryCursorStore` kept and both held to one shared contract suite. Block numbers are stored as TEXT because `node:sqlite` returns an INTEGER column as a `number`.
-- Form hashes and semantic operation identity; stored form bytes; receipt path and hash.
+- ~~Form hashes and semantic operation identity; stored form bytes~~ **Done 2026-09-05, schema v2** — `identity_key`, `vote_direction`, `form_hash`, `form_bytes` on `operations`, all nullable because an operation that was only ever issued has no returned form. Written by `recordReturn`, which moves the state with them in one transaction; two statements would leave a `RETURNED` row that cannot regenerate its receipt, or an `EMITTED` row that dedups against itself. Identity is the canonical string from `operationIdentity.ts`, not a digest — the domain may not import `node:crypto`, and a string is stable, distinct, and readable in a database. Receipt path and hash stay for Phase 6, which is what writes them.
 - Batch and item states; dependency representation.
 - Transaction records: chain, contract, signer, assigned nonce, last known receipt and block, classified error and status.
 - Executor voting job, with the unique constraint on `(chainId, contractAddress, votingId)`. Deliberately absent so far rather than created as a table with no writer.
 - Resume and re-import tests; the five crash windows.
 
 Issuance already depends on this: the `operationRef` it takes is now resolvable, and `boundOperation.ts` is where a stored record becomes the context ingestion assembles against.
+
+**The remaining items are tables whose writers do not exist yet** — transaction records (Phase 6), batch and item states (Phase 8), the executor job (Phase 7, and already noted above as deliberately absent). They stay unbuilt on the same reasoning: a table with no writer is machinery nothing exercises, which is what the vertical slices have repeatedly shown to hide defects. Slice 2 built only what import could drive.
+
+### 2026-09-05 — slice 2: semantic identity and the returned form
+
+Dedup by `operationRef` only ever caught the same *file* twice. Semantic identity catches two forms, issued separately, asking the chain for the same thing — a member who mislaid a template and reissued it has two references and one intention.
+
+- **A vote's identity excludes its direction, so `FOR` and `AGAINST` collide.** That collision is the mechanism: two forms voting opposite ways on one voting are a contradiction to surface, not two operations to submit. `vote_direction` is stored *beside* the key so a caller can tell the same vote again from the opposite one — `DUPLICATE_OPERATION` against `CONFLICTING_VOTE`.
+- **The signer is not in the key.** `zarya-intents` names it, there is no `Signer` port until Phase 6, and hard rule 8 is one wallet per installation — so within a database it is a constant, and a constant distinguishes nothing. It belongs there when the client can hold two.
+- **A numerical value carries its scale in the key.** `1234` at two decimals and `12340` at three are the same quantity; a key holding only the integer would call them different operations.
+- **Components are length-prefixed, not delimiter-joined.** Any separator chosen to be improbable is a bug waiting for a governance statement that contains it.
+- **Identity is derived from the built intent, not from the form**, so two documents filled differently that mean the same thing collide, and a form whose values did not validate never reserves an identity.
 
 ## Vertical slice — issuance wired end to end — **done 2026-09-03**
 
@@ -154,17 +170,108 @@ Three things running the app found that no test would have:
 - **A startup error on every launch since Phase 1.** `pushWorkerHealth` sends before the first frame commits; `isDestroyed()` is false and `send` throws anyway. Electron logs it itself, so a `try`/`catch` silences nothing — main now tracks `did-finish-load`.
 - **The worker's console output never reaches the terminal in dev**, despite `stdio: 'inherit'`. An observability gap, not a malfunction; the database had to be verified by opening the file.
 
-**Found by trying to issue one:** `CREATE_NUMERICAL_VALUE_VOTING` cannot be issued at all. `FIELD_PLAN` calls its `decimals` bound — "the scale the cell had when the template was issued" — while listing that operation's `x` and `y` as member-filled, so at issuance there is no cell to read a scale from. Both statements are in the same file. Which one gives is a **product decision**; the code refuses with `BOUND_VALUE_UNAVAILABLE` rather than inventing a scale. The other ten issue.
+**Found by trying to issue one:** `CREATE_NUMERICAL_VALUE_VOTING` could not be issued at all. `FIELD_PLAN` called its `decimals` bound — "the scale the cell had when the template was issued" — while listing that operation's `x` and `y` as member-filled, so at issuance there was no cell to read a scale from. Both statements were in the same file. The code refused with `BOUND_VALUE_UNAVAILABLE` rather than inventing a scale. **Resolved 2026-09-04** — see below.
 
 Evidence is five rows in the real database at `%APPDATA%/zarya-light/zarya.db`, all `EMITTED`, with organ identifiers the deployed contract rendered (`15.0.СОВ`, `15.КОН`) and subject codes — never ordinals — in `boundValues`.
 
-Still unwired: import, preflight, and the matrix report button.
+Still unwired: **preflight**. The matrix report button and the import path were both wired on 2026-09-05 — see below.
+
+### 2026-09-04 — `FIELD_PLAN` gains a third category
+
+The contradiction above was settled by adding **`resolved`** beside `input` and `bound`: keys the application reads **from chain at import**, for the coordinate the form supplied. `decimals` on a numerical value proposal is the only one, read as `numericalCell(at).decimals`.
+
+Why this rather than binding the coordinate at issuance or letting the member type the scale:
+
+- The scale is a property of the **cell**, not of the form and not of the record. At issuance no cell has been chosen, so there was never anything to record.
+- `x` and `y` stay member-filled, which is what the matrix reference report exists to support.
+- It is **stronger than binding**, not weaker. A scale recorded at issuance goes stale while a form sits on a desk for a week; a scale read at import cannot. `12.34` means twelve-point-three-four at whatever precision the cell holds now.
+- Letting the form state its own scale was rejected: `addValue` has no argument for the scale, so nothing on chain could catch a value off by a factor of a hundred, and the client check would be load-bearing rather than advisory — against hard rule 6.
+
+Consequences to know:
+
+- `assembleFormInput` stays pure and its `input` map is therefore **deliberately incomplete** for that one operation. Callers merge `resolvedKeysFor(operationType)` in before `buildIntent`; iterate the schema rather than special-casing the type.
+- **Ingestion of a numerical value form now needs a chain read**, so an RPC outage becomes an import refusal for it alone.
+- `unavailableBoundKeys` is now empty for all eleven. The mechanism is kept, and `formSchema.test.ts` asserts every bound key has an issuance-time source, so the next one added without one fails the suite.
+- **The residual window is import → mined, and nothing closes it.** A decimals voting executing in that gap leaves the submitted integer scaled by the old precision. `GovernanceIntent.decimals` carries the scale that produced the value so a submission-time check can compare it against the cell; **no such check exists yet**, and Phase 6 is where it belongs.
+
+### 2026-09-05 — the matrix report button, and the report path end to end
+
+The read model (2026-09-03, slice 1), the landscape document (slice 2) and the Russian wording (slice 3) all existed and **nothing called any of them**. This slice is the caller: `generateMatrixReport` in `src/app/`, a `generateMatrixReport` worker request, an IPC channel, a preload key, and a button.
+
+Decisions this fixes, all of which the next reader has to know:
+
+- **The projection is rebuilt from the deployment block on every press, and deliberately ignores the discovery cursor.** `CursorStore` persists a block number; the *folded* index is not durable anywhere. Resuming from a stored cursor without the state that produced it would skip every earlier event and print a matrix missing coordinates, with nothing on the page to disclose the omission. A partial index is not a slow report, it is a wrong one. Phase 7's executor is what makes an incremental index possible.
+- **The pin is chosen first and bounds the scan.** `ZaryaMatrixSnapshot.atConfirmedHead` pins at `head - confirmations`, and the projection runs `[deployment, pinned]` with `planDiscovery`'s `confirmations` set to **zero** — the depth is already applied, and re-applying it would leave the index twelve blocks short for no gain. `indexedThrough` is therefore exactly the pin, and `indexBehindBy` is always `undefined` on this path; the field is for Phase 7, where the index comes from a cursor that can lag.
+- **A failed scan fails the report.** Folding what arrived and printing the rest is the one degradation that cannot be disclosed, because a coordinate never found leaves no gap. Read failures are different — a row exists to carry the marker — and those are printed.
+- **The worker request timeout is now per request.** The supervisor's ten seconds is a *liveness* figure and also marks the worker `DEGRADED`; a report is unbounded work that grows with the chain's height and the matrix. `supervisor.request(spec, { timeoutMs })`, five minutes for this one call.
+- **`WORKER_PROTOCOL_VERSION` is 4.** The `reported` reply carries `blockNumber` as a **decimal string** — a `bigint` does not survive the structured clone — and carries `degradedRows`, so the UI cannot claim a success the document itself contradicts.
+
+Measured against the real deployment on 2026-09-05: eighteen `eth_getLogs` windows over 88,798 blocks, **1,064 ms**, one page, and this application's own ingestion answers `REJECTED`. The matrix is **empty** on that deployment — no coordinates and no axis labels — so that timing is a floor with no cell reads in it, and the populated layout has still never been rendered from real data.
+
+**The button was then pressed, and the report came out unreadable** — pdf-lib's font subsetting had dropped most of the Cyrillic, on every report since 2026-09-03. Fixed by embedding PT Sans whole; see the entry above and `DECISIONS.md`. The lesson is the one that generalises: every test in `renderMatrixReport.test.ts` asserted only that rendering **did not throw**, and a missing glyph draws as nothing and throws nothing. The test best placed to catch it asserted the file was *small*, which was the symptom.
+
+### 2026-09-05 — ingestion hardening, and import wired end to end
+
+The last two things Phase 4 owed. **Hardening** closed five gaps and added the four missing hostile fixtures; **import** gave the return half a caller, which it had never had.
+
+Both were designed by probing pdf-lib rather than reasoning about it, and the probe changed both answers:
+
+- **A compression bomb is bounded before the library sees the file.** Measured: 200 MB of spaces compresses to 204 KB — **1029×** — so the 4 MiB file cap alone permits roughly 4 GB of inflate. pdf-lib never touches a *content* stream (4 ms, no allocation) but does inflate an **object stream** during `load`, so a check on the loaded document would run after the allocation it prevents. Every Flate stream is therefore inflated on the raw bytes under `zlib`'s own `maxOutputLength`. `LZWDecode` is not covered and is recorded rather than papered over.
+- **The object-depth bound protects our own traversal, not the library.** pdf-lib was probed at depths of 100, 1 000, 10 000 and 100 000 and never overflowed a stack; at 10 000 it fails to parse and throws, already reported as unreadable. The bound exists because the hazard walk added here recurses over untrusted structure.
+- **Attachments and outward actions are refused** — `/Filespec`, `/EF`, `/EmbeddedFiles`, `/FileAttachment`, and the `URI`/`GoToR`/`Launch`/`SubmitForm`/`ImportData` family. Not because they could steer a decision, but because **Phase 6 stamps a receipt onto the returned file and hands it back out**, so anything left in it is re-published over this application's name. `SubmitForm` is the one that matters most on a form.
+- **PDF JavaScript is still tolerated**, as it always has been. The re-emission argument applies to it equally, so this is now an inconsistency rather than a settled position — flagged for the product owner rather than changed unilaterally.
+- **An appearance that disagrees with `/V` is a disclosure, not a refusal.** `/V` stays authoritative. Two refinements make the signal worth reading: `/NeedAppearances` skips the comparison entirely, and an **empty** appearance counts as "not established" — that is the shape a viewer leaves when it sets a value without redrawing, it is the common case, and reporting it would put a tamper warning on every filled field of every legitimate import.
+
+Import itself is `importReturnedForm`, a `FileSource` port, `NodeFileSource`, `describeIntent`, an `importForm` worker request, an IPC channel, a preload key, and a review panel. `WORKER_PROTOCOL_VERSION` is **5**.
+
+- **`resolved` keys are read from chain between assembly and building**, iterated from the schema rather than special-cased. An unreadable cell is a **refusal**: `addValue` takes no decimals argument, so a guessed scale is a valid transaction storing a number off by a power of ten.
+- **`RETURNED` is set last, and only if an intent was built.** Anything that fails leaves the operation in `EMITTED` so the member can fix the file and import it again — an outage must not burn the operation.
+- **A second copy is refused, not imported twice.** `bindOperation` resolves a `RETURNED` record deliberately, so a stale copy finds the completed operation instead of looking unbound; naming that state is what turns it into an answer.
+- **A `bigint` never crosses a process boundary.** `describeIntent` flattens the union to strings, and the reply guard refuses a numeric field value — a coordinate read as a number addresses a different cell.
 
 ## Phase 6 — serialized transaction queue and receipt stamping
 
+Being built in slices. **Slice 1 — the lifecycle, its persistence, and recovery — done 2026-09-05. Slice 2 — receipt stamping — done 2026-09-06.**
+
 Signer abstraction; send/wait/receipt flow; nonce-safe sequential writes; crash-state reconciliation across the five crash windows. Optional signed outbox only after the basic lifecycle is stable.
 
+### 2026-09-05 — slice 1: the write lifecycle
+
+`Signer`, `ReceiptReader`, `WriteCallEncoder` and `TransactionStore` ports; schema v3's `transactions` table; `submitOperation` and `reconcileTransactions`; viem adapters for signing and receipts.
+
+- **`ChainWriter` became two ports, split along secrets.** Signing needs key material and reading does not, so recovery can ask what a nonce did with no wallet in scope — which is what lets "reconcile before sending" be a rule rather than a chore.
+- **No signed outbox, and that is a security decision.** A persisted raw signed transaction is a bearer instrument in a file a backup copies; `zarya-transactions` permits storing them only if the security model accepts it, and this one does not. The cost is stated: after an ambiguous broadcast this client cannot rebroadcast identical bytes, so it recovers **by nonce**.
+- **`PENDING` is never `FAILED`.** No edge exists. An unread receipt is an outage, and a stuck transaction is surfaced by how long it has been pending, not by moving it.
+- **`BROADCAST → FAILED_RETRYABLE` exists but is unreachable from the send path.** Only reconciliation takes it, and only where the provider's pending nonce proves the assigned nonce is still unused. The first version of the table omitted the edge, which was too strong — a free nonce is a proof, and refusing to record it would strand provably-unsent rows in flight and block the queue forever.
+- **A spent nonce with no hash stays `UNRESOLVED`.** The one case recovery cannot close: marking it failed invites a resend under a nonce that is gone, and marking it confirmed claims an outcome nobody read.
+- **`CONFIGURE_ORGAN_THRESHOLDS` has no atomicity across its three calls.** A failure part-way leaves an organ genuinely part-configured, so the outcome is `PARTIALLY_SUBMITTED` rather than a refusal — "nothing happened" would be false.
+- **Nothing broadcasts on a timer.** `submitOperation` is the only thing in the application that sends, and it is not wired to any trigger yet.
+
+### 2026-09-06 — slice 2: receipt stamping
+
+`ReceiptStamper` port, `PdfReceiptStamper`, `stampOperationReceipt`, and `OperationStore.formBytes` — which gives the bytes stored at import their first reader.
+
+- **Stamped on confirmation, never on broadcast** (hard rule 5), and a **reverted transaction is stamped too**: it confirmed, and the receipt says `REVERTED`. Absence of a receipt means "outcome unknown", so refusing to stamp a revert would make that absence a lie.
+- **No chain access at all, and no `Clock`.** The first version took one to read the confirming block's time — which would have made a receipt un-regenerable offline, contradicting the invariant the module itself quotes. The block timestamp is now read once with the receipt and stored on the attempt (`confirmed_at`), so a workstation clock has no route to the page.
+- **Stamping is idempotent and byte-identical.** A receipt is a rendering of the stored form plus the transaction record; a lost file is regenerated with no chain write and no chain read.
+- ~~**Fields are overwritten unconditionally and the form is flattened last.** Flattening destroys the fields, so any value set afterwards would silently vanish.~~ **Superseded on 2026-09-06 by slice 3** — the receipt is no longer fields, so the order reversed: flatten first, then stamp. The flattened result is still refused by this application's own ingestion as `FLATTENED`, which is what stops a receipt re-entering the pipeline.
+- ~~**A new wording slot, `receipt.watermark`, is outstanding.**~~ **Withdrawn in slice 3**, which replaced the text watermark with a drawn stamp. Its rule survived into the stamp's own title slot: it must not say the proposal was accepted, because a confirmed transaction says nothing about whether a voting passed.
+
 Receipt stamping hangs off confirmation, never off broadcast. A reverted transaction is stamped too. Regeneration from stored form bytes plus the transaction record must work without a chain write.
+
+### 2026-09-06 — slice 3: the template reformation and the receipt stamp
+
+Asked for directly: make the fields only the application fills non-editable — "better: labels or texts with special styling" — and replace the receipt fields with a drawn stamp, with everything rendered inside it. Reopens finished work in Phases 4 and 6 rather than adding to them.
+
+- **`zarya.context.*` and `zarya.receipt.*` stopped being fields.** Context is printed on the page as `label   value` with a rule down the left margin; the receipt is a stamp. `templateFieldNames()` is now the three `zarya.meta.*` plus that operation's inputs and nothing else, so **every widget on an issued form is one a member is meant to write in** — the trust rule made visible instead of merely stated. It had been six shaded receipt boxes and up to four shaded context boxes that a member had to be told not to fill in.
+- **`FORM_SCHEMA_VERSION` → `zarya.form.2`.** Every form issued under `.1` is uningestible and no migration or compatibility path was built, on the user's explicit instruction that the current database can be dropped. **This was affordable exactly once.** It stops being affordable the day the party holds printed forms.
+- **`CONTEXT_TAMPERED` is gone, and its replacement is stronger.** The check compared a `zarya.context.*` field against the record and warned; there is nothing in the file to compare now, because page text is not something a form viewer can edit. A field from either retired namespace is refused as `RETIRED_FIELD` — named rather than folded into `UNKNOWN_FIELD`, since "this used to exist here" and "this never existed" are different facts about a document. The `warnings` channel stays and currently carries nothing, which is stated in its own doc comment rather than disguised.
+- **The stamp overprints and no page is added** — specified. Its interior is an opaque ground so the six facts stay readable over whatever they cover; the frame lands on page content. **Flatten first, then stamp**, because pdf-lib appends flattened appearances and a stamp drawn earlier would sit under the values it stamps.
+- **The mark is hard blue lines from `src/assets/receipt-stamp.svg`, paths only**, because `drawSvgPath` understands nothing else and would silently drop a `<rect>`. `stampStrokes()` refuses an asset containing one rather than losing it. The asset and the text share one coordinate table (`receiptStampArt.ts`); a test asserts the asset's rules sit exactly at the band edges the text is placed from.
+- **Two wording slots are outstanding**, `stampTitle.document` and `stampNotice.disclaimer`, and four were withdrawn. The stamp currently prints bracketed placeholders for both, so **it is not shippable to a member yet.**
+- **A new test technique.** Drawn text cannot be read back as text — pdf-lib writes glyph ids — so `testing/drawnText.ts` lays a string out in the embedded font and looks for that run of ids in the content stream. That is what now proves the organ label and all six facts are actually on the page; without it, a value that stopped being drawn would leave no field behind to miss it.
+
+Owed downstream: **Phase 9's stamp trigger produces a drawn document rather than a filled one**, so the UI hands back a file that cannot be re-imported at all rather than one whose fields are populated.
 
 ## Phase 7 — executive reconciler
 

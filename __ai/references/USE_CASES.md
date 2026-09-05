@@ -7,7 +7,7 @@ Observable behavior the client must exhibit. Each row is a test target. Sections
 | # | Case | Acceptance |
 | --- | --- | --- |
 | 1 | Click a form button | Produces a pre-filled AcroForm PDF. No signer involved, no chain write |
-| 2 | Pre-fill from context | Chain-derived context is written into `zarya.context.*` as read-only display fields |
+| 2 | Pre-fill from context | Chain-derived context is **printed on the page** as text, not written into a field. Every widget on an issued form is one a member fills |
 | 3 | Operation recorded first | `operationRef` is persisted before the file reaches the user. A crash mid-issue leaves no unrecorded reference |
 | 4 | Reproducible output | Same operation and schema version produce a byte-comparable form, so a fixture can pin it |
 | 5 | Clean template | Generated file contains no scripts, actions, embedded files, or external references — it passes the app's own ingestion checks |
@@ -116,12 +116,13 @@ Each maps to a decoded custom error where the contract provides one.
 
 | # | Case | Acceptance |
 | --- | --- | --- |
-| 1 | Transaction confirms | The returned form is stamped: `zarya.receipt.*` filled from the transaction record, then flattened |
+| 1 | Transaction confirms | The returned form is flattened, then stamped: a mark drawn onto the last page carrying all six facts from the transaction record |
 | 2 | Transaction reverts | Still stamped, with `status = REVERTED` rendered as prominently as `CONFIRMED` |
 | 3 | Broadcast but unconfirmed | No final receipt. Any provisional artifact says `PENDING` and is superseded on confirmation |
 | 4 | Outcome unprovable | No receipt. Absence means "unknown", never "failed" |
-| 5 | User pre-filled a receipt field | Overwritten unconditionally from the transaction record |
-| 6 | Receipt re-imported | Rejected by the `txHash` marker; rejected again by the flattened-form check if the marker is stripped |
+| 5 | User types a transaction hash on a form | Impossible — there is no receipt field to type into. A file carrying one has been edited and is refused as `RETIRED_FIELD` |
+| 6 | Receipt re-imported | Rejected by the flattened-form check; rejected independently as `RETIRED_FIELD` if someone rebuilds the fields |
+| 6a | Stamp overprints a filled value | Accepted and deliberate. The stamp's interior is opaque, so it covers what it lands on; nothing is reserved for it and no page is added |
 | 7 | `executeVoting` receipt | States the transaction outcome; does not claim the proposal passed |
 | 8 | Receipt lost | Regenerated from the stored form plus transaction record, with no chain write |
 | 9 | Batch of receipts | Written to one per-batch directory, named from `operationRef` and transaction hash — no dialog per form |

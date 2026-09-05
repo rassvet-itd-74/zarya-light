@@ -25,7 +25,7 @@ DISCOVERED -> READING -> PARSED -> BOUND -> VALID
                                          PREFLIGHT
 ```
 
-`REJECTED` covers structural refusal — unknown `schemaVersion`, XFA present, encrypted, flattened, a populated `zarya.receipt.txHash`, unknown field name — and is distinct from `INVALID`, which means the schema parsed but a value failed validation. `BOUND` means `operationRef` resolved to a known operation and authoritative context was recovered from storage.
+`REJECTED` covers structural refusal — unknown `schemaVersion`, XFA present, encrypted, flattened, a field from a retired namespace (`zarya.receipt.*` or `zarya.context.*`, neither of which an issued form carries), unknown field name — and is distinct from `INVALID`, which means the schema parsed but a value failed validation. `BOUND` means `operationRef` resolved to a known operation and authoritative context was recovered from storage.
 
 ## Receipt state
 
@@ -38,7 +38,7 @@ AWAITING_CONFIRMATION -> STAMPED -> WRITTEN
 
 `AWAITING_CONFIRMATION` starts at broadcast, not at signing, and no receipt exists during it. `STAMPED` requires a confirmed transaction with a known status; `NOT_STAMPED` covers a transaction that never reached a terminal outcome the client can prove.
 
-A reverted transaction still produces a receipt — `zarya.receipt.status = REVERTED`. Absence of a receipt means "outcome unknown", never "it failed".
+A reverted transaction still produces a receipt — the stamp states `REVERTED`. Absence of a receipt means "outcome unknown", never "it failed".
 
 Stamping is idempotent and re-runnable: the receipt is a rendering of the stored form plus transaction record, so `WRITTEN` can be reached again after a lost file without touching the chain.
 

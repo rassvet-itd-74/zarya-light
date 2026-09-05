@@ -40,27 +40,35 @@ describe('a well-formed bound form', () => {
     expect(result.kind === 'INPUT' && result.operationType).toBe('CAST_VOTE');
   });
 
-  it('accepts the empty receipt fields a template legitimately carries', () => {
-    // Refusing an empty txHash would refuse every unstamped form.
-    expect(filledForm('CAST_VOTE')[RECEIPT_FIELDS.txHash]).toBe('');
+  it('carries only the meta fields and the inputs, and nothing else', () => {
+    // The shape of an issued form since 2026-09-06. There is no longer any
+    // app-authored field for a member to see, wonder about, or type into: the
+    // context block is printed text and the receipt is a stamp.
+    const form = filledForm('CAST_VOTE');
+    expect(Object.keys(form).filter((name) => name.startsWith('zarya.context.'))).toEqual([]);
+    expect(Object.keys(form).filter((name) => name.startsWith('zarya.receipt.'))).toEqual([]);
     expect(intake('CAST_VOTE').kind).toBe('INPUT');
   });
 });
 
 describe('only the human-filled half is read from the file', () => {
-  it('takes the bound values from the record, ignoring what the file says', () => {
-    // The whole of hard rule 4 in one assertion: the file claims a different
-    // voting and a different cell scale, and neither reaches the input.
-    const result = intake('CAST_VOTE', { [CONTEXT_FIELDS.votingId]: '999' });
-    expect(result.kind === 'INPUT' && result.input.votingId).toBe('7');
+  it('takes the bound values from the record, and a file cannot even claim one', () => {
+    // Hard rule 4, now structural. A file used to be able to carry
+    // `zarya.context.votingId` = 999 and be ignored; there is no such field to
+    // carry, and adding one back by hand is a refusal rather than a value.
+    const clean = intake('CAST_VOTE');
+    expect(clean.kind === 'INPUT' && clean.input.votingId).toBe('7');
+    expect(
+      refusalCodes(intake('CAST_VOTE', { [CONTEXT_FIELDS.votingId]: '999' })),
+    ).toEqual(['RETIRED_FIELD']);
   });
 
   it('refuses a form that tries to supply the cell scale itself', () => {
-    // `zarya.input.decimals` on a numerical value form is an attempt to state
-    // the scale the record owns. The field list refuses it before any value is
-    // read. The assembler also writes bound keys *after* input keys, so the
-    // record would win even if the list were wrong — that second mechanism is
-    // not separately observable here, precisely because the first one fires.
+    // `zarya.input.decimals` on a numerical value form is an attempt to state a
+    // scale that is neither the member's to give nor the record's to hold — it
+    // is read from the cell at import. `allowed` is built from the plan's
+    // `input` alone, so the same field list that refuses a bound key refuses a
+    // resolved one, before any value is read.
     const form = {
       ...filledForm('CREATE_NUMERICAL_VALUE_VOTING'),
       [inputFieldName('decimals')]: '6',
@@ -69,15 +77,17 @@ describe('only the human-filled half is read from the file', () => {
     expect(refusalCodes(assembleFormInput(form, issued))).toContain('UNKNOWN_FIELD');
   });
 
-  it('uses the record’s scale on the form that is accepted', () => {
+  it('leaves the cell scale absent, for the caller to resolve', () => {
+    // The assembler is pure, and the scale is a chain read. So the map it
+    // returns is deliberately incomplete for this one operation — see the note
+    // on `FormIntakeResult.input`. Nothing here invents a default.
     const result = intake('CREATE_NUMERICAL_VALUE_VOTING');
-    expect(result.kind === 'INPUT' && result.input.decimals).toBe('2');
+    expect(result.kind).toBe('INPUT');
+    expect(result.kind === 'INPUT' && result.input).not.toHaveProperty('decimals');
   });
 
-  it('never reads a receipt field for its value', () => {
-    // A plausible transaction hash typed in achieves nothing — and here it does
-    // not even reach the value stage, because it is the re-import marker.
-    const result = intake('CAST_VOTE', { [RECEIPT_FIELDS.signer]: 'Ivan' });
+  it('reads exactly the plan’s keys and no others', () => {
+    const result = intake('CAST_VOTE');
     expect(result.kind === 'INPUT' && Object.keys(result.input).sort()).toEqual([
       'support',
       'votingId',
@@ -93,7 +103,9 @@ describe('the schema version gate', () => {
   });
 
   it('refuses an unknown version outright rather than parsing what it can', () => {
-    const result = intake('CAST_VOTE', { [META_FIELDS.schemaVersion]: 'zarya.form.2' });
+    // `zarya.form.1` is the version this build replaced, and the one every form
+    // issued before 2026-09-06 carries. It is refused like any other unknown.
+    const result = intake('CAST_VOTE', { [META_FIELDS.schemaVersion]: 'zarya.form.1' });
     expect(refusalCodes(result)).toEqual(['UNKNOWN_SCHEMA_VERSION']);
     // One refusal, and no attempt at the rest: an unrecognised version means the
     // field names in the file mean something this build does not know.
@@ -144,19 +156,31 @@ describe('the operation reference', () => {
   });
 });
 
-describe('the re-import marker', () => {
-  it('refuses a form carrying a transaction hash', () => {
+describe('a field from a namespace that is no longer written', () => {
+  it('refuses a form carrying a receipt field at all, filled or empty', () => {
+    // The presence *is* the signal now. A receipt is stamped onto the page, so a
+    // form with a `zarya.receipt.*` widget was edited by hand — and the value in
+    // it is beside the point, which is why an empty one is refused too.
     expect(
       refusalCodes(intake('CAST_VOTE', { [RECEIPT_FIELDS.txHash]: '0x'.padEnd(66, 'a') })),
-    ).toContain('RECEIPT_ALREADY_STAMPED');
+    ).toEqual(['RETIRED_FIELD']);
+    expect(refusalCodes(intake('CAST_VOTE', { [RECEIPT_FIELDS.txHash]: '' }))).toEqual([
+      'RETIRED_FIELD',
+    ]);
   });
 
   it('refuses a hand-typed one exactly the same way', () => {
     // A forgery attempt and a receipt coming back around are the same refusal.
     // Nothing here tries to tell them apart, because the file cannot say.
-    expect(refusalCodes(intake('CAST_VOTE', { [RECEIPT_FIELDS.txHash]: 'not a hash' }))).toContain(
-      'RECEIPT_ALREADY_STAMPED',
-    );
+    expect(refusalCodes(intake('CAST_VOTE', { [RECEIPT_FIELDS.txHash]: 'not a hash' }))).toEqual([
+      'RETIRED_FIELD',
+    ]);
+  });
+
+  it('names it as retired rather than as unknown', () => {
+    // Two different facts about a document: "this field used to exist here" and
+    // "no such field has ever existed". A member can act on the first.
+    expect(refusalCodes(intake('CAST_VOTE', { 'zarya.nonsense': 'x' }))).toEqual(['UNKNOWN_FIELD']);
   });
 });
 
@@ -193,49 +217,54 @@ describe('field names are never matched approximately', () => {
 
 describe('a record that cannot complete the form', () => {
   it('is refused, naming what the application failed to author', () => {
+    // A record missing a bound key is a database that lost part of a row. The
+    // organ is the case that matters: the form carries only a *display* copy of
+    // it, which is compared and never used, so there is nowhere else to recover
+    // it from and inventing one would propose against a different organ.
     const issued = issuedOperation('CREATE_NUMERICAL_VALUE_VOTING');
-    const { decimals, ...withoutScale } = issued.values;
-    void decimals;
+    const { organType, ...withoutOrganType } = issued.values;
+    void organType;
     const result = assembleFormInput(filledForm('CREATE_NUMERICAL_VALUE_VOTING'), {
       ...issued,
-      values: withoutScale,
+      values: withoutOrganType,
     });
     expect(refusalCodes(result)).toEqual(['MISSING_BOUND_VALUE']);
   });
 });
 
-describe('the tamper check compares and then ignores', () => {
-  it('warns about a context field the file disagrees with', () => {
-    const result = intake('CREATE_MEMBERSHIP_VOTING', {
-      [CONTEXT_FIELDS.organ]: '74.СОВ',
-    });
-    expect(result.kind).toBe('INPUT');
-    expect(result.kind === 'INPUT' && result.warnings).toEqual([
-      {
-        code: 'CONTEXT_TAMPERED',
-        field: CONTEXT_FIELDS.organ,
-        message: expect.stringContaining('74.СОВ'),
-      },
-    ]);
-    // And the organ actually used is still the record's: Chechnya's subject
-    // code, which the region table alone can turn into an ordinal.
+describe('the tamper check that no longer exists', () => {
+  /**
+   * There used to be one here, and it is worth saying why there is not now.
+   *
+   * `CONTEXT_TAMPERED` compared each `zarya.context.*` field against the record
+   * and warned when they disagreed — compare, never use. It could do that
+   * because the file carried the application's rendering in a field a member
+   * could edit. It no longer does: the application block is printed page text,
+   * which a form viewer cannot edit and this parser cannot read.
+   *
+   * The replacement is stronger and lives in the refusal above. A form that
+   * disagrees with the record about its organ is not a form that gets imported
+   * with a warning attached — it is a form that has had a field added to it,
+   * and it is refused.
+   */
+  it('produces no warnings, because a well-formed form now carries nothing to compare', () => {
+    for (const type of OPERATION_TYPES) {
+      const result = intake(type);
+      expect(result.kind === 'INPUT' && result.warnings, type).toEqual([]);
+    }
+  });
+
+  it('refuses rather than warns when the file carries an organ label of its own', () => {
+    // The old behaviour was INPUT plus a warning. A member could not have
+    // produced this file with any PDF viewer, so it is not something to import.
+    const result = intake('CREATE_MEMBERSHIP_VOTING', { [CONTEXT_FIELDS.organ]: '74.СОВ' });
+    expect(refusalCodes(result)).toEqual(['RETIRED_FIELD']);
+  });
+
+  it('still takes the organ from the record on a clean form', () => {
+    // Chechnya's subject code, which the region table alone can turn into an
+    // ordinal — the value the file never had a say in either way.
+    const result = intake('CREATE_MEMBERSHIP_VOTING');
     expect(result.kind === 'INPUT' && result.input.regionSubjectCode).toBe('95');
-  });
-
-  it('warns about a tampered chain id without refusing the form', () => {
-    // Refusing would be stricter than necessary — the value is not used — and
-    // would give a tampered display field power over an import.
-    const result = intake('CAST_VOTE', { [CONTEXT_FIELDS.chainId]: '1' });
-    expect(result.kind).toBe('INPUT');
-    expect(result.kind === 'INPUT' && result.warnings.map((w) => w.field)).toEqual([
-      CONTEXT_FIELDS.chainId,
-    ]);
-  });
-
-  it('says nothing about a context field the record has no expectation for', () => {
-    // "Unknown" and "disagrees" are different, and only one is evidence.
-    const issued = issuedOperation('CAST_VOTE');
-    const result = assembleFormInput(filledForm('CAST_VOTE'), { ...issued, context: {} });
-    expect(result.kind === 'INPUT' && result.warnings).toEqual([]);
   });
 });

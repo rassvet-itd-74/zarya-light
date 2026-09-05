@@ -29,7 +29,11 @@ Only `src/adapters/forms/` may import it, enforced by ESLint and observed firing
 ## Templates are generated, in Russian, on A4 — decided 2026-09-02
 
 - **The application generates every template.** A hand-prepared PDF filled in by the app was considered and rejected: it becomes an untracked binary whose field names nothing can check against `FIELD_PLAN`, and the reproducibility decision above turns into pinning someone's file rather than the issuer's output.
-- **PT Sans, embedded whole rather than subset.** `src/assets/pt-sans/`, OFL. pdf-lib's standard fonts are WinAnsi and throw `WinAnsi cannot encode "С"`, so an embedded font is required. Subsetting would cost 11 KB against 322 KB, and is **not** used: a subset carries only the glyphs the issuer draws, and a viewer regenerating a field's appearance from it would show a member blanks where their own Cyrillic should be — a form that looks broken while the data is correct. Reasoned, not observed; revisit only after checking a template in a real viewer.
+- **PT Sans, embedded whole rather than subset — on every document this application produces.** `src/assets/pt-sans/`, OFL. pdf-lib's standard fonts are WinAnsi and throw `WinAnsi cannot encode "С"`, so an embedded font is required. Subsetting would cost 11 KB against 322 KB and is **not** used, for two separate reasons:
+  - **On a form**, a subset carries only the glyphs the issuer draws, and a viewer regenerating a field's appearance from it would show a member blanks where their own Cyrillic should be — a form that looks broken while the data is correct.
+  - **On the matrix report** that argument does not apply, since a report has no fields, and it was subset for a while on exactly that reasoning. **Observed 2026-09-05:** pdf-lib's subsetter dropped most of the Cyrillic and the first report a person produced was unreadable — `б в д ц ф ч ь П Э Т ю` drew and `а е и о н с т р л к м п у я` did not. So the rule is now unconditional and the reason is empirical, not reasoned.
+
+  A missing glyph **draws as nothing and throws nothing**, so a test asserting that rendering succeeded proves only that the font *encoded* the text. `renderMatrixReport.test.ts` pulls the font back out of the finished PDF and asks whether it still carries the alphabet; a form has no equivalent check yet.
 - **A4**, and **Russian only** on every printed string.
 - **Printed wording lives in one module** (`formLabels.ts`) as values, and a slot with no Russian text yet renders bracketed rather than blank — a missing label is worse than an obvious placeholder, because a member cannot tell the field is unexplained. `pendingLabels()` enumerates what is outstanding so the suite reports it instead of anyone remembering.
 - **Option groups keep ASCII export values.** `FOR`, `AGAINST`, `CATEGORICAL`, `NUMERICAL` are what the parser reads; only the text drawn beside the box is translated. Translating an export value is a form schema change.
@@ -65,8 +69,10 @@ Accepted costs, recorded rather than buried:
 
 ## Receipts
 
-- When a transaction confirms, the returned form is stamped: `zarya.receipt.*` fields filled from the transaction record, then flattened.
-- The watermark is carried by AcroForm fields present in every template and empty at issuance — not by composed graphics. Field rotation is quantized to 90° steps, so the mark is a horizontal band rather than a diagonal.
+- When a transaction confirms, the returned form is stamped: flattened first, then a mark drawn onto the last page carrying all six facts from the transaction record.
+- **Superseded 2026-09-06.** The receipt used to be six AcroForm fields present in every template and empty at issuance, filled at stamp time. It is now composed graphics: hard blue lines from `src/assets/receipt-stamp.svg` plus drawn text, applied over the page. Two reasons — six empty shaded boxes on every issued form were six boxes a member had to be told not to fill in, and field rotation is quantized to 90° steps, so nothing that reads as a stamp was achievable with fields.
+- The stamp **overprints**. Nothing is reserved for it and the template is not laid out around it. Its interior is an opaque ground so the six facts stay readable over whatever they cover; the frame lands directly on page content.
+- `FORM_SCHEMA_VERSION` went to `zarya.form.2` with that change. Every form issued under `.1` is uningestible. Affordable exactly once, because none were in circulation.
 - A receipt is a rendering of stored data and is regenerable without a chain write. The PDF is disposable output; the form bytes and transaction record are the state.
 - The Zarya logo is drawn onto templates and receipts from `src/assets/logo.png`. `favicon.ico` cannot be embedded in a PDF and is the window, HTML, and installer icon only.
 

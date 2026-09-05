@@ -20,7 +20,8 @@ import {
   NARROWEST_COLUMN,
   TYPE as REPORT_TYPE,
 } from './reportLayout';
-import { CONTENT_WIDTH, HALF_WIDTH, LOGO, ROW, TYPE } from './templateLayout';
+import { STAMP, STAMP_BAND_WIDTH, STAMP_HALF_BAND_WIDTH } from './receiptStampArt';
+import { CONTENT_WIDTH, CONTEXT_LABEL_WIDTH, LOGO, ROW, TYPE } from './templateLayout';
 
 /**
  * The wording table, and the two things that could silently go wrong with it.
@@ -42,8 +43,14 @@ const GEOMETRY: Readonly<Record<string, { face: 'regular' | 'bold'; size: number
     input: { face: 'bold', size: TYPE.label, width: CONTENT_WIDTH },
     hint: { face: 'regular', size: TYPE.hint, width: CONTENT_WIDTH },
     option: { face: 'regular', size: TYPE.label, width: CONTENT_WIDTH - ROW.optionSize - 7 },
-    context: { face: 'bold', size: TYPE.label, width: CONTENT_WIDTH },
-    receipt: { face: 'bold', size: TYPE.label, width: HALF_WIDTH },
+    // A label beside its printed value, so it gets the label column and not the
+    // page. Narrower than when these were full-width fields.
+    context: { face: 'bold', size: TYPE.label, width: CONTEXT_LABEL_WIDTH },
+    // The tightest strings in the application: drawn inside the stamp, at
+    // 6.5pt, in a half band.
+    receipt: { face: 'bold', size: STAMP.type.label, width: STAMP_HALF_BAND_WIDTH },
+    stampTitle: { face: 'regular', size: STAMP.type.subtitle, width: STAMP.width - 94 - 14 },
+    stampNotice: { face: 'regular', size: STAMP.type.notice, width: STAMP_BAND_WIDTH },
     meta: { face: 'regular', size: TYPE.meta, width: CONTENT_WIDTH / 3 - 60 },
     section: { face: 'bold', size: TYPE.sectionHeading, width: CONTENT_WIDTH },
     sentence: { face: 'regular', size: TYPE.sentence, width: CONTENT_WIDTH },
@@ -107,10 +114,15 @@ describe('the slot table', () => {
     // A tripwire on the count, split by document so that adding a slot to one
     // does not quietly look like wording arriving for the other.
     const slots = Object.keys(SLOT_ENGLISH);
-    expect(slots.filter((slot) => !isReportSlot(slot))).toHaveLength(62);
+    // 63 before 2026-09-06. Four withdrawn with the receipt fields and the
+    // read-only context boxes — `section.receipt`, `sentence.receiptNotice`,
+    // `sentence.tamperNotice` (nothing left to tamper with) and
+    // `receipt.watermark` (the stamp replaced it) — and two added for the
+    // stamp's own strings.
+    expect(slots.filter((slot) => !isReportSlot(slot))).toHaveLength(61);
     expect(slots.filter(isReportSlot)).toHaveLength(37);
-    expect(LABEL_SLOT_COUNT).toBe(99);
-    expect(pendingLabels().length).toBe(99 - Object.keys(appliedWording()).length);
+    expect(LABEL_SLOT_COUNT).toBe(98);
+    expect(pendingLabels().length).toBe(LABEL_SLOT_COUNT - Object.keys(appliedWording()).length);
   });
 });
 
@@ -147,13 +159,19 @@ describe('the applied wording', () => {
 
 describe('a pending slot', () => {
   it('is not something any slot currently is, in either document', () => {
-    // Both halves are worded now — the forms since 2026-09-02 and the report
-    // since 2026-09-03 — so a bracketed placeholder appearing on either is a
-    // regression rather than work in progress.
+    // Both halves were fully worded — the forms since 2026-09-02 and the report
+    // since 2026-09-03. The two outstanding are the stamp's own strings, added
+    // on 2026-09-06 and waiting on the party.
     //
-    // Asserted directly rather than by looping over `pendingLabels()`: an empty
-    // loop is a test that checks nothing, and this file has had one twice.
-    expect(pendingLabels()).toEqual([]);
+    // They are the two that most need the party's own words rather than a
+    // translation: one must not claim the proposal was accepted, and the other
+    // has to say that an official-looking mark proves nothing.
+    //
+    // The list is named rather than counted, so a *different* slot going
+    // unworded still fails here. Asserted directly rather than by looping over
+    // `pendingLabels()`: an empty loop is a test that checks nothing, and this
+    // file has had one twice.
+    expect(pendingLabels()).toEqual(['stampTitle.document', 'stampNotice.disclaimer']);
   });
 
   it('would render bracketed and never blank', () => {
@@ -181,9 +199,9 @@ describe('the build script and the layout agree', () => {
       const match = new RegExp(`${name}:\\s*\\{[^}]*width:\\s*([A-Za-z0-9_. /*+-]+)`).exec(script);
       expect(match, name).not.toBeNull();
       return Function(
-        `"use strict"; const CONTENT_WIDTH=${CONTENT_WIDTH}, HALF_WIDTH=${HALF_WIDTH}, OPTION_WIDTH=${
+        `"use strict"; const CONTENT_WIDTH=${CONTENT_WIDTH}, OPTION_WIDTH=${
           CONTENT_WIDTH - ROW.optionSize - 7
-        }, REPORT_CONTENT_WIDTH=${REPORT_CONTENT_WIDTH}, NARROWEST_COLUMN=${NARROWEST_COLUMN}; return (${match?.[1]});`,
+        }, CONTEXT_LABEL_WIDTH=${CONTEXT_LABEL_WIDTH}, STAMP_BAND_WIDTH=${STAMP_BAND_WIDTH}, STAMP_HALF_BAND_WIDTH=${STAMP_HALF_BAND_WIDTH}, REPORT_CONTENT_WIDTH=${REPORT_CONTENT_WIDTH}, NARROWEST_COLUMN=${NARROWEST_COLUMN}; return (${match?.[1]});`,
       )() as number;
     };
     for (const [prefix, geometry] of Object.entries(GEOMETRY)) {

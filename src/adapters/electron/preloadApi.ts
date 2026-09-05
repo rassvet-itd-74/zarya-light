@@ -1,8 +1,10 @@
 import {
   IPC_CHANNELS,
   type AppStatus,
+  type ImportFormResult,
   type IssueTemplateInput,
   type IssueTemplateResult,
+  type MatrixReportResult,
   type ZaryaDesktopApi,
 } from './ipcContract';
 import { type WorkerHealth, isWorkerHealth } from './workerProtocol';
@@ -32,6 +34,17 @@ export function createZaryaApi(ipc: RendererIpc): ZaryaDesktopApi {
 
     issueTemplate: async (input: IssueTemplateInput): Promise<IssueTemplateResult> =>
       (await ipc.invoke(IPC_CHANNELS.issueTemplate, input)) as IssueTemplateResult,
+
+    // No argument, because the report is not addressed. The handler asserts that
+    // on arrival too — an extra argument there means the caller is not this
+    // surface.
+    generateMatrixReport: async (): Promise<MatrixReportResult> =>
+      (await ipc.invoke(IPC_CHANNELS.generateMatrixReport)) as MatrixReportResult,
+
+    // Also no argument: the file is chosen by a dialog in main, and a renderer
+    // that could name a path could name any path — this one gets *read*.
+    importForm: async (): Promise<ImportFormResult> =>
+      (await ipc.invoke(IPC_CHANNELS.importForm)) as ImportFormResult,
 
     onWorkerHealth: (listener: (health: WorkerHealth) => void): (() => void) => {
       const subscription = (_event: unknown, ...args: unknown[]): void => {

@@ -90,3 +90,19 @@ export interface MatrixSnapshotReader {
 
   latestValue(kind: MatrixKind, at: MatrixCoordinate): Promise<CellValue | undefined>;
 }
+
+/**
+ * Chooses the block to pin to, and hands back a reader fixed at it.
+ *
+ * Separate from the reader because it is the one part of pinning that can fail
+ * for a reason a reader cannot express: a reader always has an `at`, so a
+ * provider that will not say what the head is has no reader to return.
+ *
+ * `undefined` rather than a throw, and never a fallback to the workstation
+ * clock. A report with no block stamp is not a stale report, it is no report —
+ * so the caller's only options are to refuse or to try again, and both are
+ * better than a page claiming a freshness the chain never asserted.
+ */
+export interface MatrixSnapshotSource {
+  pin(): Promise<MatrixSnapshotReader | undefined>;
+}

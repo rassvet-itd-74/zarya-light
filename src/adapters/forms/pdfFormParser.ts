@@ -1,5 +1,7 @@
-import { PDFDict, PDFDocument, PDFName, PDFRadioGroup, PDFTextField } from 'pdf-lib';
+import { PDFBool, PDFDict, PDFDocument, PDFName, PDFRadioGroup, PDFTextField } from 'pdf-lib';
 import type { ParsedFormFields } from './assembleFormInput';
+import { appearanceTextOf } from './fieldAppearance';
+import { type HazardCode, findCompressionBomb, findFileHazards } from './pdfHazards';
 
 /**
  * PDF bytes to field values, or a structural rejection.
@@ -88,7 +90,9 @@ export type FormRejectionCode =
   | 'DUPLICATE_FIELD_NAME'
   | 'TOO_MANY_FIELDS'
   | 'FIELD_VALUE_TOO_LONG'
-  | 'UNSUPPORTED_FIELD_TYPE';
+  | 'UNSUPPORTED_FIELD_TYPE'
+  /** Attachments, outward references, bombs, and nesting. See `pdfHazards.ts`. */
+  | HazardCode;
 
 export interface FormRejection {
   readonly code: FormRejectionCode;
@@ -97,8 +101,33 @@ export interface FormRejection {
   readonly message: string;
 }
 
+/**
+ * Something a person should be told about a form that was nonetheless read.
+ *
+ * Kept apart from a rejection because the two ask different things of a caller:
+ * a rejection means there is nothing to import, and a disclosure means here is
+ * what was imported **and** here is what looks wrong with it. Collapsing them
+ * would either block a member whose viewer merely failed to redraw a field, or
+ * silently submit a value they never saw.
+ */
+export type FormDisclosureCode = 'APPEARANCE_DISAGREES';
+
+export interface FormDisclosure {
+  readonly code: FormDisclosureCode;
+  readonly field: string;
+  readonly message: string;
+}
+
 export type FormParseResult =
-  | { readonly kind: 'FIELDS'; readonly fields: ParsedFormFields }
+  | {
+      readonly kind: 'FIELDS';
+      readonly fields: ParsedFormFields;
+      /**
+       * Empty on a form with nothing to remark on, which is the normal case.
+       * Never a reason to withhold `fields` — see {@link FormDisclosure}.
+       */
+      readonly disclosures: readonly FormDisclosure[];
+    }
   | { readonly kind: 'REJECTED'; readonly rejections: readonly FormRejection[] };
 
 const rejected = (code: FormRejectionCode, message: string, field?: string): FormParseResult => ({
@@ -124,6 +153,13 @@ export async function parseFormFields(bytes: Uint8Array): Promise<FormParseResul
       `This file is larger than the ${Math.floor(MAX_FILE_BYTES / (1024 * 1024))} MB a governance form can be.`,
     );
   }
+
+  // Also before the library, and for a sharper reason than the cap above:
+  // pdf-lib inflates object streams during `load`, so a bound checked afterwards
+  // would be checked after the allocation it exists to prevent. Measured, not
+  // assumed — see `pdfHazards.ts`.
+  const bomb = findCompressionBomb(bytes);
+  if (bomb !== undefined) return rejected(bomb.code, bomb.message);
 
   let document: PDFDocument;
   try {
@@ -163,6 +199,9 @@ export async function parseFormFields(bytes: Uint8Array): Promise<FormParseResul
   }
 }
 
+const isTrue = (value: unknown): boolean =>
+  value instanceof PDFBool ? value.asBoolean() : false;
+
 function readFields(document: PDFDocument): FormParseResult {
   // Checked on the catalog **before** `getForm()`, which creates an AcroForm
   // dictionary when none is present — asking it first would make every PDF look
@@ -185,6 +224,21 @@ function readFields(document: PDFDocument): FormParseResult {
     );
   }
 
+  // Before any field is read: an attachment or an outward-reaching action makes
+  // this a file we decline to open at all, whatever its fields say. A returned
+  // form is re-emitted as a receipt in Phase 6, so anything left in it would go
+  // back out over this application's name.
+  const fileHazard = findFileHazards(document);
+  if (fileHazard !== undefined) return rejected(fileHazard.code, fileHazard.message);
+
+  // `/NeedAppearances` is the document declaring its own appearances stale and
+  // asking the viewer to redraw them. When it is set, what a field currently
+  // draws says nothing about what anyone saw, so there is nothing to compare
+  // and the comparison is skipped rather than reported as a disagreement.
+  const comparableAppearances = !isTrue(
+    acroForm instanceof PDFDict ? acroForm.get(PDFName.of('NeedAppearances')) : undefined,
+  );
+
   const fields = document.getForm().getFields();
 
   if (fields.length === 0) {
@@ -203,6 +257,7 @@ function readFields(document: PDFDocument): FormParseResult {
   }
 
   const rejections: FormRejection[] = [];
+  const disclosures: FormDisclosure[] = [];
   const values: Record<string, string> = {};
   const seen = new Set<string>();
 
@@ -230,6 +285,32 @@ function readFields(document: PDFDocument): FormParseResult {
     let value: string;
     if (field instanceof PDFTextField) {
       value = field.getText() ?? '';
+
+      // `/V` stays authoritative — a transaction is built from data, not from a
+      // rendering. What changes here is that a divergence is no longer silent:
+      // it means the member saw one thing and another would be submitted.
+      // `undefined` is "could not be established", never "they agree".
+      //
+      // An **empty** appearance is in that same "not established" category, and
+      // saying so is what keeps this signal worth reading. A viewer that sets a
+      // value without redrawing leaves exactly that shape, and it is the common
+      // case rather than an exotic one: pdf-lib produces it, and it does not set
+      // `/NeedAppearances` when it does. Reporting it would put a tamper warning
+      // on every filled field of every legitimate import, which is how a warning
+      // stops being read at all.
+      //
+      // A substitution looks different. It shows one real value where another is
+      // stored, and both sides are non-empty — which is still caught.
+      const drawn = comparableAppearances ? appearanceTextOf(field) : undefined;
+      if (drawn !== undefined && drawn.trim().length > 0 && drawn !== value) {
+        disclosures.push({
+          code: 'APPEARANCE_DISAGREES',
+          field: name,
+          message:
+            'What this field displays does not match the value stored in it. The stored value ' +
+            'is the one this application reads, so check it before submitting.',
+        });
+      }
     } else if (field instanceof PDFRadioGroup) {
       // The export value, never a rendered label. Vote direction comes from
       // this and is never inferred from free text.
@@ -260,5 +341,7 @@ function readFields(document: PDFDocument): FormParseResult {
     values[name] = value;
   }
 
-  return rejections.length > 0 ? { kind: 'REJECTED', rejections } : { kind: 'FIELDS', fields: values };
+  return rejections.length > 0
+    ? { kind: 'REJECTED', rejections }
+    : { kind: 'FIELDS', fields: values, disclosures };
 }

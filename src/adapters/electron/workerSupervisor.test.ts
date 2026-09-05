@@ -284,6 +284,57 @@ describe('requests', () => {
     expect(supervisor.currentHealth()).toBe('DEGRADED');
   });
 
+  it('lets one request wait longer than the liveness default', async () => {
+    // The default is a liveness figure: `ping` is one call, and silence past it
+    // is evidence of a worker in trouble. A matrix report is not that kind of
+    // request — it projects the whole event history and reads every cell it
+    // finds, work that grows with the chain's height and with the matrix rather
+    // than being one call. Sharing one timeout would mean declaring a working
+    // worker degraded partway through a report.
+    const { supervisor, latest } = harness();
+    supervisor.start();
+    latest().spawned();
+
+    const pending = supervisor.request(
+      { kind: 'generateMatrixReport', payload: { targetPath: 'C:/report.pdf' } },
+      { timeoutMs: 300_000 },
+    );
+
+    // Well past the 5s harness default, and still waiting rather than rejected.
+    vi.advanceTimersByTime(60_000);
+    expect(supervisor.currentHealth()).toBe('HEALTHY');
+
+    latest().replied({
+      kind: 'reported',
+      requestId: latest().sent.at(-1)?.requestId,
+      path: 'C:/report.pdf',
+      pageCount: 2,
+      blockNumber: '11642262',
+      readAt: 1_756_000_000,
+      rows: 4,
+      degradedRows: 0,
+      empty: false,
+    });
+
+    await expect(pending).resolves.toMatchObject({ kind: 'reported' });
+    expect(supervisor.currentHealth()).toBe('HEALTHY');
+  });
+
+  it('still gives up on a long request eventually', async () => {
+    const { supervisor, latest } = harness();
+    supervisor.start();
+    latest().spawned();
+
+    const pending = supervisor.request(
+      { kind: 'generateMatrixReport', payload: { targetPath: 'C:/report.pdf' } },
+      { timeoutMs: 300_000 },
+    );
+    vi.advanceTimersByTime(300_000);
+
+    await expect(pending).rejects.toThrow('within 300000ms');
+    expect(supervisor.currentHealth()).toBe('DEGRADED');
+  });
+
   it('discards a reply that does not match the protocol', async () => {
     const { supervisor, errors, latest } = harness();
     supervisor.start();

@@ -29,9 +29,38 @@ export const TYPE = {
   /** Inside a field's own appearance. */
   fieldValue: 10,
   sentence: 8,
+  /** An application-authored value, drawn as text rather than held in a field. */
+  contextValue: 10,
   /** The metadata line, present to be read back rather than read. */
   meta: 7,
 } as const;
+
+/**
+ * The application block: `label   value` on one line, with a rule down the left.
+ *
+ * These values used to be shaded read-only text fields, which is the problem
+ * this replaced. A member looking at a page of boxes cannot tell which ones are
+ * theirs, and the ReadOnly flag is advisory — it stops a viewer, not a person
+ * with any other tool. Drawing them as text makes the distinction one a reader
+ * can name without being told: **a box means write here; a line of text does
+ * not.**
+ *
+ * The rule is what keeps the block reading as a block once the boxes are gone.
+ */
+export const CONTEXT = {
+  /** From the left margin to the label, leaving room for the rule. */
+  indent: 10,
+  /** The label column. The value starts after it, so values line up. */
+  labelWidth: 150,
+  /** Between the label's column and the label itself, so nothing touches. */
+  gap: 8,
+  /** One line, at the value's size with room above and below. */
+  lineHeight: 15,
+  ruleWidth: 2,
+} as const;
+
+/** How wide a context label may be drawn. Enforced by the wording checker. */
+export const CONTEXT_LABEL_WIDTH = CONTEXT.labelWidth - CONTEXT.gap;
 
 export const ROW = {
   /** A text field's box. 16pt fits a 10pt value with room above and below. */
@@ -40,7 +69,24 @@ export const ROW = {
   labelLead: 4,
   /** Between a label and its field. */
   labelGap: 2,
+  /** Above a hint, separating it from the label. */
   hintGap: 1.5,
+  /**
+   * Below a hint's **baseline**, clearing its descenders from the field box.
+   *
+   * Without this the box's top edge landed exactly on the hint baseline and
+   * painted over every descender — «значение оси X из отчёта…» rendered sliced
+   * through, on every hinted field of every form the app had issued. Found by
+   * rendering an issued document in a viewer, not by a test: the fields were
+   * inside the printable area and no two overlapped, so nothing asserted here
+   * was false.
+   *
+   * 2.5pt against a measured 2.07pt descender at 7.5pt PT Sans — the same order
+   * of clearance `labelGap` gives a 9pt label. The figure is measured from the
+   * embedded font in `issueTemplate.test.ts`, not chosen: a first estimate of
+   * ~1.6pt would have made the old 1.5pt gap look adequate when it is not.
+   */
+  hintDrop: 2.5,
   /** Between one field and the next label. */
   rowGap: 5,
   /** Before a section heading. */
@@ -49,16 +95,6 @@ export const ROW = {
   optionSize: 12,
   optionGap: 5,
 } as const;
-
-/**
- * Half the content width, for the receipt block.
- *
- * Six one-line values stacked full width push every form onto a second page.
- * They are read, never filled, so two columns costs nothing in legibility and
- * buys back three rows.
- */
-export const HALF_WIDTH = (CONTENT_WIDTH - 14) / 2;
-export const COLUMN_GAP = 14;
 
 /** Square, top-right, ~13 mm. The 120 px source lands near 240 DPI at this size. */
 export const LOGO = { size: 36 } as const;
@@ -117,7 +153,7 @@ export const rowHeight = (hasHint: boolean): number =>
   ROW.labelLead +
   TYPE.label +
   ROW.labelGap +
-  (hasHint ? TYPE.hint + ROW.hintGap : 0) +
+  (hasHint ? ROW.hintGap + TYPE.hint + ROW.hintDrop : 0) +
   ROW.fieldHeight +
   ROW.rowGap;
 

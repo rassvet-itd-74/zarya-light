@@ -100,7 +100,9 @@
       .field[hidden] {
         display: none;
       }
-      #issue-result {
+      /* Shared by both panels: an outcome reads the same whichever document
+         produced it, and a second copy of these rules would drift. */
+      .result {
         margin: 1rem 0 0;
         padding: 0.5rem 0.75rem;
         border-left: 3px solid;
@@ -108,20 +110,40 @@
         max-width: 46rem;
         word-break: break-all;
       }
-      #issue-result[hidden] {
+      .result[hidden] {
         display: none;
       }
-      #issue-result[data-outcome='ISSUED'] {
+      .result[data-outcome='ISSUED'],
+      .result[data-outcome='REPORTED'] {
         border-color: #1a7f37;
       }
-      #issue-result[data-outcome='CANCELLED'] {
+      .result[data-outcome='CANCELLED'],
+      .result[data-outcome='WORKING'] {
         border-color: #57606a;
       }
-      #issue-result[data-outcome='REFUSED'] {
+      .result[data-outcome='REFUSED'] {
         border-color: #9a6700;
       }
-      #issue-result[data-outcome='FAILED'] {
+      .result[data-outcome='FAILED'] {
         border-color: #cf222e;
+      }
+      /* Tamper evidence. Amber rather than red: the import succeeded, and the
+         member is being asked to look rather than told something broke. */
+      #import-warnings {
+        margin: 0.5rem 0 0;
+        padding: 0 0 0 1.1rem;
+        max-width: 46rem;
+        font-size: 0.875rem;
+        color: #9a6700;
+      }
+      #import-warnings[hidden],
+      #import-fields[hidden] {
+        display: none;
+      }
+      #import-fields {
+        margin: 0.75rem 0 0;
+        max-width: 46rem;
+        font-size: 0.875rem;
       }
     </style>
   </head>
@@ -157,7 +179,33 @@
         <input id="voting-id" type="number" min="1" step="1" />
       </div>
       <button id="issue" type="button">Choose a location and issue…</button>
-      <p id="issue-result" hidden></p>
+      <p id="issue-result" class="result" hidden></p>
+    </section>
+
+    <section>
+      <h2>Matrix reference report</h2>
+      <p class="lede">
+        The coordinate index a voter consults before filling in a form: which
+        <code>(x, y)</code> exist, what each holds, and — for a numerical cell —
+        the precision a value must be written at. Read at one block and stamped
+        with it; the matrix can change after it is printed.
+      </p>
+      <button id="generate-report" type="button">Choose a location and read…</button>
+      <p id="report-result" class="result" hidden></p>
+    </section>
+
+    <section>
+      <h2>Import a filled form</h2>
+      <p class="lede">
+        Reads a form back and shows what this application understood from it. The
+        values it authored are recovered from its own record, never from the
+        file — so what you see below is what a transaction would carry.
+        Nothing is sent: there is no submission path yet.
+      </p>
+      <button id="import-form" type="button">Choose a form and import…</button>
+      <p id="import-result" class="result" hidden></p>
+      <dl id="import-fields" hidden></dl>
+      <ul id="import-warnings" hidden></ul>
     </section>
 
     <script type="module" src="/src/renderer.ts"></script>

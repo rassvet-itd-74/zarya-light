@@ -25,14 +25,16 @@ export interface NetworkStatusView {
   readonly usable: boolean;
 }
 
-export const NOT_CHECKED: NetworkStatusView = {
-  status: 'NOT_CHECKED',
-  detail: 'The network has not been checked yet.',
-  chainId: null,
-  blockNumber: null,
-  transient: true,
-  usable: false,
-};
+/**
+ * `NOT_CHECKED` is **not** here, deliberately.
+ *
+ * This module converts a verdict the chain produced, and the chain never
+ * produces "nobody asked" — `toNetworkStatusView` maps real verdicts only. The
+ * sentinel is the application's answer for a worker it could not reach, so it
+ * lives with the use case that returns it (`getAppStatus`). Keeping it here
+ * would also mean an application service importing a chain adapter for a value,
+ * which is the layering ESLint now forbids.
+ */
 
 const detailFor = (verdict: NetworkVerdict): string => {
   switch (verdict.status) {

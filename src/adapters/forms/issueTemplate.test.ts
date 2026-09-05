@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, PDFName } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import { buildIntent } from '../../domain/intents/buildIntent';
@@ -6,11 +7,18 @@ import { OPERATION_TYPES, type OperationType } from '../../domain/intents/intent
 import { INTENT_SAMPLES } from '../../domain/intents/testing/intentSamples';
 import { assembleFormInput } from './assembleFormInput';
 import { pendingLabels } from './formLabels';
-import { META_FIELDS, RECEIPT_FIELDS, inputFieldName, templateFieldNames } from './formSchema';
+import {
+  CONTEXT_FIELDS,
+  META_FIELDS,
+  RECEIPT_FIELDS,
+  inputFieldName,
+  templateFieldNames,
+} from './formSchema';
 import { parseFormFields } from './pdfFormParser';
 import { type TemplateAssets, contextValuesFor, issueTemplate } from './issueTemplate';
-import { filledForm, issuedOperation } from './testing/formSamples';
-import { MARGIN, PAGE } from './templateLayout';
+import { asGlyphs, drawnContent } from './testing/drawnText';
+import { filledForm, issuedOperation, resolvedValues } from './testing/formSamples';
+import { MARGIN, PAGE, ROW, TYPE } from './templateLayout';
 
 /**
  * Issuance, and the round trip the whole phase was aimed at.
@@ -28,6 +36,7 @@ const ASSETS: TemplateAssets = {
 };
 
 const REF = 'op_01HQ3ZS8Q0000000000000000';
+
 
 const context = (type: OperationType) =>
   contextValuesFor(type, {
@@ -61,22 +70,40 @@ describe('an issued template', () => {
     }
   });
 
-  it('pre-fills the context block and leaves every input empty', async () => {
+  it('leaves every input empty, and carries the reference the parser needs', async () => {
     const parsed = await parseFormFields((await issue('CREATE_MEMBERSHIP_VOTING')).bytes);
     const fields = parsed.kind === 'FIELDS' ? parsed.fields : {};
-    expect(fields['zarya.context.organ']).toBe('95.СОВ');
     expect(fields[META_FIELDS.operationRef]).toBe(REF);
     // Nothing a member is meant to write is written for them.
     expect(fields[inputFieldName('member')]).toBe('');
     expect(fields[inputFieldName('duration')]).toBe('');
   });
 
-  it('leaves the receipt fields present and empty', async () => {
-    const parsed = await parseFormFields((await issue('CAST_VOTE')).bytes);
+  it('carries no receipt or context widget, only meta and inputs', async () => {
+    // The rule made visible: every box on the page is a box for the member. The
+    // organ, the network and the contract are still on the form — as printed
+    // text, checked below — and the receipt arrives later as a stamp.
+    const parsed = await parseFormFields((await issue('CREATE_MEMBERSHIP_VOTING')).bytes);
     const fields = parsed.kind === 'FIELDS' ? parsed.fields : {};
-    for (const fieldName of Object.values(RECEIPT_FIELDS)) {
-      expect(fields, fieldName).toHaveProperty(fieldName, '');
+    for (const fieldName of [...Object.values(RECEIPT_FIELDS), ...Object.values(CONTEXT_FIELDS)]) {
+      expect(fields, fieldName).not.toHaveProperty(fieldName);
     }
+    expect(Object.keys(fields).sort()).toEqual(
+      [...templateFieldNames('CREATE_MEMBERSHIP_VOTING')].sort(),
+    );
+  });
+
+  it('prints the context values on the page, where nobody can type over them', async () => {
+    // Drawn text, so it is read out of the page's content stream rather than out
+    // of a field. That it can be found there at all is the check: a value that
+    // stopped being a field and was never drawn would vanish silently, and the
+    // member would lose the organ label they are supposed to verify.
+    const { bytes } = await issue('CREATE_MEMBERSHIP_VOTING');
+    const drawn = await drawnContent(bytes);
+    expect(drawn).toContain(asGlyphs('95.СОВ', ASSETS.fontRegular));
+    expect(drawn).toContain(
+      asGlyphs('0x6b31cC58a7DC5919f460068cF68D16281F360d25', ASSETS.fontRegular),
+    );
   });
 
   it('leaves the vote unselected, because a pre-selected vote is an opinion', async () => {
@@ -204,6 +231,27 @@ describe('the generated file is clean', () => {
     }
   });
 
+  it('clears a hint’s descenders from the field box under it', () => {
+    // The bug this exists for was invisible to every other test here: the boxes
+    // were inside the printable area, none overlapped each other, and the page
+    // count was right. What was wrong was a box overlapping *drawn text* — the
+    // field's top edge sat exactly on the hint's baseline, so «значение оси X
+    // из отчёта…» printed with its descenders painted over. Only rendering an
+    // issued document in a viewer showed it.
+    //
+    // Asserted against the font's own metrics rather than a chosen number, so
+    // shrinking the clearance or enlarging the hint type fails here.
+    // The same file the issuer embeds, read through fontkit's own API rather
+    // than pdf-lib's private embedder.
+    const font = fontkit.create(ASSETS.fontRegular);
+    const descender = (Math.abs(font.descent) / font.unitsPerEm) * TYPE.hint;
+
+    // ~2.07pt for PT Sans at 7.5pt. The first guess at this was 1.6pt, which
+    // would have made the old 1.5pt gap look adequate — hence measuring.
+    expect(descender).toBeGreaterThan(1.5);
+    expect(ROW.hintDrop).toBeGreaterThan(descender);
+  });
+
   it('never overlaps two fields', async () => {
     // Two boxes on the same spot means one is unreachable, which a page-count
     // check cannot see. The receipt block puts two fields on one row, so this
@@ -275,8 +323,16 @@ describe('the full round trip: issue, fill, ingest', () => {
       expect(assembled.kind, `${type} assemble: ${JSON.stringify(assembled)}`).toBe('INPUT');
       if (assembled.kind !== 'INPUT') continue;
 
-      const built = buildIntent(assembled.operationType, assembled.input);
-      expect(built.kind, `${type} build`).toBe('INTENT');
+      // The chain read ingestion performs, stood in for by the fixture: the
+      // scale of the cell the form addressed. Empty for ten of the eleven.
+      const built = buildIntent(assembled.operationType, {
+        ...assembled.input,
+        ...resolvedValues(type),
+      });
+      // The problems, never the intent: an intent holds bigints and
+      // JSON.stringify refuses them.
+      const why = built.kind === 'PROBLEMS' ? JSON.stringify(built.problems) : '';
+      expect(built.kind, `${type} build ${why}`).toBe('INTENT');
       if (built.kind !== 'INTENT') continue;
 
       expect(built.intent, type).toEqual(INTENT_SAMPLES[type]);
@@ -317,7 +373,13 @@ describe('the wording', () => {
     // slot going pending must not fail the template tests, and
     // `formLabels.test.ts` owns the stronger claim that nothing at all is
     // pending.
-    expect(pendingLabels().filter((slot) => !slot.startsWith('report'))).toEqual([]);
+    // The stamp's two slots are outstanding since 2026-09-06 and are excluded
+    // here for the same reason report slots are: they are drawn by the stamper,
+    // not by issuance, so a template test must not fail on them.
+    // `formLabels.test.ts` owns the stronger claim about what is pending.
+    expect(
+      pendingLabels().filter((slot) => !slot.startsWith('report') && !slot.startsWith('stamp')),
+    ).toEqual([]);
   });
 
   it('titles a form in Russian, in the document metadata as well as on the page', async () => {

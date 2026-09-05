@@ -25,7 +25,7 @@ import {
 /**
  * What the document says and where, which is the half worth testing.
  *
- * Composition is separated from rendering because a subset embedded font turns
+ * Composition is separated from rendering because an embedded custom font turns
  * every drawn string into glyph identifiers, so once this is a PDF there is no
  * way to assert that the coordinate on the page is the coordinate that was
  * meant. Everything that matters about a reference sheet — that the stamp is on

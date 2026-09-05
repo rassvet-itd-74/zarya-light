@@ -3,9 +3,17 @@ import { type AppStatus, type GetAppStatusDeps, getAppStatus } from '../../app/g
 import {
   IPC_CHANNELS,
   type IssueTemplateInput,
+  type ImportFormResult,
   type IssueTemplateResult,
+  type MatrixReportResult,
 } from './ipcContract';
-import type { IssueTemplatePayload, WorkerHealth, WorkerReply } from './workerProtocol';
+import type {
+  ImportFormPayload,
+  IssueTemplatePayload,
+  MatrixReportPayload,
+  WorkerHealth,
+  WorkerReply,
+} from './workerProtocol';
 
 /**
  * The receiving side of the IPC boundary.
@@ -157,6 +165,105 @@ export async function handleIssueTemplate(
 }
 
 /**
+ * The report's side of the same split: main owns the dialog, the worker owns
+ * everything after it.
+ *
+ * Separate from `IssueTemplateGateway` rather than widened, because the two
+ * share only the dialog. An issuance is addressed — an operation type, an organ,
+ * a voting — and a report is not, so a combined gateway would have one method
+ * taking a payload and one taking nothing, with a comment explaining why.
+ */
+export interface MatrixReportGateway {
+  /** `null` when the user cancelled. */
+  chooseDestination(suggestedName: string): Promise<string | null>;
+  generate(payload: MatrixReportPayload): Promise<WorkerReply>;
+}
+
+/** The report is not addressed, so this channel takes no arguments at all. */
+export async function handleGenerateMatrixReport(
+  gateway: MatrixReportGateway,
+  args: readonly unknown[] = [],
+): Promise<MatrixReportResult> {
+  assertNoPayload(IPC_CHANNELS.generateMatrixReport, args);
+
+  const target = await gateway.chooseDestination(MATRIX_REPORT_FILE_NAME);
+  if (target === null) return { kind: 'CANCELLED' };
+
+  const reply = await gateway.generate({ targetPath: target });
+
+  switch (reply.kind) {
+    case 'reported':
+      return {
+        kind: 'REPORTED',
+        path: reply.path,
+        pageCount: reply.pageCount,
+        blockNumber: reply.blockNumber,
+        readAt: reply.readAt,
+        rows: reply.rows,
+        degradedRows: reply.degradedRows,
+        empty: reply.empty,
+      };
+    case 'refused':
+      return { kind: 'REFUSED', code: reply.code, message: reply.message };
+    case 'failure':
+      return { kind: 'FAILED', message: reply.message };
+    default:
+      return { kind: 'FAILED', message: `the worker answered with ${reply.kind}` };
+  }
+}
+
+/**
+ * Latin, like the form filenames and for the same reason — it crosses
+ * filesystems and email. No operation type to derive it from: there is one
+ * matrix and one report of it.
+ */
+export const MATRIX_REPORT_FILE_NAME = 'zarya-matrix-report.pdf';
+
+/**
+ * Import's side of the split, and the only one that opens a file rather than
+ * creating one.
+ *
+ * The dialog is `chooseSource` rather than `chooseDestination` because the
+ * difference matters at this boundary: this path hands a worker a path it will
+ * **read**, and the renderer must not be able to name it.
+ */
+export interface ImportFormGateway {
+  /** `null` when the user cancelled. */
+  chooseSource(): Promise<string | null>;
+  importForm(payload: ImportFormPayload): Promise<WorkerReply>;
+}
+
+/** No arguments: which file is the dialog's answer, and which operation is the file's. */
+export async function handleImportForm(
+  gateway: ImportFormGateway,
+  args: readonly unknown[] = [],
+): Promise<ImportFormResult> {
+  assertNoPayload(IPC_CHANNELS.importForm, args);
+
+  const source = await gateway.chooseSource();
+  if (source === null) return { kind: 'CANCELLED' };
+
+  const reply = await gateway.importForm({ sourcePath: source });
+
+  switch (reply.kind) {
+    case 'imported':
+      return {
+        kind: 'IMPORTED',
+        operationRef: reply.operationRef,
+        operationType: reply.operationType,
+        fields: reply.fields,
+        warnings: reply.warnings,
+      };
+    case 'refused':
+      return { kind: 'REFUSED', code: reply.code, message: reply.message };
+    case 'failure':
+      return { kind: 'FAILED', message: reply.message };
+    default:
+      return { kind: 'FAILED', message: `the worker answered with ${reply.kind}` };
+  }
+}
+
+/**
  * A filename a member can recognise in a downloads folder.
  *
  * Lower-cased and hyphenated from the operation type rather than from a Russian
@@ -170,6 +277,8 @@ export interface RegisterIpcHandlersOptions {
   ipcMain: Pick<IpcMain, 'handle'>;
   deps: GetAppStatusDeps;
   issuance: IssueTemplateGateway;
+  matrixReport: MatrixReportGateway;
+  importForm: ImportFormGateway;
   /** Receives the unsanitized error. Never the renderer. */
   onError?: (channel: string, error: unknown) => void;
 }
@@ -197,6 +306,8 @@ export function registerIpcHandlers({
   ipcMain,
   deps,
   issuance,
+  matrixReport,
+  importForm,
   onError = () => undefined,
 }: RegisterIpcHandlersOptions): void {
   ipcMain.handle(IPC_CHANNELS.getAppStatus, async (_event, ...args: unknown[]) =>
@@ -207,6 +318,16 @@ export function registerIpcHandlers({
     await guarded(IPC_CHANNELS.issueTemplate, onError, () =>
       handleIssueTemplate(issuance, args),
     ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS.generateMatrixReport, async (_event, ...args: unknown[]) =>
+    await guarded(IPC_CHANNELS.generateMatrixReport, onError, () =>
+      handleGenerateMatrixReport(matrixReport, args),
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS.importForm, async (_event, ...args: unknown[]) =>
+    await guarded(IPC_CHANNELS.importForm, onError, () => handleImportForm(importForm, args)),
   );
 }
 

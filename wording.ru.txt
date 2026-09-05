@@ -21,9 +21,13 @@
 #
 # EVERY FORM IS ONE A4 PAGE, top to bottom:
 #   header    application name, form title, one grey line of service data
-#   context   shaded read-only fields the application filled in
-#   member    empty fields to fill in - the ONLY ones read back from the file
-#   receipt   shaded read-only fields, empty until the transaction confirms
+#   context   PRINTED TEXT the application filled in - not fields, cannot be typed in
+#   member    empty fields to fill in - the ONLY boxes on the page, and the only
+#             values read back from the file
+#
+# There is no receipt block on the form any more. Once the transaction confirms,
+# the application prints a STAMP over the bottom right of the page, and the
+# transaction details are inside the stamp.
 
 
 # ##########################################################################
@@ -393,15 +397,15 @@ option.NUMERICAL = ЧИСЛОВАЯ
 # ##########################################################################
 # 5. CONTEXT LABELS
 #
-# Read-only, application-filled. Compared against the file to detect edits, never used from it.
-# Element: Bold label above a SHADED, read-only field the application already filled in.
-# Style  : 9pt bold, full width
-# Limit  : 118 characters
+# Application-filled, and PRINTED TEXT rather than a field - a member cannot type into these.
+# Element: Bold label to the LEFT of its printed value, on one line, with a rule down the left margin.
+# Style  : 9pt bold, label column only
+# Limit  : 33 characters
 # ##########################################################################
 
 # --------------------------------------------------------------------------
 # context.chainId
-#   Field   : zarya.context.chainId
+#   Printed : as text on the form, not a field
 #   Appears : all 11 forms
 #   Means   : The network the form was issued against. Display only - never read back from the file.
 #   English : network
@@ -409,7 +413,7 @@ context.chainId = Номер сети
 
 # --------------------------------------------------------------------------
 # context.contract
-#   Field   : zarya.context.contract
+#   Printed : as text on the form, not a field
 #   Appears : all 11 forms
 #   Means   : The contract address the form was issued against. Display only.
 #   English : contract address
@@ -417,7 +421,7 @@ context.contract = Адрес контракта
 
 # --------------------------------------------------------------------------
 # context.organ
-#   Field   : zarya.context.organ
+#   Printed : as text on the form, not a field
 #   Appears : 7 of 11 - CREATE_MEMBERSHIP_VOTING, CREATE_MEMBERSHIP_REVOCATION_VOTING, CREATE_CATEGORY_VOTING, CREATE_DECIMALS_VOTING, CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING, CONFIGURE_ORGAN_THRESHOLDS
 #   Means   : The proposing organ as the contract renders it, e.g. 95.SOV. A member checks this is the right organ.
 #   English : party organ
@@ -425,24 +429,26 @@ context.organ = Партийный орган
 
 # --------------------------------------------------------------------------
 # context.votingId
-#   Field   : zarya.context.votingId
+#   Printed : as text on the form, not a field
 #   Appears : 1 of 11 - CAST_VOTE
 #   Means   : Which voting the vote is about. Display only; the real number comes from the application record.
 #   English : voting number
 context.votingId = Номер голосования
 
 # ##########################################################################
-# 6. RECEIPT LABELS
+# 6. RECEIPT LABELS - INSIDE THE STAMP
 #
-# TIGHTEST LIMIT: two per row, so each gets half the page width.
-# Element: Bold label above a shaded read-only field that stays EMPTY until the transaction confirms.
-# Style  : 9pt bold, HALF width - two per row
-# Limit  : 57 characters
+# TIGHTEST LIMIT IN THE APPLICATION. These are printed inside the stamp the
+# application puts over the page once the transaction confirms. Each sits above
+# its value in a ruled band. There is no field behind any of them.
+# Element: Small bold label inside the stamp, above the value it names.
+# Style  : 6.5pt bold, half the stamp's width
+# Limit  : 40 characters
 # ##########################################################################
 
 # --------------------------------------------------------------------------
 # receipt.txHash
-#   Field   : zarya.receipt.txHash
+#   Printed : inside the stamp, not a field
 #   Appears : all 11 forms
 #   Means   : The transaction hash, written after confirmation.
 #   English : transaction hash
@@ -450,7 +456,7 @@ receipt.txHash = Хеш транзакции
 
 # --------------------------------------------------------------------------
 # receipt.status
-#   Field   : zarya.receipt.status
+#   Printed : inside the stamp, not a field
 #   Appears : all 11 forms
 #   Means   : Whether the transaction succeeded or reverted. NOTE: the transaction outcome, not whether the proposal passed.
 #   English : status
@@ -458,7 +464,7 @@ receipt.status = Статус
 
 # --------------------------------------------------------------------------
 # receipt.blockNumber
-#   Field   : zarya.receipt.blockNumber
+#   Printed : inside the stamp, not a field
 #   Appears : all 11 forms
 #   Means   : The block the transaction was mined in.
 #   English : block
@@ -466,7 +472,7 @@ receipt.blockNumber = Номер блока
 
 # --------------------------------------------------------------------------
 # receipt.chainId
-#   Field   : zarya.receipt.chainId
+#   Printed : inside the stamp, not a field
 #   Appears : all 11 forms
 #   Means   : The network the transaction was sent to.
 #   English : network
@@ -474,7 +480,7 @@ receipt.chainId = Номер сети
 
 # --------------------------------------------------------------------------
 # receipt.confirmedAt
-#   Field   : zarya.receipt.confirmedAt
+#   Printed : inside the stamp, not a field
 #   Appears : all 11 forms
 #   Means   : The block timestamp of confirmation. Chain time, not the workstation clock.
 #   English : confirmed at
@@ -482,7 +488,7 @@ receipt.confirmedAt = Время подтверждения
 
 # --------------------------------------------------------------------------
 # receipt.signer
-#   Field   : zarya.receipt.signer
+#   Printed : inside the stamp, not a field
 #   Appears : all 11 forms
 #   Means   : The address that signed. No key material ever appears on the form.
 #   English : signed by
@@ -524,7 +530,7 @@ meta.schemaVersion = Версия формы
 # ##########################################################################
 # 8. SECTION HEADINGS
 #
-# Three blocks: what the app filled, what the member fills, what the receipt will say.
+# Two blocks now: what the application filled in, and what the member fills in.
 # Element: Bold heading introducing one of the three blocks of the form.
 # Style  : 10.5pt bold, full width
 # Limit  : 101 characters
@@ -534,7 +540,7 @@ meta.schemaVersion = Версия формы
 # section.context
 #   Field   : (drawn text, not a field)
 #   Appears : all 11 forms
-#   Means   : Heading over the shaded fields the application filled in.
+#   Means   : Heading over the printed values the application filled in.
 #   English : completed by the application
 section.context = Блок контекстуальных полей
 
@@ -542,17 +548,9 @@ section.context = Блок контекстуальных полей
 # section.input
 #   Field   : (drawn text, not a field)
 #   Appears : all 11 forms
-#   Means   : Heading over the empty fields the member fills in. The most important heading on the page.
+#   Means   : Heading over the empty boxes the member fills in. The most important heading on the page, and now the only block with boxes under it.
 #   English : to be completed by the member
 section.input = Блок полей к заполнению
-
-# --------------------------------------------------------------------------
-# section.receipt
-#   Field   : (drawn text, not a field)
-#   Appears : all 11 forms
-#   Means   : Heading over the block that stays empty until the transaction confirms.
-#   English : transaction receipt
-section.receipt = Блок полей проверки
 
 # ##########################################################################
 # 9. SENTENCES
@@ -572,14 +570,6 @@ section.receipt = Блок полей проверки
 sentence.instruction = Заполнив все доступные к заполнению поля, пожалуйста, загрузите файл обратно в приложение.
 
 # --------------------------------------------------------------------------
-# sentence.tamperNotice
-#   Field   : (drawn text, not a field)
-#   Appears : all 11 forms
-#   Means   : Under the application-block heading. States that editing those values changes nothing, because they are not read from the file.
-#   English : Values in the application block are not read from this file. Editing them changes nothing.
-sentence.tamperNotice = Значения контекстуальных полей не считываются из файла. Их редактирование ни на что не влияет.
-
-# --------------------------------------------------------------------------
 # sentence.coordinateDisclosure
 #   Field   : (drawn text, not a field)
 #   Appears : 6 of 11 - CREATE_CATEGORY_VOTING, CREATE_DECIMALS_VOTING, CREATE_THEME_VOTING, CREATE_STATEMENT_VOTING, CREATE_CATEGORICAL_VALUE_VOTING, CREATE_NUMERICAL_VALUE_VOTING
@@ -587,13 +577,36 @@ sentence.tamperNotice = Значения контекстуальных поле
 #   English : Coordinates come from the matrix reference report and are checked again when the form is submitted.
 sentence.coordinateDisclosure = Координаты должны соответствовать тем, которые были указаны в отчёте Зари, и сверяются с ним при загрузке файла формы обратно.
 
+# ##########################################################################
+# 11. THE STAMP
+#
+# Printed OVER the bottom right of the form once the transaction confirms.
+# Hard blue lines, on top of whatever is already on the page.
+#
+# IMPORTANT: the stamp must NOT say the proposal was accepted. A confirmed
+# transaction only means the instruction reached the contract. Whether a voting
+# passed is a different question with a different answer.
+# ##########################################################################
+
 # --------------------------------------------------------------------------
-# sentence.receiptNotice
-#   Field   : (drawn text, not a field)
-#   Appears : all 11 forms
-#   Means   : Under the receipt heading. Explains why the block is empty.
-#   English : The receipt block is filled in by the application after the transaction confirms.
-sentence.receiptNotice = Блок полей проверки заполняется приложением автоматически после того, как файл успешно был обработан Зарёй.
+# stampTitle.document
+#   Printed : inside the stamp, at the top, beside the application name
+#   Appears : on every stamped receipt
+#   Means   : Names what the stamp is. Must NOT claim the proposal was accepted or approved.
+#   English : transaction record
+#   Style   : 8.5pt regular
+#   Limit   : 55 characters
+stampTitle.document =
+
+# --------------------------------------------------------------------------
+# stampNotice.disclaimer
+#   Printed : inside the stamp, along the bottom
+#   Appears : on every stamped receipt
+#   Means   : Says the stamp itself proves nothing, and that the transaction hash above it is what can be checked against the network. Anyone can draw a stamp on a PDF.
+#   English : This mark is not proof. Check the transaction hash above against the network.
+#   Style   : 6.5pt regular, the stamp's full width
+#   Limit   : 93 characters
+stampNotice.disclaimer =
 
 # ##########################################################################
 # 10. APPLICATION NAME
@@ -995,3 +1008,11 @@ reportSentence.indexBehind = События прочитаны не до ука�
 #             contract's records says which one a value was written to.
 #   English : A coordinate bound in both matrices is listed under each, because nothing distinguishes which one a value was written to.
 reportSentence.ambiguous = Координаты в категориальной и числовой матрицах могут совпадать, поэтому такая координата показана в каждой из них.
+
+# receipt.watermark
+#   Appears : diagonally across every page of a stamped receipt
+#   Means   : Marks the document as a receipt this application produced. It must
+#             NOT say the proposal was accepted — a confirmed transaction says
+#             nothing about whether the voting passed. Short: it is set large,
+#             rotated, across the page.
+#   English : RECEIPT

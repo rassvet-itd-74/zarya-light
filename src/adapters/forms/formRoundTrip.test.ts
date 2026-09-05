@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { buildIntent } from '../../domain/intents/buildIntent';
+import type { IntentInput } from '../../domain/intents/fields';
 import { callsForIntent } from '../../domain/intents/intentCalls';
 import { OPERATION_TYPES, type GovernanceIntent } from '../../domain/intents/intent';
 import { INTENT_SAMPLES } from '../../domain/intents/testing/intentSamples';
 import { assembleFormInput } from './assembleFormInput';
 import { inputFieldName } from './formSchema';
 import { parseFormFields } from './pdfFormParser';
-import { filledForm, issuedOperation } from './testing/formSamples';
+import { filledForm, issuedOperation, resolvedValues } from './testing/formSamples';
 import { formPdf } from './testing/pdfFixtures';
 
 /**
@@ -26,7 +27,27 @@ import { formPdf } from './testing/pdfFixtures';
  * What is still missing is the **issuer**: these bytes come from a test fixture
  * that writes field names and nothing else. Slice 3 replaces it, and these
  * assertions should not change when it does.
+ *
+ * ## The `resolvedValues` merge is the pipeline, not test scaffolding
+ *
+ * Both helpers below merge `resolvedValues(type)` into the assembled map before
+ * validating. That stands in for the one chain read ingestion performs: the
+ * scale of the cell the form addressed, which is neither typed by the member nor
+ * held in the record. Ten of the eleven merge an empty object. The eleventh,
+ * `CREATE_NUMERICAL_VALUE_VOTING`, is why the step exists — and the test below
+ * that removes it proves the step is load-bearing rather than decorative.
  */
+
+const resolveAndBuild = (
+  type: (typeof OPERATION_TYPES)[number],
+  input: IntentInput,
+): GovernanceIntent => {
+  const built = buildIntent(type, { ...input, ...resolvedValues(type) });
+  if (built.kind !== 'INTENT') {
+    throw new Error(`${type} failed validation: ${JSON.stringify(built.problems)}`);
+  }
+  return built.intent;
+};
 
 const intentFromPdf = async (
   type: (typeof OPERATION_TYPES)[number],
@@ -39,11 +60,7 @@ const intentFromPdf = async (
   if (assembled.kind !== 'INPUT') {
     throw new Error(`${type} was refused: ${JSON.stringify(assembled.refusals)}`);
   }
-  const built = buildIntent(assembled.operationType, assembled.input);
-  if (built.kind !== 'INTENT') {
-    throw new Error(`${type} failed validation: ${JSON.stringify(built.problems)}`);
-  }
-  return built.intent;
+  return resolveAndBuild(assembled.operationType, assembled.input);
 };
 
 const intentFrom = (type: (typeof OPERATION_TYPES)[number]): GovernanceIntent => {
@@ -51,11 +68,7 @@ const intentFrom = (type: (typeof OPERATION_TYPES)[number]): GovernanceIntent =>
   if (assembled.kind !== 'INPUT') {
     throw new Error(`${type} was refused: ${JSON.stringify(assembled.refusals)}`);
   }
-  const built = buildIntent(assembled.operationType, assembled.input);
-  if (built.kind !== 'INTENT') {
-    throw new Error(`${type} failed validation: ${JSON.stringify(built.problems)}`);
-  }
-  return built.intent;
+  return resolveAndBuild(assembled.operationType, assembled.input);
 };
 
 describe('a filled PDF becomes the intent it was issued for', () => {
@@ -94,16 +107,46 @@ describe('a filled form becomes the intent it was issued for', () => {
     expect(intent.type === 'CREATE_MEMBERSHIP_VOTING' && intent.organ.region).toBe(20);
   });
 
-  it('scales a written decimal by the cell’s recorded precision', () => {
-    // `12.34` on the form, two decimals in the record, `1234n` in the intent.
-    // The scale never appears on the form and never reaches the call.
+  it('scales a written decimal by the precision read from the cell', () => {
+    // `12.34` on the form, two decimals read from the cell at import, `1234n` in
+    // the intent. The scale never appears on the form and never reaches the call.
     const intent = intentFrom('CREATE_NUMERICAL_VALUE_VOTING');
     expect(intent.type === 'CREATE_NUMERICAL_VALUE_VOTING' && intent.value).toBe(1234n);
     expect(intent.type === 'CREATE_NUMERICAL_VALUE_VOTING' && intent.decimals).toBe(2);
   });
 
+  it('takes the scale from neither the form nor the record', () => {
+    // The provenance rule, asserted from both sides rather than trusted. Nothing
+    // a member could edit and nothing issuance stored carries the scale, so the
+    // only place `2` can have come from is the chain read.
+    const form = filledForm('CREATE_NUMERICAL_VALUE_VOTING');
+    expect(Object.keys(form)).not.toContain(inputFieldName('decimals'));
+    expect(issuedOperation('CREATE_NUMERICAL_VALUE_VOTING').values).not.toHaveProperty('decimals');
+    expect(resolvedValues('CREATE_NUMERICAL_VALUE_VOTING')).toEqual({ decimals: '2' });
+  });
+
+  it('cannot build a numerical value intent without resolving the scale first', () => {
+    // The resolution step is load-bearing: skip it and validation fails against
+    // `decimals`, a field no member ever saw. Asserted so that a caller which
+    // forgets the merge fails here rather than in front of a member — and so the
+    // note on `FormIntakeResult.input` is backed by a test.
+    const assembled = assembleFormInput(
+      filledForm('CREATE_NUMERICAL_VALUE_VOTING'),
+      issuedOperation('CREATE_NUMERICAL_VALUE_VOTING'),
+    );
+    expect(assembled.kind).toBe('INPUT');
+    const built = buildIntent(
+      'CREATE_NUMERICAL_VALUE_VOTING',
+      assembled.kind === 'INPUT' ? assembled.input : {},
+    );
+    expect(built.kind).toBe('PROBLEMS');
+    expect(built.kind === 'PROBLEMS' && built.problems.map((problem) => problem.field)).toContain(
+      'decimals',
+    );
+  });
+
   it('refuses the same value against a scale the cell does not hold', () => {
-    // The template said two decimals; a member wrote three. Refused rather than
+    // The cell holds two decimals; a member wrote three. Refused rather than
     // rounded, because a rounded governance value is one nobody chose.
     const form = filledForm('CREATE_NUMERICAL_VALUE_VOTING', {
       [inputFieldName('value')]: '12.345',
@@ -112,6 +155,7 @@ describe('a filled form becomes the intent it was issued for', () => {
     expect(assembled.kind).toBe('INPUT');
     const built = buildIntent('CREATE_NUMERICAL_VALUE_VOTING', {
       ...(assembled.kind === 'INPUT' ? assembled.input : {}),
+      ...resolvedValues('CREATE_NUMERICAL_VALUE_VOTING'),
     });
     expect(built.kind).toBe('PROBLEMS');
     expect(built.kind === 'PROBLEMS' && built.problems.map((problem) => problem.field)).toEqual([

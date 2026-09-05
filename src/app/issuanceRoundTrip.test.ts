@@ -81,7 +81,7 @@ const capturingSink = (): FileSink & { bytes(): Uint8Array } => {
 };
 
 const issue = async (
-  operationType: 'CREATE_MEMBERSHIP_VOTING' | 'CAST_VOTE',
+  operationType: 'CREATE_MEMBERSHIP_VOTING' | 'CAST_VOTE' | 'CREATE_NUMERICAL_VALUE_VOTING',
   extra: { votingId?: string } = {},
 ) => {
   const database = openDatabase(':memory:');
@@ -214,20 +214,135 @@ describe('a form this application issued, imported back', () => {
   });
 
   it('prints the organ the contract renders, and stores the code it derives from', async () => {
-    // Both halves of the ordinal/code split in one assertion: the *document*
-    // shows the contract's identifier, the *row* keeps the subject code, and the
-    // ordinal appears in neither.
-    const { store, database, outcome, bytes } = await issue('CREATE_MEMBERSHIP_VOTING');
-    const parsed = await parseFormFields(bytes);
-    if (parsed.kind !== 'FIELDS') throw new Error('the issued form did not parse');
+    // Both halves of the ordinal/code split in one assertion: the *record* keeps
+    // the contract's identifier as what was printed and the subject code as what
+    // it derived from, and the ordinal appears in neither.
+    //
+    // Read from the record rather than from the document since 2026-09-06: the
+    // organ label is printed page text now, not a field, so there is nothing to
+    // parse it back out of. What the document shows is asserted in
+    // `issueTemplate.test.ts`, in glyph space, where it can actually be checked.
+    const { store, database, outcome } = await issue('CREATE_MEMBERSHIP_VOTING');
 
-    expect(parsed.fields['zarya.context.organ']).toBe('95.СОВ-7');
     const record = await store.find(outcome.operationRef);
+    expect(record?.displayedContext['zarya.context.organ']).toBe('95.СОВ-7');
     expect(record?.boundValues).toEqual({
       organType: 'LocalSoviet',
       regionSubjectCode: '95',
       organNumber: '7',
     });
+    database.close();
+  });
+});
+
+describe('a numerical value form, which issuance used to refuse outright', () => {
+  /**
+   * The operation the schema contradiction made unissuable.
+   *
+   * `decimals` was `bound` — "the scale the cell had when the template was
+   * issued" — while `x` and `y` were member-filled, so there was no cell at
+   * issuance and no scale to record. `issueOperationTemplate` refused it with
+   * `BOUND_VALUE_UNAVAILABLE`. The scale is now `resolved`: read from the cell
+   * the member addressed, when the form comes back.
+   *
+   * These go through the real use case and the real database, so what they prove
+   * is what the application does rather than what the schema says.
+   */
+  it('issues, where it previously refused with BOUND_VALUE_UNAVAILABLE', async () => {
+    const { outcome, database } = await issue('CREATE_NUMERICAL_VALUE_VOTING');
+
+    expect(outcome.kind).toBe('ISSUED');
+    // `issue` throws on a refusal, so reaching here is the assertion; the field
+    // count is here to show a real document was composed rather than an empty
+    // one accepted.
+    expect(outcome.fieldCount).toBeGreaterThan(0);
+    database.close();
+  });
+
+  it('records the organ and no scale, because there is no cell yet', async () => {
+    // The positive and the negative together. A row carrying a `decimals` would
+    // mean issuance had invented one, which is the failure the refusal existed
+    // to prevent and which this must not have replaced with a default.
+    const { store, database, outcome } = await issue('CREATE_NUMERICAL_VALUE_VOTING');
+    const record = await store.find(outcome.operationRef);
+
+    expect(record?.boundValues).toEqual({
+      organType: 'LocalSoviet',
+      regionSubjectCode: '95',
+      organNumber: '7',
+    });
+    expect(record?.boundValues).not.toHaveProperty('decimals');
+    database.close();
+  });
+
+  it('writes no scale field onto the document either', async () => {
+    // Neither printed as context nor offered as an input. A member cannot state
+    // the scale and cannot read one off the form — the matrix reference report
+    // is where a cell's precision is published.
+    const { database, bytes } = await issue('CREATE_NUMERICAL_VALUE_VOTING');
+    const parsed = await parseFormFields(bytes);
+    if (parsed.kind !== 'FIELDS') throw new Error('the issued form did not parse');
+
+    const names = Object.keys(parsed.fields);
+    expect(names).not.toContain('zarya.input.decimals');
+    expect(names).not.toContain('zarya.context.decimals');
+    // The coordinate it belongs to *is* asked for, which is the half of the
+    // contradiction that survived.
+    expect(names).toContain('zarya.input.x');
+    expect(names).toContain('zarya.input.y');
+    database.close();
+  });
+
+  it('becomes the right intent once the scale is resolved, and not before', async () => {
+    // The whole path through the application, with the one chain read stood in
+    // for. `12.34` against a two-decimal cell is `1234n`; against a four-decimal
+    // cell the same form yields `123400n`, which is the same *number* — that is
+    // the property reading the scale at import buys.
+    const { store, database, outcome, bytes } = await issue('CREATE_NUMERICAL_VALUE_VOTING');
+
+    const filled = await fillIssuedForm(bytes, {
+      x: '3',
+      y: '7',
+      value: '12.34',
+      valueAuthor: '0x2222222222222222222222222222222222222222',
+      duration: '86400',
+    });
+    const parsed = await parseFormFields(filled);
+    if (parsed.kind !== 'FIELDS') throw new Error('the filled form did not parse');
+
+    const record = await store.find(outcome.operationRef);
+    if (record === undefined) throw new Error('the row was not found');
+    const bound = bindOperation(record, DEPLOYMENT);
+    if (bound.kind !== 'BOUND') throw new Error(bound.message);
+
+    const assembled = assembleFormInput(parsed.fields, bound.issued);
+    if (assembled.kind !== 'INPUT') throw new Error(JSON.stringify(assembled.refusals));
+
+    // Without the resolution step the form cannot be completed, and it fails
+    // against `decimals` — a field the member never saw. That is why ingestion
+    // must iterate `resolvedKeysFor` rather than hope.
+    const unresolved = buildIntent(assembled.operationType, assembled.input);
+    expect(unresolved.kind).toBe('PROBLEMS');
+
+    for (const [scale, expected] of [
+      ['2', 1234n],
+      ['4', 123400n],
+    ] as const) {
+      const built = buildIntent(assembled.operationType, {
+        ...assembled.input,
+        decimals: scale,
+      });
+      if (built.kind !== 'INTENT') throw new Error(JSON.stringify(built.problems));
+      expect(built.intent).toEqual({
+        type: 'CREATE_NUMERICAL_VALUE_VOTING',
+        organ: ORGAN,
+        at: { x: 3n, y: 7n },
+        value: expected,
+        decimals: Number(scale),
+        valueAuthor: '0x2222222222222222222222222222222222222222',
+        duration: 86400,
+      });
+    }
     database.close();
   });
 });

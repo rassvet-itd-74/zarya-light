@@ -8,7 +8,6 @@ import {
   META_LABELS,
   OPERATION_TITLES,
   OPTION_LABELS,
-  RECEIPT_LABELS,
   SECTION_LABELS,
   SENTENCES,
   BRAND,
@@ -19,15 +18,13 @@ import {
   FIELD_PLAN,
   FORM_SCHEMA_VERSION,
   META_FIELDS,
-  RECEIPT_FIELDS,
   contextFieldsFor,
   inputFieldName,
   templateFieldNames,
 } from './formSchema';
 import {
-  COLUMN_GAP,
+  CONTEXT,
   CONTENT_WIDTH,
-  HALF_WIDTH,
   LOGO,
   MARGIN,
   PAGE,
@@ -126,7 +123,6 @@ const EPOCH = new Date(0);
 const INK = rgb(0.09, 0.09, 0.11);
 const MUTED = rgb(0.42, 0.42, 0.46);
 const RULE = rgb(0.78, 0.78, 0.82);
-const FIELD_BG = rgb(0.965, 0.965, 0.975);
 
 /** `support` is the one option group; `matrix` is the other. */
 const OPTION_VALUES: Readonly<Record<string, readonly string[]>> = {
@@ -258,12 +254,9 @@ export async function issueTemplate(
    */
   const fieldBox = (
     fieldName: string,
-    value: string,
-    readOnly: boolean,
     box: { x: number; y: number; width: number },
   ): void => {
     const field = form.createTextField(fieldName);
-    if (value.length > 0) field.setText(value);
     field.addToPage(page, {
       x: box.x,
       y: box.y,
@@ -271,13 +264,9 @@ export async function issueTemplate(
       height: ROW.fieldHeight,
       font: regular,
       textColor: INK,
-      backgroundColor: readOnly ? FIELD_BG : undefined,
       borderColor: RULE,
       borderWidth: 0.75,
     });
-    // A hint for the reader, never a control: `zarya-pdf-forms` says treat the
-    // ReadOnly flag as advisory, and the trust rule does not depend on it.
-    if (readOnly) field.enableReadOnly();
   };
 
   /**
@@ -287,46 +276,50 @@ export async function issueTemplate(
    * which is what `reserve` was given. When the two disagreed, a label could
    * land on one page and its field on the next.
    */
-  const textRow = (
-    label: string,
-    hint: string | undefined,
-    fieldName: string,
-    value: string,
-    readOnly: boolean,
-  ): void => {
+  const textRow = (label: string, hint: string | undefined, fieldName: string): void => {
     cursor.reserve(rowHeight(hint !== undefined));
     cursor.advance(ROW.labelLead + TYPE.label);
     text(label, { size: TYPE.label, font: bold, y: cursor.y });
     cursor.advance(ROW.labelGap);
     if (hint !== undefined) {
-      cursor.advance(TYPE.hint + ROW.hintGap);
+      cursor.advance(ROW.hintGap + TYPE.hint);
       text(hint, { size: TYPE.hint, font: regular, y: cursor.y, color: MUTED });
+      // `hintDrop` goes *after* the baseline, which is the whole point: the box
+      // is placed relative to the cursor, so without this its top edge sits on
+      // the baseline and covers the descenders.
+      cursor.advance(ROW.hintDrop);
     }
     cursor.advance(ROW.fieldHeight);
-    fieldBox(fieldName, value, readOnly, { x: MARGIN, y: cursor.y, width: CONTENT_WIDTH });
+    fieldBox(fieldName, { x: MARGIN, y: cursor.y, width: CONTENT_WIDTH });
     cursor.advance(ROW.rowGap);
   };
 
   /**
-   * Two read-only fields sharing one row, for the receipt block.
+   * One application-authored value: `label   value`, drawn, with no widget.
    *
-   * Six one-line receipt values stacked full width push every form onto a
-   * second page. They are read and never filled, so two columns costs nothing
-   * and buys back three rows.
+   * The whole point of the block is that it does not look fillable. A member
+   * scanning the page sees boxes only where they are meant to write, and there
+   * is no ReadOnly flag standing between an editor and a value this application
+   * would ignore anyway.
    */
-  const receiptPair = (left: readonly [string, string], right: readonly [string, string]): void => {
-    cursor.reserve(rowHeight(false));
-    cursor.advance(ROW.labelLead + TYPE.label);
-    text(left[0], { size: TYPE.label, font: bold, y: cursor.y });
-    text(right[0], { size: TYPE.label, font: bold, y: cursor.y, x: MARGIN + HALF_WIDTH + COLUMN_GAP });
-    cursor.advance(ROW.labelGap + ROW.fieldHeight);
-    fieldBox(left[1], '', true, { x: MARGIN, y: cursor.y, width: HALF_WIDTH });
-    fieldBox(right[1], '', true, {
-      x: MARGIN + HALF_WIDTH + COLUMN_GAP,
-      y: cursor.y,
-      width: HALF_WIDTH,
+  const contextLine = (label: string, value: string): void => {
+    cursor.reserve(CONTEXT.lineHeight);
+    cursor.advance(CONTEXT.lineHeight);
+    // One segment per line rather than one rule for the block, so a page break
+    // between two lines cannot leave a rule running down empty paper.
+    page.drawLine({
+      start: { x: MARGIN, y: cursor.y - 3.5 },
+      end: { x: MARGIN, y: cursor.y + CONTEXT.lineHeight - 3.5 },
+      thickness: CONTEXT.ruleWidth,
+      color: RULE,
     });
-    cursor.advance(ROW.rowGap);
+    text(label, { size: TYPE.label, font: bold, y: cursor.y, x: MARGIN + CONTEXT.indent });
+    text(value, {
+      size: TYPE.contextValue,
+      font: regular,
+      y: cursor.y,
+      x: MARGIN + CONTEXT.indent + CONTEXT.labelWidth,
+    });
   };
 
   const optionRow = (label: string, domainKey: string): void => {
@@ -362,16 +355,9 @@ export async function issueTemplate(
 
   // ----------------------------------------------------------------- context
   heading(labelText(SECTION_LABELS.context));
-  sentence(labelText(SENTENCES.tamperNotice));
   for (const fieldName of contextFieldsFor(request.operationType)) {
     const key = fieldName.slice('zarya.context.'.length);
-    textRow(
-      labelText(CONTEXT_LABELS[key]),
-      undefined,
-      fieldName,
-      request.context[fieldName] ?? '',
-      true,
-    );
+    contextLine(labelText(CONTEXT_LABELS[key]), request.context[fieldName] ?? '');
   }
 
   // ------------------------------------------------------------------- input
@@ -390,29 +376,13 @@ export async function issueTemplate(
       labelText(INPUT_LABELS[key]),
       hint === undefined ? undefined : labelText(hint),
       inputFieldName(key),
-      '',
-      false,
     );
   }
 
-  // ----------------------------------------------------------------- receipt
-  heading(labelText(SECTION_LABELS.receipt));
-  sentence(labelText(SENTENCES.receiptNotice));
-  // Empty, and present from the first issuance. Retrofitting them later
-  // invalidates every form already handed out.
-  const receiptEntries = Object.values(RECEIPT_FIELDS).map((fieldName) => {
-    const key = fieldName.slice('zarya.receipt.'.length);
-    return [labelText(RECEIPT_LABELS[key]), fieldName] as const;
-  });
-  for (let index = 0; index < receiptEntries.length; index += 2) {
-    const left = receiptEntries[index];
-    const right = receiptEntries[index + 1];
-    if (right === undefined) {
-      textRow(left[0], undefined, left[1], '', true);
-      continue;
-    }
-    receiptPair(left, right);
-  }
+  // No receipt block. The receipt is a stamp drawn onto the returned page when a
+  // transaction confirms (`stampReceipt.ts`), so there is nothing to reserve
+  // here — and six empty shaded boxes were six boxes a member had to be told not
+  // to fill in.
 
   // Appearances generated once, explicitly, with the embedded font — then the
   // save is told not to do it again with the default one, which cannot encode

@@ -15,9 +15,10 @@ import {
   domainKeyOf,
   fieldTrust,
   inputFieldName,
+  resolvedKeysFor,
   templateFieldNames,
 } from './formSchema';
-import { filledForm, issuedOperation } from './testing/formSamples';
+import { filledForm, issuedOperation, resolvedValues } from './testing/formSamples';
 
 /**
  * The load-bearing property here is not the spelling of a field name — it is
@@ -41,20 +42,33 @@ const observedKeys = (operationType: OperationType, input: Readonly<Record<strin
   return seen;
 };
 
-/** The complete input the assembler would produce, without going through it. */
+/**
+ * The complete input ingestion would produce, without going through it.
+ *
+ * All three provenances, from the three sources that own them: the form, the
+ * operation record, and the chain read. Assembling it here from the plan is what
+ * makes the coverage test below meaningful — if a category were left out, every
+ * key in it would look like one the builder reads and the plan does not supply.
+ */
 const completeInput = (operationType: OperationType): Record<string, string> => {
   const form = filledForm(operationType);
   const issued = issuedOperation(operationType);
+  const resolved = resolvedValues(operationType);
   const input: Record<string, string> = {};
   for (const key of FIELD_PLAN[operationType].input) input[key] = form[inputFieldName(key)];
   for (const key of FIELD_PLAN[operationType].bound) input[key] = issued.values[key];
+  for (const key of FIELD_PLAN[operationType].resolved) input[key] = resolved[key];
   return input;
 };
 
 describe('the plan covers what the intent builder reads', () => {
   it('provides every key the builder touches, for all eleven operations', () => {
     for (const type of OPERATION_TYPES) {
-      const planned = new Set([...FIELD_PLAN[type].input, ...FIELD_PLAN[type].bound]);
+      const planned = new Set([
+        ...FIELD_PLAN[type].input,
+        ...FIELD_PLAN[type].bound,
+        ...FIELD_PLAN[type].resolved,
+      ]);
       for (const key of observedKeys(type, completeInput(type))) {
         expect(planned, `${type} reads ${key}`).toContain(key);
       }
@@ -106,19 +120,35 @@ describe('the bound half is hard rule 4', () => {
     }
   });
 
-  it('binds the cell scale on a numerical value proposal and only there', () => {
-    // The scale is a property of the cell as it was when the template was
-    // issued. A form allowed to state it could submit a number a hundred times
-    // too small, and the contract has no argument to notice with.
-    expect(FIELD_PLAN.CREATE_NUMERICAL_VALUE_VOTING.bound).toContain('decimals');
+  it('resolves the cell scale on a numerical value proposal and only there', () => {
+    // The scale is a property of the *cell*, read at import for the coordinate
+    // the member wrote. It is not bound — at issuance there is no cell — and not
+    // member-filled, because a form allowed to state it could submit a number a
+    // hundred times too small and the contract has no argument to notice with.
+    expect(FIELD_PLAN.CREATE_NUMERICAL_VALUE_VOTING.resolved).toEqual(['decimals']);
+    expect(FIELD_PLAN.CREATE_NUMERICAL_VALUE_VOTING.bound).not.toContain('decimals');
     expect(FIELD_PLAN.CREATE_NUMERICAL_VALUE_VOTING.input).not.toContain('decimals');
     // On a decimals *proposal* the same key is the thing being proposed.
     expect(FIELD_PLAN.CREATE_DECIMALS_VOTING.input).toContain('decimals');
     expect(FIELD_PLAN.CREATE_DECIMALS_VOTING.bound).not.toContain('decimals');
+    expect(FIELD_PLAN.CREATE_DECIMALS_VOTING.resolved).toEqual([]);
+  });
+
+  it('resolves nothing anywhere else', () => {
+    // Ten empty and one populated, asserted as a whole. A second resolved key
+    // means a second chain read in ingestion, which is a decision to make
+    // deliberately rather than to discover.
+    const resolving = OPERATION_TYPES.filter((type) => FIELD_PLAN[type].resolved.length > 0);
+    expect(resolving).toEqual(['CREATE_NUMERICAL_VALUE_VOTING']);
+    expect(resolvedKeysFor('CREATE_MEMBERSHIP_VOTING')).toEqual([]);
   });
 
   it('binds the voting number on a vote, leaving only the direction to a human', () => {
-    expect(FIELD_PLAN.CAST_VOTE).toEqual({ input: ['support'], bound: ['votingId'] });
+    expect(FIELD_PLAN.CAST_VOTE).toEqual({
+      input: ['support'],
+      bound: ['votingId'],
+      resolved: [],
+    });
   });
 
   it('asks for no signer anywhere', () => {
@@ -127,10 +157,28 @@ describe('the bound half is hard rule 4', () => {
     expect(ALL_INPUT_FIELD_NAMES).not.toContain(inputFieldName('signer'));
   });
 
-  it('never lists a key as both filled and bound', () => {
+  it('keeps the three categories disjoint', () => {
+    // A key in two categories has two provenances, and which one wins would be
+    // decided by whichever loop ran last in `assembleFormInput`.
     for (const type of OPERATION_TYPES) {
-      const { input, bound } = FIELD_PLAN[type];
-      expect(input.filter((key) => bound.includes(key)), type).toEqual([]);
+      const { input, bound, resolved } = FIELD_PLAN[type];
+      const all = [...input, ...bound, ...resolved];
+      expect(new Set(all).size, `${type} lists a key twice`).toBe(all.length);
+    }
+  });
+
+  it('binds only keys issuance can actually supply', () => {
+    // The invariant that used to be discovered at runtime, by
+    // `unavailableBoundKeys` returning `decimals` and refusing the issuance. It
+    // is checked here instead, so a bound key with no issuance-time source fails
+    // the suite rather than one operation type in the app.
+    const availableAtIssuance = new Set([...ORGAN_KEYS, 'votingId']);
+    for (const type of OPERATION_TYPES) {
+      for (const key of FIELD_PLAN[type].bound) {
+        expect(availableAtIssuance, `${type} binds ${key}, which issuance cannot know`).toContain(
+          key,
+        );
+      }
     }
   });
 });
@@ -178,12 +226,28 @@ describe('field name classification', () => {
 });
 
 describe('what a template has to carry', () => {
-  it('includes the receipt fields, empty, from the first issuance', () => {
-    // Retrofitting them later invalidates every form already handed out.
+  it('carries no receipt or context field, for any operation', () => {
+    // The receipt is a stamp drawn on the page and the context block is printed
+    // text, so neither is a widget any more. This is the assertion behind the
+    // rule a member can see: every box on an issued form is a box for them.
     for (const type of OPERATION_TYPES) {
-      for (const fieldName of Object.values(RECEIPT_FIELDS)) {
-        expect(templateFieldNames(type), type).toContain(fieldName);
+      const names = templateFieldNames(type);
+      for (const fieldName of [...Object.values(RECEIPT_FIELDS), ...Object.values(CONTEXT_FIELDS)]) {
+        expect(names, `${type} / ${fieldName}`).not.toContain(fieldName);
       }
+    }
+  });
+
+  it('is exactly the meta fields plus that operation’s inputs', () => {
+    // Named exhaustively rather than by a `toContain` sweep: a field quietly
+    // added back is the failure this catches, and `toContain` cannot see one.
+    for (const type of OPERATION_TYPES) {
+      expect([...templateFieldNames(type)].sort(), type).toEqual(
+        [
+          ...Object.values(META_FIELDS),
+          ...FIELD_PLAN[type].input.map(inputFieldName),
+        ].sort(),
+      );
     }
   });
 
@@ -204,6 +268,9 @@ describe('what a template has to carry', () => {
   });
 
   it('pins the schema version, because bumping it invalidates issued forms', () => {
-    expect(FORM_SCHEMA_VERSION).toBe('zarya.form.1');
+    // `.2` since 2026-09-06, when the context and receipt namespaces stopped
+    // being fields. Every form issued under `.1` is now uningestible, which was
+    // affordable because none were in circulation.
+    expect(FORM_SCHEMA_VERSION).toBe('zarya.form.2');
   });
 });

@@ -47,7 +47,6 @@ const checkOnly = process.argv.includes('--check');
  * suite rather than silently loosening a limit here.
  */
 const CONTENT_WIDTH = 595.28 - 42 * 2;
-const HALF_WIDTH = (CONTENT_WIDTH - 14) / 2;
 const OPTION_WIDTH = CONTENT_WIDTH - 12 - 7;
 
 /**
@@ -62,14 +61,28 @@ const OPTION_WIDTH = CONTENT_WIDTH - 12 - 7;
 const REPORT_CONTENT_WIDTH = 841.89 - 42 * 2;
 const NARROWEST_COLUMN = 70;
 
+/**
+ * Restated from `templateLayout.ts` and `receiptStampArt.ts`, same as above.
+ *
+ * The receipt labels are the tightest strings in the application: they are drawn
+ * inside the stamp, at 6.5pt, in a half band.
+ */
+const CONTEXT_LABEL_WIDTH = 150 - 8;
+const STAMP_BAND_WIDTH = 326 - 14;
+const STAMP_HALF_BAND_WIDTH = 176 - 14;
+
 /** prefix -> { face, size, width } for the slot's drawn position. */
 const GEOMETRY = {
   operationTitle: { face: 'bold', size: 13, width: CONTENT_WIDTH },
   input: { face: 'bold', size: 9, width: CONTENT_WIDTH },
   hint: { face: 'regular', size: 7.5, width: CONTENT_WIDTH },
   option: { face: 'regular', size: 9, width: OPTION_WIDTH },
-  context: { face: 'bold', size: 9, width: CONTENT_WIDTH },
-  receipt: { face: 'bold', size: 9, width: HALF_WIDTH },
+  // A label in the application block, beside its value on one line.
+  context: { face: 'bold', size: 9, width: CONTEXT_LABEL_WIDTH },
+  // Drawn inside the receipt stamp, above its value.
+  receipt: { face: 'bold', size: 6.5, width: STAMP_HALF_BAND_WIDTH },
+  stampTitle: { face: 'regular', size: 8.5, width: 340 - 94 - 14 },
+  stampNotice: { face: 'regular', size: 6.5, width: STAMP_BAND_WIDTH },
   // Three labels and their three values share one 7pt line.
   meta: { face: 'regular', size: 7, width: CONTENT_WIDTH / 3 - 60 },
   section: { face: 'bold', size: 10.5, width: CONTENT_WIDTH },

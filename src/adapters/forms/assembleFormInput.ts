@@ -1,13 +1,12 @@
 import type { IntentInput } from '../../domain/intents/fields';
 import { type OperationType, isOperationType } from '../../domain/intents/intent';
 import {
-  CONTEXT_FIELDS,
   FIELD_PLAN,
   FORM_SCHEMA_VERSION,
   META_FIELDS,
-  RECEIPT_FIELDS,
   fieldTrust,
   inputFieldName,
+  isRetiredNamespace,
 } from './formSchema';
 
 /**
@@ -23,6 +22,12 @@ import {
  * It ends at a neutral `Record<string, string>`. No chain library, no calldata,
  * no signer, no storage: given the same form and the same record it produces the
  * same result, so a refusal here is never an outage.
+ *
+ * That purity is why the map it returns can be **incomplete**. A `resolved` key
+ * — `decimals` on a numerical value proposal, the only one — is read from the
+ * cell the form addressed, which is a chain read and therefore not this
+ * function's business. The caller merges it in afterwards; see the note on the
+ * `INPUT` arm of {@link FormIntakeResult}.
  *
  * ## Bound forms only
  *
@@ -63,7 +68,7 @@ export type FormRefusalCode =
   | 'OPERATION_TYPE_MISMATCH'
   | 'UNKNOWN_FIELD'
   | 'MISSING_INPUT_FIELD'
-  | 'RECEIPT_ALREADY_STAMPED'
+  | 'RETIRED_FIELD'
   | 'MISSING_BOUND_VALUE';
 
 export interface FormRefusal {
@@ -75,16 +80,22 @@ export interface FormRefusal {
 }
 
 /**
- * A disagreement between the file and the record, reported and then ignored.
+ * Something worth telling the importer that is not a reason to stop.
  *
- * Not a refusal: the app-authored value is used regardless, so a tampered
- * context field changes nothing about the transaction. It is surfaced because a
- * member who edited one may have believed it would take effect, and because it
- * is evidence about the file.
+ * **Nothing produces one today, and that is the honest state.** The only warning
+ * this function ever raised was `CONTEXT_TAMPERED` — a `zarya.context.*` field
+ * in the file disagreeing with the record. Those are no longer fields, so there
+ * is nothing left in the document to compare: an application-authored value is
+ * drawn text now, and editing page text is not something a form viewer can do
+ * or this parser can see.
+ *
+ * The channel is kept because it is a channel — the port declares it and the UI
+ * renders it — not because it is carrying a claim. It is deliberately not typed
+ * to a closed union of codes it no longer has.
  */
-export interface FormWarning {
-  readonly code: 'CONTEXT_TAMPERED';
-  readonly field: string;
+export interface FormNotice {
+  readonly code: string;
+  readonly field?: string;
   readonly message: string;
 }
 
@@ -92,13 +103,21 @@ export type FormIntakeResult =
   | {
       readonly kind: 'INPUT';
       readonly operationType: OperationType;
+      /**
+       * The member-filled and app-recorded halves, merged.
+       *
+       * **Not necessarily complete.** A plan's `resolved` keys are absent — this
+       * function is pure and they come from a chain read — so a caller must merge
+       * `resolvedKeysFor(operationType)` in before calling `buildIntent`.
+       * `CREATE_NUMERICAL_VALUE_VOTING` is the only operation this affects today,
+       * and passing this map straight through for it yields a validation problem
+       * against `decimals`, a field no member ever saw. Iterate the schema rather
+       * than special-casing that one type.
+       */
       readonly input: IntentInput;
-      readonly warnings: readonly FormWarning[];
+      readonly warnings: readonly FormNotice[];
     }
   | { readonly kind: 'REFUSED'; readonly refusals: readonly FormRefusal[] };
-
-/** How long a meta or context field may be before it is not worth comparing. */
-const MAX_COMPARED_LENGTH = 256;
 
 const short = (value: string): string =>
   value.length <= 64 ? JSON.stringify(value) : `${JSON.stringify(value.slice(0, 64))}…`;
@@ -188,19 +207,6 @@ export function assembleFormInput(
     });
   }
 
-  // The re-import marker. A receipt is flattened, so this normally cannot even
-  // be read — that is the second, independent mechanism, and neither relies on
-  // the other. A hand-typed hash lands here too, which is the same refusal.
-  const stamped = form[RECEIPT_FIELDS.txHash]?.trim();
-  if (stamped !== undefined && stamped.length > 0) {
-    refusals.push({
-      code: 'RECEIPT_ALREADY_STAMPED',
-      field: RECEIPT_FIELDS.txHash,
-      message:
-        'This form already carries a transaction receipt, so it has been submitted or has been edited to look as though it was. It cannot be imported again.',
-    });
-  }
-
   const declared = form[META_FIELDS.operationType]?.trim();
   if (declared === undefined || declared.length === 0) {
     refusals.push({
@@ -232,6 +238,26 @@ export function assembleFormInput(
 
   for (const fieldName of Object.keys(form)) {
     const trust = fieldTrust(fieldName);
+    if (isRetiredNamespace(trust)) {
+      // A form this build issued carries neither namespace as a widget: context
+      // is drawn text and the receipt is a stamp. So one being present means the
+      // file was edited by hand — or is a receipt whose flattening was undone,
+      // which the parser's flattened-form check catches independently when it
+      // was not.
+      //
+      // Named rather than folded into `UNKNOWN_FIELD`, because "this field used
+      // to exist" and "no such field has ever existed" are different facts about
+      // a document and a member can act on the first.
+      refusals.push({
+        code: 'RETIRED_FIELD',
+        field: fieldName,
+        message:
+          trust === 'RECEIPT'
+            ? 'This form carries a transaction receipt field. A receipt is stamped onto the page, not into a field, so this file has been edited or is a receipt being re-imported. It cannot be imported.'
+            : 'This form carries an application field that issued forms no longer have. The application block is printed text, so this file has been edited. It cannot be imported.',
+      });
+      continue;
+    }
     if (trust === 'UNKNOWN') {
       refusals.push({
         code: 'UNKNOWN_FIELD',
@@ -243,7 +269,10 @@ export function assembleFormInput(
     if (trust === 'INPUT' && !allowed.has(fieldName)) {
       // An input field belonging to a *different* operation. This is the one
       // that matters: `zarya.input.decimals` added to a numerical value form
-      // would be an attempt to supply the cell's scale, which is bound.
+      // would be an attempt to supply the cell's scale, which is neither the
+      // member's to state nor read from here — it is `resolved`, read from the
+      // cell at import. `allowed` is built from `plan.input` alone, so a
+      // resolved key is refused by the same check as a bound one.
       refusals.push({
         code: 'UNKNOWN_FIELD',
         field: fieldName,
@@ -289,37 +318,7 @@ export function assembleFormInput(
     input[key] = value;
   }
 
-  const warnings = compareContext(form, issued);
-
   return refusals.length > 0
     ? { kind: 'REFUSED', refusals }
-    : { kind: 'INPUT', operationType: issued.operationType, input, warnings };
-}
-
-/**
- * The tamper check: compare, never use.
- *
- * Only fields the record actually has an expected value for are compared. A
- * context field the record says nothing about produces no warning, because
- * "unknown" and "disagrees" are different and only one of them is evidence.
- */
-function compareContext(form: ParsedFormFields, issued: IssuedOperation): readonly FormWarning[] {
-  const warnings: FormWarning[] = [];
-  for (const fieldName of Object.values(CONTEXT_FIELDS)) {
-    const expected = issued.context[fieldName];
-    if (expected === undefined) continue;
-    const actual = form[fieldName];
-    if (actual === undefined) continue;
-    if (actual.trim().slice(0, MAX_COMPARED_LENGTH) === expected.trim()) continue;
-    warnings.push({
-      code: 'CONTEXT_TAMPERED',
-      field: fieldName,
-      message: `This form displays ${short(
-        actual.trim(),
-      )} where this application recorded ${short(
-        expected.trim(),
-      )}. The recorded value is the one being used.`,
-    });
-  }
-  return warnings;
+    : { kind: 'INPUT', operationType: issued.operationType, input, warnings: [] };
 }

@@ -63,20 +63,19 @@ export class FormTemplateWriter implements TemplateWriter {
 /**
  * The bound domain keys issuance can actually supply.
  *
- * The organ triple comes from the request and `votingId` from the request, so
- * those four are known. **`decimals` is not**, and its absence from this set is
- * the whole reason `unavailableBoundKeys` exists.
+ * The organ triple and `votingId` both come from the request, so all four are
+ * known, and **every key in every plan's `bound` is now in this set** — an
+ * invariant `formSchema.test.ts` asserts directly rather than leaving to this
+ * filter to discover at runtime.
  *
- * `FIELD_PLAN` says `decimals` on a numerical value proposal is bound — "the
- * scale the cell had when the template was issued" — while listing that same
- * operation's `x` and `y` as member-filled, on the grounds that a bound cell
- * would make the matrix reference report pointless. Both statements are in the
- * same file and they cannot both hold: at issuance there is no cell, so there is
- * no scale to record.
- *
- * Neither side is corrected here, because which one gives is a product decision
- * about what a member is asked to choose and when. What this does is make the
- * conflict a refusal a user can read instead of a `decimals` value invented by
- * whichever code path got there first.
+ * So `unavailableBoundKeys` is empty for all eleven operations, and the
+ * mechanism is kept anyway. It exists because it once fired: `decimals` on a
+ * numerical value proposal was listed as bound while the coordinate it belongs
+ * to was member-filled, which made the operation unissuable, and this returning
+ * the key is how that surfaced as a refusal a user could read instead of a
+ * scale invented by whichever code path got there first. `decimals` is now
+ * `resolved` — read from the cell at import — so nothing is missing at
+ * issuance. The next bound key added without an issuance-time source will be
+ * caught by the test, and by this if the test is wrong.
  */
 const KNOWN_AT_ISSUANCE: ReadonlySet<string> = new Set([...ORGAN_KEYS, 'votingId']);

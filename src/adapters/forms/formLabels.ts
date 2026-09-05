@@ -99,6 +99,9 @@ export const SLOT_ENGLISH: Readonly<Record<string, string>> = {
   'context.organ': 'party organ',
   'context.votingId': 'voting number',
 
+  // Drawn **inside the stamp**, not beside a field — there are no receipt fields
+  // any more. Each sits above its value in a ruled band, at 6.5pt, so these are
+  // the tightest labels in the application.
   'receipt.txHash': 'transaction hash',
   'receipt.status': 'status',
   'receipt.blockNumber': 'block',
@@ -112,15 +115,27 @@ export const SLOT_ENGLISH: Readonly<Record<string, string>> = {
 
   'section.context': 'completed by the application',
   'section.input': 'to be completed by the member',
-  'section.receipt': 'transaction receipt',
 
   'sentence.instruction': 'Fill in only the member block, then return this file to the application.',
-  'sentence.tamperNotice':
-    'Values in the application block are not read from this file. Editing them changes nothing.',
   'sentence.coordinateDisclosure':
     'Coordinates come from the matrix reference report and are checked again when the form is submitted.',
-  'sentence.receiptNotice':
-    'The receipt block is filled in by the application after the transaction confirms.',
+
+  /**
+   * The stamp's own two strings, drawn inside the mark once a transaction
+   * confirms.
+   *
+   * `stampTitle.document` must **not** claim the proposal was accepted. A
+   * confirmed transaction says nothing about whether a voting passed, and a
+   * stamp reading "approved" would be the most consequential mislabel in the
+   * application — the more so now that it looks official.
+   *
+   * `stampNotice.disclaimer` says the opposite of what a stamp implies: that it
+   * proves nothing, and that the hash printed above it is what can be checked.
+   * Anyone can put a mark like this on any PDF.
+   */
+  'stampTitle.document': 'transaction record',
+  'stampNotice.disclaimer':
+    'This mark is not proof. Check the transaction hash above against the network.',
 
   /** The application's own name, which the whitepaper already supplies. */
   brand: 'Zarya',
@@ -277,27 +292,28 @@ export const OPTION_LABELS = group('option');
 /** Labels for the app-authored context block. Display only. */
 export const CONTEXT_LABELS = group('context');
 
+/** The six facts a stamp states, keyed by the schema key each names. */
 export const RECEIPT_LABELS = group('receipt');
 
 export const META_LABELS = group('meta');
 
 export const SECTION_LABELS = {
-  /** The block the application filled in. */
+  /** The block the application filled in. Drawn text, not fields. */
   context: labelFor('section.context'),
-  /** The block the member fills in. */
+  /** The block the member fills in — the only widgets on the page. */
   input: labelFor('section.input'),
-  /** The block the application stamps after confirmation. */
-  receipt: labelFor('section.receipt'),
 } as const;
 
 export const SENTENCES = {
   instruction: labelFor('sentence.instruction'),
-  tamperNotice: labelFor('sentence.tamperNotice'),
   coordinateDisclosure: labelFor('sentence.coordinateDisclosure'),
-  receiptNotice: labelFor('sentence.receiptNotice'),
 } as const;
 
 export const BRAND = labelFor('brand');
+
+/** The stamp's two strings. See their slots' own note. */
+export const STAMP_TITLE = labelFor('stampTitle.document');
+export const STAMP_NOTICE = labelFor('stampNotice.disclaimer');
 
 /** The matrix reference's own groups. Same derivation, different document. */
 export const REPORT_TITLE = labelFor('reportTitle.document');

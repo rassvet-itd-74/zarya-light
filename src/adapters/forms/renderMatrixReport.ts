@@ -11,24 +11,33 @@ import { PAGE } from './reportLayout';
  * The matrix reference, drawn.
  *
  * Everything that could be decided has been, in `composeMatrixReport` — which
- * exists because with an embedded subset font `drawText` writes glyph
+ * exists because with an embedded custom font `drawText` writes glyph
  * identifiers rather than characters, so a claim about what this document *says*
  * is unverifiable once it is a content stream. What is left here is mechanism:
  * embed, position, save.
  *
- * ## Here the font is subset, and on a form it is not
+ * ## The font is embedded whole, and subsetting is what broke it
  *
- * The forms embed PT Sans whole, ~327 KB each, because a viewer regenerates a
- * text field's appearance from the font named in its `/DA` when someone types —
- * so a subset carrying only the issuer's own glyphs would show a member blanks
- * where their own Cyrillic should be.
+ * This used to pass `{ subset: true }`, on the reasoning that a report has no
+ * fields — nothing will ever regenerate an appearance from this font, so only
+ * the glyphs actually drawn are needed. The reasoning is sound and the result was
+ * not: pdf-lib's subset **dropped most of the Cyrillic**.
  *
- * A report has **no fields**. Nothing will ever regenerate an appearance from
- * this font, so the only glyphs needed are the ones drawn at save time: the
- * labels plus the party's own themes, statements and category names, all of
- * which are drawn. Subsetting is therefore not a risk trade here at all. The
- * difference between the two decisions is the presence of fields, not a change
- * of mind.
+ * Seen on 2026-09-05, on the first report a person ever produced from the button.
+ * Rendered in a viewer, «Отчёт по состоянию Зари» came out as scattered letters
+ * on a mostly blank page — `б в д ц ф ч ь П Э Т ю` survived and `а е и о н с т р
+ * л к м п у я` did not. The same model with the font embedded whole renders every
+ * sentence correctly, so the composition was never at fault.
+ *
+ * Subsetting was a **size optimization**, never a safety one, and it cost a
+ * governance document its legibility. The forms already embed PT Sans whole at
+ * ~327 KB for a different reason — a viewer regenerates a text field's appearance
+ * from the font named in its `/DA` — and a report now costs the same ~326 KB. A
+ * reference sheet a voter cannot read is worth nothing at any size.
+ *
+ * Not investigated: *why* the subset drops those glyphs. It is pdf-lib's
+ * subsetter, the fix does not depend on the answer, and a governance document is
+ * the wrong place to carry a workaround for a library defect.
  *
  * ## It is a report, not a form, and cannot become one
  *
@@ -59,8 +68,10 @@ export class MatrixReportRenderer implements MatrixReportWriter {
     const document = await PDFDocument.create({ updateMetadata: false });
     document.registerFontkit(fontkit);
 
-    const regular = await document.embedFont(this.assets.fontRegular, { subset: true });
-    const bold = await document.embedFont(this.assets.fontBold, { subset: true });
+    // Whole, not subset. See the note above: the subset dropped most of the
+    // party's alphabet and produced an unreadable page that every test passed.
+    const regular = await document.embedFont(this.assets.fontRegular, { subset: false });
+    const bold = await document.embedFont(this.assets.fontBold, { subset: false });
     const logo = await document.embedPng(this.assets.logoPng);
 
     document.setTitle(labelText(REPORT_TITLE));

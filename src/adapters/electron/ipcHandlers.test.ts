@@ -106,6 +106,24 @@ describe('registerIpcHandlers', () => {
     }),
   });
 
+  const stubMatrixReport = () => ({
+    chooseDestination: async () => null,
+    generate: async () => ({
+      kind: 'failure' as const,
+      requestId: 'r1',
+      message: 'not used here',
+    }),
+  });
+
+  const stubImportForm = () => ({
+    chooseSource: async () => null,
+    importForm: async () => ({
+      kind: 'failure' as const,
+      requestId: 'r1',
+      message: 'not used here',
+    }),
+  });
+
   const fakeIpcMain = () => {
     const handlers = new Map<
       string,
@@ -123,10 +141,18 @@ describe('registerIpcHandlers', () => {
 
   it('registers exactly the channels in the contract', () => {
     const { handlers, ipcMain } = fakeIpcMain();
-    registerIpcHandlers({ ipcMain, deps: deps(), issuance: stubIssuance() });
+    registerIpcHandlers({
+      ipcMain,
+      deps: deps(),
+      issuance: stubIssuance(),
+      matrixReport: stubMatrixReport(),
+      importForm: stubImportForm(),
+    });
     expect([...handlers.keys()]).toEqual([
       IPC_CHANNELS.getAppStatus,
       IPC_CHANNELS.issueTemplate,
+      IPC_CHANNELS.generateMatrixReport,
+      IPC_CHANNELS.importForm,
     ]);
   });
 
@@ -143,6 +169,8 @@ describe('registerIpcHandlers', () => {
         },
       }),
       issuance: stubIssuance(),
+      matrixReport: stubMatrixReport(),
+      importForm: stubImportForm(),
       onError,
     });
 
@@ -155,7 +183,13 @@ describe('registerIpcHandlers', () => {
 
   it('passes our own validation message through, since we wrote it', async () => {
     const { handlers, ipcMain } = fakeIpcMain();
-    registerIpcHandlers({ ipcMain, deps: deps(), issuance: stubIssuance() });
+    registerIpcHandlers({
+      ipcMain,
+      deps: deps(),
+      issuance: stubIssuance(),
+      matrixReport: stubMatrixReport(),
+      importForm: stubImportForm(),
+    });
 
     const handler = handlers.get(IPC_CHANNELS.getAppStatus);
     await expect(handler?.(null, 'unexpected')).rejects.toThrow('takes no arguments');

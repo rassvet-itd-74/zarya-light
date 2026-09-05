@@ -54,25 +54,22 @@ describe('what each operation needs before it can be issued', () => {
   });
 });
 
-describe('the one operation that cannot be issued, and why', () => {
-  it('names `decimals` as unavailable on a numerical value proposal', () => {
-    // `FIELD_PLAN` says this `decimals` is bound — "the scale the cell had when
-    // the template was issued" — while listing that same operation's `x` and `y`
-    // as member-filled. Both statements are in the same file and they cannot both
-    // hold: at issuance there is no cell, so there is no scale to record.
-    expect(writer.requirements('CREATE_NUMERICAL_VALUE_VOTING').unavailableBoundKeys).toEqual([
-      'decimals',
-    ]);
-  });
-
-  it('reports nothing unavailable for the other ten', () => {
-    // If this ever fails, a bound value was added that issuance cannot supply —
-    // which is a schema decision, not a bug to patch here.
+describe('every operation can be issued, and the guard that says so', () => {
+  it('reports nothing unavailable, for all eleven', () => {
+    // This used to name `decimals` on a numerical value proposal, because
+    // `FIELD_PLAN` listed it as bound — "the scale the cell had when the
+    // template was issued" — while listing that same operation's `x` and `y` as
+    // member-filled. Both cannot hold: at issuance there is no cell, so there
+    // was no scale to record, and the operation was unissuable.
+    //
+    // `decimals` is now `resolved`, read from the cell at import, so nothing is
+    // missing at issuance. If this ever fails again, a bound value was added
+    // that issuance cannot supply — a schema decision, not a bug to patch here.
     const blocked = OPERATION_TYPES.filter(
       (type) => writer.requirements(type).unavailableBoundKeys.length > 0,
     );
 
-    expect(blocked).toEqual(['CREATE_NUMERICAL_VALUE_VOTING']);
+    expect(blocked).toEqual([]);
   });
 });
 

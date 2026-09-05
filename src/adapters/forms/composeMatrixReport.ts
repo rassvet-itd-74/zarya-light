@@ -32,7 +32,7 @@ import {
 /**
  * Laying the report out, as data rather than as ink.
  *
- * Split from the renderer because with an embedded subset font `drawText` writes
+ * Split from the renderer because with an embedded custom font `drawText` writes
  * **glyph identifiers**, not characters — so once a string is in a PDF content
  * stream there is no way to assert that it is the string that was meant without
  * a full text extractor. Every interesting property of this document is about

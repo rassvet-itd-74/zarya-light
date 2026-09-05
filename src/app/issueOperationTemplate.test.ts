@@ -68,6 +68,17 @@ const harness = (options: {
       order.push(`advance:${state}`);
       advanced.push(`${ref}:${state}`);
     },
+    // Import's half of the port. Issuance never reaches either, and a throw
+    // rather than a no-op is what would say so if it ever did.
+    findByIdentity: async () => {
+      throw new Error('issuance does not dedup');
+    },
+    recordReturn: async () => {
+      throw new Error('issuance does not import');
+    },
+    formBytes: async () => {
+      throw new Error('issuance does not read returned forms');
+    },
     listByState: async () => [],
   };
 
@@ -264,9 +275,12 @@ describe('what is refused, and refused before anything is written', () => {
   });
 
   it('a bound value issuance cannot know', async () => {
-    // `CREATE_NUMERICAL_VALUE_VOTING`: its `decimals` is bound to a cell whose
-    // coordinates the member fills in, so at issuance there is no cell to read a
-    // scale from. Refused with a reason rather than recorded with a guess.
+    // No real operation reports one any more — `CREATE_NUMERICAL_VALUE_VOTING`
+    // did, because its `decimals` was bound to a cell whose coordinates the
+    // member fills in, and the schema now reads that from the cell at import
+    // instead. The stubbed port keeps the guard under test regardless: a future
+    // bound key with no issuance-time source is refused with a reason rather
+    // than recorded with a guess.
     const h = harness({ requirements: requirements({ unavailableBoundKeys: ['decimals'] }) });
     const outcome = await issueOperationTemplate(
       h.deps,

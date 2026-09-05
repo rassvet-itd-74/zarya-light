@@ -185,10 +185,17 @@ export interface CreateNumericalValueVotingIntent extends Proposal {
    * self-describing.
    *
    * The contract does not take it — it is stored per cell — which is exactly why
-   * it has to travel: a template issued when the cell had two decimals, filled
-   * in a week later against a cell that now has four, would otherwise submit a
-   * number a hundred times too small with nothing to detect it. Preflight
-   * compares this against the cell's current decimals.
+   * it has to travel. It is read from that cell at **import**, for the
+   * coordinate the form supplied (`FIELD_PLAN`'s `resolved` category), so the
+   * long staleness window is already gone: a form filled in a week after it was
+   * issued is scaled by the precision the cell holds when it comes back, not by
+   * one recorded when it went out.
+   *
+   * What remains is import → mined. A decimals voting executing in that gap
+   * leaves this integer scaled by the old precision and nothing on chain can
+   * notice. **No check compares this field today** — it is here so that one can,
+   * at submission, once a submission path exists. Do not read the presence of
+   * this field as evidence the comparison happens.
    */
   readonly decimals: number;
   readonly valueAuthor: EvmAddress;

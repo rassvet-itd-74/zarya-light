@@ -16,7 +16,7 @@ import type { NetworkStatusView } from '../chain/networkStatusView';
 export type { NetworkStatusView };
 
 /** Bumped whenever a request or reply shape changes. */
-export const WORKER_PROTOCOL_VERSION = 3;
+export const WORKER_PROTOCOL_VERSION = 5;
 
 /**
  * Liveness of the worker **process**. Not executor health: a healthy worker can
@@ -62,13 +62,53 @@ export interface IssueTemplatePayload {
   readonly targetPath: string;
 }
 
+/**
+ * What a matrix report needs from the UI, which is a destination and nothing
+ * else.
+ *
+ * There is no operation type, no organ and no coordinate range, because a report
+ * is not addressed: it is the whole matrix as of one block. Everything that
+ * decides its content — which blocks to project, which block to pin — is read
+ * from the chain and the configuration inside the worker, so there is no field
+ * here a renderer could set to change what the document says.
+ */
+export interface MatrixReportPayload {
+  readonly targetPath: string;
+}
+
 export type WorkerRequest =
   | { readonly kind: 'ping' | 'checkNetwork'; readonly requestId: string }
   | {
       readonly kind: 'issueTemplate';
       readonly requestId: string;
       readonly payload: IssueTemplatePayload;
+    }
+  | {
+      readonly kind: 'generateMatrixReport';
+      readonly requestId: string;
+      readonly payload: MatrixReportPayload;
+    }
+  | {
+      readonly kind: 'importForm';
+      readonly requestId: string;
+      readonly payload: ImportFormPayload;
     };
+
+/**
+ * What an import needs from the UI: where the file is, and nothing else.
+ *
+ * The path travels **inwards** only, exactly as issuance's destination does, and
+ * it comes from an open dialog in main. A renderer that could name a path could
+ * name any path, and this one is read.
+ *
+ * Nothing else crosses because nothing else may: which operation the form
+ * belongs to is the file's to state and the record's to confirm, and a caller
+ * that could assert an `operationRef` here would be supplying the app-authored
+ * half from outside the record (hard rule 4).
+ */
+export interface ImportFormPayload {
+  readonly sourcePath: string;
+}
 
 export type WorkerReply =
   | {
@@ -98,6 +138,47 @@ export type WorkerReply =
       readonly path: string;
       readonly organIdentifier: string | null;
       readonly fieldCount: number;
+    }
+  | {
+      readonly kind: 'reported';
+      readonly requestId: string;
+      readonly path: string;
+      readonly pageCount: number;
+      /**
+       * The block every row was read at, as a decimal string.
+       *
+       * A string because a `bigint` does not survive `postMessage`'s structured
+       * clone in every Electron build, and because nothing downstream does
+       * arithmetic on it — it is displayed, and it is what the page is stamped
+       * with.
+       */
+      readonly blockNumber: string;
+      /** The pinned block's own timestamp, in seconds. Chain time, never the workstation's. */
+      readonly readAt: number;
+      readonly rows: number;
+      readonly degradedRows: number;
+      readonly empty: boolean;
+    }
+  | {
+      readonly kind: 'imported';
+      readonly requestId: string;
+      readonly operationRef: string;
+      readonly operationType: string;
+      /**
+       * The intent, flattened to strings by `describeIntent`.
+       *
+       * Flattened because a `bigint` does not cross a structured clone reliably,
+       * and a coordinate or a scaled value that arrived coerced would describe a
+       * different cell or a different number. Nothing downstream reconstructs an
+       * intent from this — it is for a person to read.
+       */
+      readonly fields: readonly { readonly label: string; readonly value: string }[];
+      /** Context edited in the file, or an appearance that disagrees with its value. */
+      readonly warnings: readonly {
+        readonly code: string;
+        readonly field?: string;
+        readonly message: string;
+      }[];
     }
   | {
       /**
@@ -137,7 +218,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const hasRequestId = (value: Record<string, unknown>): boolean =>
   typeof value.requestId === 'string' && value.requestId.length > 0;
 
-const REQUEST_KINDS: ReadonlySet<string> = new Set(['ping', 'checkNetwork', 'issueTemplate']);
+const REQUEST_KINDS: ReadonlySet<string> = new Set([
+  'ping',
+  'checkNetwork',
+  'issueTemplate',
+  'generateMatrixReport',
+  'importForm',
+]);
 
 /**
  * Shape only, and shape is all this can promise.
@@ -158,12 +245,22 @@ const isIssuePayload = (value: unknown): boolean => {
   return true;
 };
 
+/** A destination and nothing else, so there is exactly one field to check. */
+const isReportPayload = (value: unknown): boolean =>
+  isRecord(value) && typeof value.targetPath === 'string' && value.targetPath.length > 0;
+
 export function isWorkerRequest(value: unknown): value is WorkerRequest {
   if (!isRecord(value) || !hasRequestId(value)) return false;
   if (typeof value.kind !== 'string' || !REQUEST_KINDS.has(value.kind)) return false;
   if (value.kind === 'issueTemplate') return isIssuePayload(value.payload);
+  if (value.kind === 'generateMatrixReport') return isReportPayload(value.payload);
+  if (value.kind === 'importForm') return isImportPayload(value.payload);
   return true;
 }
+
+/** A source path and nothing else, so there is exactly one field to check. */
+const isImportPayload = (value: unknown): boolean =>
+  isRecord(value) && typeof value.sourcePath === 'string' && value.sourcePath.length > 0;
 
 export function isWorkerReply(value: unknown): value is WorkerReply {
   if (!isRecord(value) || !hasRequestId(value)) return false;
@@ -183,6 +280,36 @@ export function isWorkerReply(value: unknown): value is WorkerReply {
       typeof value.path === 'string' &&
       typeof value.fieldCount === 'number' &&
       (value.organIdentifier === null || typeof value.organIdentifier === 'string')
+    );
+  }
+  if (value.kind === 'reported') {
+    return (
+      typeof value.path === 'string' &&
+      typeof value.pageCount === 'number' &&
+      // Never a bigint: it crossed as a decimal string, and a bigint arriving
+      // here would mean a worker built against a different protocol.
+      typeof value.blockNumber === 'string' &&
+      typeof value.readAt === 'number' &&
+      typeof value.rows === 'number' &&
+      typeof value.degradedRows === 'number' &&
+      typeof value.empty === 'boolean'
+    );
+  }
+  if (value.kind === 'imported') {
+    return (
+      typeof value.operationRef === 'string' &&
+      typeof value.operationType === 'string' &&
+      Array.isArray(value.fields) &&
+      // Every value a string: a `bigint` or a `number` arriving here would mean a
+      // worker that skipped `describeIntent`, and a coordinate read as a number
+      // addresses a different cell.
+      value.fields.every(
+        (field: unknown) =>
+          isRecord(field) &&
+          typeof field.label === 'string' &&
+          typeof field.value === 'string',
+      ) &&
+      Array.isArray(value.warnings)
     );
   }
   if (value.kind === 'refused') {

@@ -6,7 +6,6 @@ import {
   FIELD_PLAN,
   FORM_SCHEMA_VERSION,
   META_FIELDS,
-  RECEIPT_FIELDS,
   contextFieldsFor,
   inputFieldName,
 } from '../formSchema';
@@ -64,8 +63,9 @@ const INPUT_VALUES: { readonly [T in OperationType]: Readonly<Record<string, str
     valueAuthor: AUTHOR,
     duration: '86400',
   },
-  // `12.34` written against a cell the record says holds two decimals, which is
-  // the pair that produces the fixture's stored `1234n`.
+  // `12.34` written against a cell that holds two decimals — the scale comes
+  // from `RESOLVED_VALUES`, not from here and not from the record, and the pair
+  // produces the fixture's stored `1234n`.
   CREATE_NUMERICAL_VALUE_VOTING: {
     x: '3',
     y: '7',
@@ -93,10 +93,35 @@ const BOUND_VALUES: Readonly<Record<string, string>> = {
   organType: 'RegionalSoviet',
   regionSubjectCode: REGION_SUBJECT_CODE,
   organNumber: '0',
-  // The scale the cell had when the template was issued. Not on the form.
-  decimals: '2',
   votingId: '7',
 };
+
+/**
+ * The chain-read half, keyed by domain key.
+ *
+ * Standing in for `numericalCell({ x: 3, y: 7 }).decimals` — the scale of the
+ * cell the form addresses, which is neither on the form nor in the record.
+ * Kept as a separate table rather than folded into {@link BOUND_VALUES} because
+ * the whole point of the `resolved` category is that its provenance differs, and
+ * a fixture that blurred the two would let a regression through: dropping the
+ * resolution step would still find the value.
+ */
+const RESOLVED_VALUES: Readonly<Record<string, string>> = {
+  decimals: '2',
+};
+
+/**
+ * What ingestion would have read from chain, for this operation.
+ *
+ * Derived from the plan, so it is empty for the ten operations that resolve
+ * nothing and a test cannot accidentally supply a key the schema does not ask
+ * for.
+ */
+export function resolvedValues(operationType: OperationType): Readonly<Record<string, string>> {
+  const resolved: Record<string, string> = {};
+  for (const key of FIELD_PLAN[operationType].resolved) resolved[key] = RESOLVED_VALUES[key];
+  return resolved;
+}
 
 export const SAMPLE_OPERATION_REF = 'op_01HQ3ZS8Q0000000000000000';
 export const SAMPLE_CHAIN_ID = '11155111';
@@ -125,12 +150,13 @@ export function issuedOperation(operationType: OperationType): IssuedOperation {
 }
 
 /**
- * The form as it comes back: every field a template carries, with the input half
- * filled and the receipt half still empty.
+ * The form as it comes back: every field a template carries, input half filled.
  *
- * The empty receipt fields are present deliberately — that is what an unstamped
- * template looks like, and an intake that refused an empty `txHash` would refuse
- * every legitimate form.
+ * Three meta fields and the inputs, and nothing else — since 2026-09-06 that is
+ * the whole of an issued form. The context block is printed text and the receipt
+ * is a stamp, so neither appears here; a fixture that still carried them would
+ * be testing a document this application no longer produces, and every such
+ * field is now a refusal.
  */
 export function filledForm(
   operationType: OperationType,
@@ -140,12 +166,10 @@ export function filledForm(
     [META_FIELDS.schemaVersion]: FORM_SCHEMA_VERSION,
     [META_FIELDS.operationRef]: SAMPLE_OPERATION_REF,
     [META_FIELDS.operationType]: operationType,
-    ...issuedOperation(operationType).context,
   };
   for (const [key, value] of Object.entries(INPUT_VALUES[operationType])) {
     fields[inputFieldName(key)] = value;
   }
-  for (const fieldName of Object.values(RECEIPT_FIELDS)) fields[fieldName] = '';
 
   for (const [fieldName, value] of Object.entries(overrides)) {
     if (value === undefined) delete fields[fieldName];

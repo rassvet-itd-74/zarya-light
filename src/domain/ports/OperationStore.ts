@@ -49,8 +49,14 @@ export interface OperationRecord {
   readonly boundValues: Readonly<Record<string, string>>;
   /**
    * What the template printed in its context block, keyed by form field name.
-   * Opaque here, and its only purpose is to be compared against what a returned
-   * file says, so that a disagreement can be reported without ever being used.
+   * Opaque here.
+   *
+   * It used to exist to be compared against what a returned file said, so a
+   * disagreement could be reported without ever being used. That comparison is
+   * gone — the context block is printed page text since 2026-09-06, so a
+   * returned file carries no copy of it to disagree with. What remains is the
+   * audit answer to "what did the document this member was sent actually say",
+   * which is worth keeping and is the reason a reissued template is identical.
    */
   readonly displayedContext: Readonly<Record<string, string>>;
   /**
@@ -63,6 +69,17 @@ export interface OperationRecord {
    * make impossible.
    */
   readonly recordedAt: number;
+  /**
+   * What the returned form turned out to be, once one has been imported.
+   *
+   * `undefined` until then, and never a placeholder: "no form has come back" and
+   * "a form came back with an empty identity" must not be the same value.
+   */
+  readonly identityKey?: string;
+  /** A vote's direction, stored beside the identity because it is not in it. */
+  readonly voteDirection?: string;
+  /** Digest of the file as received. */
+  readonly formHash?: string;
 }
 
 /** A record being created. The state is fixed, so a caller cannot invent one. */
@@ -128,4 +145,59 @@ export interface OperationStore {
     scope: { readonly chainId: ChainId; readonly contractAddress: EvmAddress },
     state: IssuedTemplateState,
   ): Promise<readonly OperationRecord[]>;
+
+  /**
+   * Operations on this deployment already carrying `identityKey`.
+   *
+   * The dedup question, and it is asked of the **store** rather than computed
+   * over a listing because it has to see operations this session never touched:
+   * a member who imported a form last week and reissued the template today has
+   * two references and one intention.
+   *
+   * Returns every match, including the caller's own operation if it already has
+   * the key. The caller compares references; deciding what a match *means* — a
+   * duplicate, or a vote in the opposite direction — is domain reasoning and not
+   * the store's.
+   */
+  findByIdentity(
+    scope: { readonly chainId: ChainId; readonly contractAddress: EvmAddress },
+    identityKey: string,
+  ): Promise<readonly OperationRecord[]>;
+
+  /**
+   * Records what a returned form was, and moves the operation to `RETURNED`.
+   *
+   * **One call because it is one fact.** Writing the identity and the bytes in
+   * one statement and advancing the state in another leaves two crash windows
+   * that mean opposite things: a `RETURNED` row with no bytes cannot regenerate
+   * its receipt, and an `EMITTED` row holding an identity would be re-imported
+   * and deduped against itself. The state machine is still enforced, so this
+   * refuses anything but `EMITTED → RETURNED`.
+   *
+   * The digest is computed by the implementation rather than passed in, so no
+   * caller can record a hash that does not match the bytes beside it.
+   *
+   * @throws {UnknownOperationRefError} if the reference resolves to nothing.
+   * @throws {IllegalTemplateTransitionError} if the operation is not `EMITTED`.
+   */
+  recordReturn(input: ReturnedFormRecord): Promise<void>;
+
+  /**
+   * The returned form's bytes, or `undefined` if no form has come back.
+   *
+   * Separate from `find` because these are large and almost nobody wants them:
+   * a listing that carried a few hundred kilobytes per row would make
+   * reconciliation expensive for no reason. The one caller is receipt stamping,
+   * which is what makes a lost receipt regenerable without a chain write.
+   */
+  formBytes(operationRef: OperationRef): Promise<Uint8Array | undefined>;
+}
+
+export interface ReturnedFormRecord {
+  readonly operationRef: OperationRef;
+  readonly identityKey: string;
+  /** Only for a vote. See {@link OperationRecord.voteDirection}. */
+  readonly voteDirection?: string;
+  /** The file exactly as it was received, for receipt regeneration in Phase 6. */
+  readonly formBytes: Uint8Array;
 }

@@ -13,7 +13,9 @@ import { buildWindowPlan } from './adapters/electron/windowOptions';
 import { createUtilityProcessSpawner } from './adapters/electron/workerHost';
 import { WorkerSupervisor } from './adapters/electron/workerSupervisor';
 import type {
+  ImportFormPayload,
   IssueTemplatePayload,
+  MatrixReportPayload,
   WorkerHealth,
 } from './adapters/electron/workerProtocol';
 import type { WorkerProbe } from './app/getAppStatus';
@@ -148,22 +150,86 @@ const workerProbe: WorkerProbe = {
  * there is no last-used directory to remember yet, and guessing the app's own
  * installation folder would be worse than a familiar default.
  */
+const chooseDestination = async (suggestedName: string): Promise<string | null> => {
+  const parent = BrowserWindow.getAllWindows()[0];
+  const result = await dialog.showSaveDialog(parent, {
+    title: 'Zarya',
+    defaultPath: path.join(app.getPath('documents'), suggestedName),
+    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    // The dialog does the overwrite confirmation, which is why FileSink does
+    // not: asking twice would overrule an answer we just received.
+    properties: ['createDirectory', 'showOverwriteConfirmation'],
+  });
+  return result.canceled || result.filePath.length === 0 ? null : result.filePath;
+};
+
 const issuanceGateway = {
-  chooseDestination: async (suggestedName: string): Promise<string | null> => {
-    const parent = BrowserWindow.getAllWindows()[0];
-    const result = await dialog.showSaveDialog(parent, {
-      title: 'Zarya',
-      defaultPath: path.join(app.getPath('documents'), suggestedName),
-      filters: [{ name: 'PDF', extensions: ['pdf'] }],
-      // The dialog does the overwrite confirmation, which is why FileSink does
-      // not: asking twice would overrule an answer we just received.
-      properties: ['createDirectory', 'showOverwriteConfirmation'],
-    });
-    return result.canceled || result.filePath.length === 0 ? null : result.filePath;
-  },
+  chooseDestination,
 
   issue: async (payload: IssueTemplatePayload) =>
     await supervisor.request({ kind: 'issueTemplate', payload }),
+};
+
+/**
+ * The matrix report, from main's side. Same split as issuance: the dialog is
+ * here, everything after it is the worker's.
+ *
+ * The timeout is the one difference worth reading. A report projects the
+ * contract's whole event history and then reads every cell it found. Measured
+ * against Sepolia on 2026-09-05 the projection is about a second — eighteen
+ * windows — but that figure is a floor: the matrix was empty, so no cell reads
+ * happened at all, and both halves grow, one with the chain's height and one
+ * with the number of populated coordinates. The supervisor's ten-second liveness
+ * timeout would abort a working report and mark the worker degraded for
+ * finishing its job.
+ *
+ * Five minutes is therefore not an expectation. It is an upper bound past which
+ * something is genuinely wrong, chosen wide because the alternative — tuning it
+ * to a matrix nobody has populated yet — would be guessing with a worse
+ * failure mode.
+ */
+const MATRIX_REPORT_TIMEOUT_MS = 5 * 60_000;
+
+const matrixReportGateway = {
+  chooseDestination,
+
+  generate: async (payload: MatrixReportPayload) =>
+    await supervisor.request(
+      { kind: 'generateMatrixReport', payload },
+      { timeoutMs: MATRIX_REPORT_TIMEOUT_MS },
+    ),
+};
+
+/**
+ * Import, from main's side. The only dialog here that **opens** a file.
+ *
+ * `openFile` alone — no `multiSelections`, no `openDirectory` — because the
+ * worker reads whatever path comes back, and the batch engine that would justify
+ * several at once is Phase 8. Widening this is a decision about what the
+ * application does, not a dialog option.
+ *
+ * A generous timeout for the same reason the report has one: an import parses a
+ * document, reads the local record, and for a numerical value proposal makes a
+ * chain call. That is more than the ten-second liveness probe was sized for,
+ * though far less than a full matrix projection.
+ */
+const IMPORT_TIMEOUT_MS = 60_000;
+
+const importFormGateway = {
+  chooseSource: async (): Promise<string | null> => {
+    const parent = BrowserWindow.getAllWindows()[0];
+    const result = await dialog.showOpenDialog(parent, {
+      title: 'Zarya',
+      defaultPath: app.getPath('documents'),
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      properties: ['openFile'],
+    });
+    const [chosen] = result.filePaths;
+    return result.canceled || chosen === undefined ? null : chosen;
+  },
+
+  importForm: async (payload: ImportFormPayload) =>
+    await supervisor.request({ kind: 'importForm', payload }, { timeoutMs: IMPORT_TIMEOUT_MS }),
 };
 
 const createWindow = (): void => {
@@ -213,6 +279,8 @@ app.on('ready', () => {
     ipcMain,
     deps: { publicConfig: config.publicConfig, worker: workerProbe },
     issuance: issuanceGateway,
+    matrixReport: matrixReportGateway,
+    importForm: importFormGateway,
     onError: (channel, error) => {
       // The unsanitized error stops here. The renderer received a generic one.
       console.error(`[main] ${channel}:`, error);

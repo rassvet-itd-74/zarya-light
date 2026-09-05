@@ -17,6 +17,10 @@ export const IPC_CHANNELS = {
   getAppStatus: 'zarya:get-app-status',
   /** Renderer → main, invoke/handle. Opens a save dialog, then issues. */
   issueTemplate: 'zarya:issue-template',
+  /** Renderer → main, invoke/handle. Opens a save dialog, then reads the matrix. */
+  generateMatrixReport: 'zarya:generate-matrix-report',
+  /** Renderer → main, invoke/handle. Opens a file dialog, then imports what it names. */
+  importForm: 'zarya:import-form',
   /** Main → renderer, one-way push. */
   workerHealth: 'zarya:worker-health',
 } as const;
@@ -64,6 +68,64 @@ export type IssueTemplateResult =
   | { readonly kind: 'REFUSED'; readonly code: string; readonly message: string }
   | { readonly kind: 'FAILED'; readonly message: string };
 
+/**
+ * What a finished matrix report tells the UI.
+ *
+ * The counts are here so the panel can say something truthful about a document
+ * the user cannot see from the app. `degradedRows` in particular: a report can
+ * be written *and* incomplete, and a row whose fields did not read is marked on
+ * the page — so the UI has to be able to point at it rather than reporting an
+ * unqualified success.
+ *
+ * `blockNumber` is a decimal string for the same reason it is one in the worker
+ * protocol: a `bigint` does not survive the structured clone, and nothing here
+ * does arithmetic on it.
+ */
+export type MatrixReportResult =
+  | {
+      readonly kind: 'REPORTED';
+      readonly path: string;
+      readonly pageCount: number;
+      readonly blockNumber: string;
+      /** The pinned block's own timestamp, in seconds. Chain time. */
+      readonly readAt: number;
+      readonly rows: number;
+      readonly degradedRows: number;
+      readonly empty: boolean;
+    }
+  | { readonly kind: 'CANCELLED' }
+  | { readonly kind: 'REFUSED'; readonly code: string; readonly message: string }
+  | { readonly kind: 'FAILED'; readonly message: string };
+
+/**
+ * What a finished import tells the UI.
+ *
+ * `fields` is the intent flattened to strings, and it is what a member checks
+ * before anything is submitted — the form is untrusted, so seeing what the
+ * application actually understood is the point of the screen rather than a
+ * courtesy.
+ *
+ * `warnings` is tamper evidence and must be shown even though the import
+ * succeeded: a context field edited in the file, or a field whose appearance
+ * disagreed with its value. Neither can change the intent, which is exactly why
+ * neither may be silently dropped.
+ */
+export type ImportFormResult =
+  | {
+      readonly kind: 'IMPORTED';
+      readonly operationRef: string;
+      readonly operationType: string;
+      readonly fields: readonly { readonly label: string; readonly value: string }[];
+      readonly warnings: readonly {
+        readonly code: string;
+        readonly field?: string;
+        readonly message: string;
+      }[];
+    }
+  | { readonly kind: 'CANCELLED' }
+  | { readonly kind: 'REFUSED'; readonly code: string; readonly message: string }
+  | { readonly kind: 'FAILED'; readonly message: string };
+
 /** The object exposed as `window.zarya`. Nothing else reaches the renderer. */
 export interface ZaryaDesktopApi {
   getAppStatus(): Promise<AppStatus>;
@@ -72,6 +134,27 @@ export interface ZaryaDesktopApi {
    * the file — or returns why it did not.
    */
   issueTemplate(input: IssueTemplateInput): Promise<IssueTemplateResult>;
+  /**
+   * Asks for the coordinate reference. Shows a save dialog, projects the
+   * matrix's whole event history, reads every cell at one pinned block, and
+   * writes the document — or returns why it did not.
+   *
+   * **Slow by nature** compared with every other call here, and unbounded in a
+   * way they are not: the work grows with the chain's height and with the number
+   * of populated coordinates. Roughly a second against Sepolia's empty matrix on
+   * 2026-09-05, which is a floor rather than a typical figure. A caller must keep
+   * its button disabled for the whole wait; there is no progress channel yet.
+   */
+  generateMatrixReport(): Promise<MatrixReportResult>;
+  /**
+   * Imports a filled form. Shows a file dialog, reads the file, recovers the
+   * app-authored half from the local record, and returns what the application
+   * understood — or why it will not.
+   *
+   * Takes no argument: a renderer that could name a path could name any path,
+   * and the file is chosen in main.
+   */
+  importForm(): Promise<ImportFormResult>;
   /** Subscribes to worker health pushes; returns the unsubscribe function. */
   onWorkerHealth(listener: (health: WorkerHealth) => void): () => void;
 }
@@ -80,6 +163,12 @@ export interface ZaryaDesktopApi {
  * The exposed key set, asserted by a test. Widening the renderer's surface is
  * then a deliberate two-place edit rather than an accident in one.
  */
-export const ZARYA_API_KEYS = ['getAppStatus', 'issueTemplate', 'onWorkerHealth'] as const;
+export const ZARYA_API_KEYS = [
+  'getAppStatus',
+  'issueTemplate',
+  'generateMatrixReport',
+  'importForm',
+  'onWorkerHealth',
+] as const;
 
 export const ZARYA_API_GLOBAL = 'zarya';

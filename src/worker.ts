@@ -20,7 +20,10 @@ import {
   toNetworkStatusView,
 } from './adapters/chain/networkStatusView';
 import { ZaryaOrganResolver } from './adapters/chain/organResolver';
-import { createZaryaPublicClient } from './adapters/chain/publicClient';
+import {
+  type ZaryaPublicClient,
+  createZaryaPublicClient,
+} from './adapters/chain/publicClient';
 import { type AppConfig, loadConfig } from './adapters/config/appConfig';
 import { FormTemplateWriter } from './adapters/forms/formTemplateWriter';
 import { loadTemplateAssets } from './adapters/forms/templateAssets';
@@ -40,11 +43,22 @@ import {
 } from './app/issueOperationTemplate';
 import {
   WORKER_PROTOCOL_VERSION,
+  type ImportFormPayload,
   type IssueTemplatePayload,
+  type MatrixReportPayload,
   type WorkerReply,
   type WorkerRequest,
   isWorkerRequest,
 } from './adapters/electron/workerProtocol';
+import { ZaryaMatrixEvents } from './adapters/chain/matrixEvents';
+import { ZaryaMatrixReader } from './adapters/chain/matrixReader';
+import { ZaryaMatrixSnapshot } from './adapters/chain/matrixSnapshot';
+import { MatrixReportRenderer } from './adapters/forms/renderMatrixReport';
+import { PdfReturnedFormReader } from './adapters/forms/returnedFormReader';
+import { NodeFileSource } from './adapters/platform/nodeFileSource';
+import { describeIntent } from './domain/intents/describeIntent';
+import { generateMatrixReport } from './app/generateMatrixReport';
+import { importReturnedForm } from './app/importReturnedForm';
 
 // Present only inside a utilityProcess. The typings declare it unconditionally,
 // so the annotation is what makes the guard below meaningful.
@@ -66,6 +80,15 @@ if (parentPort === undefined) {
  */
 interface ChainContext {
   config: AppConfig;
+  /**
+   * Kept beside the ports rather than discarded after building them.
+   *
+   * The report's two chain dependencies are constructed **per request**, not
+   * once: `ZaryaMatrixSnapshot` is pinned to a block, so an instance is only
+   * valid for the report that pinned it, and reusing one would silently date a
+   * second report with the first one's block.
+   */
+  client: ZaryaPublicClient;
   guard: NetworkGuard;
   clock: Clock;
   organs: OrganResolver;
@@ -83,6 +106,7 @@ const getChainContext = (): ChainContext => {
     const client = createZaryaPublicClient({ rpcUrl: config.secretConfig.rpcUrl });
     chainContext = {
       config,
+      client,
       guard: new ZaryaNetworkGuard(client, config.publicConfig.contractAddress),
       clock: new ChainClock(client),
       organs: new ZaryaOrganResolver(client, config.publicConfig.contractAddress),
@@ -252,6 +276,125 @@ const issue = async (payload: IssueTemplatePayload, requestId: string): Promise<
   };
 };
 
+/**
+ * The matrix reference report, from the worker's side.
+ *
+ * Almost nothing to validate, and that is a property of the document rather than
+ * an omission: a report is not addressed. There is no operation type, no organ
+ * and no coordinate range a caller could get wrong — the payload is a
+ * destination, and everything that decides what the page says is read here from
+ * the chain and the configuration.
+ *
+ * The two chain dependencies are built per request. The snapshot is pinned to a
+ * block, so an instance outlives its own validity the moment the report using it
+ * is finished, and `ZaryaMatrixEvents` is built alongside it for symmetry rather
+ * than cached — it holds nothing but a client and an address.
+ *
+ * `loadTemplateAssets()` is the same call issuance makes, and the fonts are the
+ * reason: the report prints Cyrillic organ labels and axis text, so PT Sans has
+ * to be embedded here exactly as it is in a form.
+ */
+const report = async (
+  payload: MatrixReportPayload,
+  requestId: string,
+): Promise<WorkerReply> => {
+  const chain = getChainContext();
+  const address = chain.config.publicConfig.contractAddress;
+
+  const outcome = await generateMatrixReport(
+    {
+      snapshots: {
+        pin: async () => await ZaryaMatrixSnapshot.atConfirmedHead(chain.client, address),
+      },
+      events: new ZaryaMatrixEvents(chain.client, address),
+      organs: chain.organs,
+      reports: new MatrixReportRenderer(loadTemplateAssets()),
+      files: new NodeFileSink(),
+      // Widened here, at the call site, exactly as `PublicConfig` says to.
+      deploymentBlock: BigInt(chain.config.publicConfig.deploymentBlock),
+    },
+    { targetPath: payload.targetPath },
+  );
+
+  if (outcome.kind === 'REFUSED') {
+    return { kind: 'refused', requestId, code: outcome.code, message: outcome.message };
+  }
+  return {
+    kind: 'reported',
+    requestId,
+    path: outcome.path,
+    pageCount: outcome.pageCount,
+    // Decimal string: a bigint does not survive the structured clone.
+    blockNumber: outcome.blockNumber.toString(),
+    readAt: outcome.readAt,
+    rows: outcome.rows,
+    degradedRows: outcome.degradedRows,
+    empty: outcome.empty,
+  };
+};
+
+/**
+ * A returned form, from the worker's side.
+ *
+ * Like the report, almost nothing to validate: the payload is a path, and every
+ * value that decides anything is recovered here — from the file for the
+ * member-filled half, from the local record for the app-authored half, and from
+ * the chain for the one key the schema resolves.
+ *
+ * `ZaryaMatrixReader` and not the report's pinned snapshot: an import asks what
+ * is true **now**, because the scale it recovers is about to produce a number a
+ * transaction will carry.
+ */
+const importForm = async (
+  payload: ImportFormPayload,
+  requestId: string,
+): Promise<WorkerReply> => {
+  const chain = getChainContext();
+  const address = chain.config.publicConfig.contractAddress;
+
+  const outcome = await importReturnedForm(
+    {
+      files: new NodeFileSource(),
+      forms: new PdfReturnedFormReader(),
+      store: new SqliteOperationStore(getStore().db),
+      matrix: new ZaryaMatrixReader(chain.client, address),
+      deployment: {
+        chainId: chain.config.publicConfig.chainId,
+        contractAddress: address,
+      },
+    },
+    { sourcePath: payload.sourcePath },
+  );
+
+  if (outcome.kind === 'REFUSED') {
+    // The problems are folded into the message rather than dropped: a refusal
+    // naming no field tells a member their form is wrong and nothing else.
+    const detail = outcome.problems
+      .map((problem) => (problem.field === undefined ? problem.message : `${problem.field}: ${problem.message}`))
+      .join(' ');
+    return {
+      kind: 'refused',
+      requestId,
+      code: outcome.code,
+      message: detail.length > 0 ? `${outcome.message} ${detail}` : outcome.message,
+    };
+  }
+
+  return {
+    kind: 'imported',
+    requestId,
+    operationRef: outcome.operationRef,
+    operationType: outcome.operationType,
+    // Flattened here, once, because a bigint does not cross reliably.
+    fields: describeIntent(outcome.intent),
+    warnings: outcome.warnings.map((warning) => ({
+      code: warning.code,
+      ...(warning.field === undefined ? {} : { field: warning.field }),
+      message: warning.message,
+    })),
+  };
+};
+
 const handle = async (request: WorkerRequest): Promise<WorkerReply> => {
   // Destructured before the switch narrows `request` away entirely, so the
   // exhaustiveness check below still has a name to report.
@@ -274,6 +417,12 @@ const handle = async (request: WorkerRequest): Promise<WorkerReply> => {
 
     case 'issueTemplate':
       return await issue(request.payload, requestId);
+
+    case 'generateMatrixReport':
+      return await report(request.payload, requestId);
+
+    case 'importForm':
+      return await importForm(request.payload, requestId);
   }
 
   // Exhaustiveness: adding a request kind without handling it fails to compile
