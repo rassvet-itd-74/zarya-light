@@ -302,6 +302,17 @@ Estimated **9–12 slices**, down from 13–18. What is explicitly **not** cut: 
 
 **Slice 5: wire the write path.** `submitOperation` and `stampOperationReceipt` reach the UI. This is the first way the application can broadcast, so it is also where an explicit confirmation belongs — hard rule 1 says a transaction is never sent unasked, and a button is the asking.
 
+#### 2026-09-06 — slice 5: the write path is wired — **done**
+
+**The application can now broadcast.** A button, a confirmation in main, and a worker that signs.
+
+- **The renderer names an operation and nothing else.** `submitOperation` carries one `operationRef` — no intent, no calldata, no address, no amount. The untrusted UI chooses *which* stored operation to send and has no way to influence *what* it is. A payload that could carry calldata would put a hole in the form pipeline's allow-list one layer below where anyone would look for it.
+- **The intent is derived again, from the stored document.** Nothing persists an intent, so submission re-reads the bytes stored at import and rebuilds it through the same parser, binding and builder that accepted it. The transaction is therefore derived from what the member actually returned, and the numerical scale is read at submission rather than at import — one step closer to the mined block. `intentFromForm.ts` is shared by both paths so the subtle part cannot drift.
+- **The confirmation lives in main**, as a modal defaulting to Cancel. It stops a mis-click. It is **not** a defence against a compromised renderer, which could invoke the channel with any reference and would see its own choice named back — that boundary is the narrow payload plus the worker's derivation, and the code says so rather than overclaiming.
+- **`SecretConfig` carries key material for the first time.** `ZARYA_MEMBER_KEY`, validated at startup so a malformed key is a startup message rather than a failure at the moment someone presses send. The redaction written in Phase 1 for exactly this moment is what stops `console.log(config)` being the leak. The executor key is deliberately still absent — it belongs with Phase 7 and hard rule 3.
+- **The signer is built per request and never cached**, so a process that never sends never holds key material in memory.
+- **An unconfigured wallet is a refusal, not a failure.** The read, issue and import half works without one.
+
 **Slice 6: stuck detection.** Surface a transaction that has been `PENDING` too long, with re-checking. Replacement-by-fee is deliberately **not** in it: same nonce, explicit fee bump, its own tests, and no evidence yet that Sepolia contention needs it.
 
 ## Phase 7 — executive reconciler

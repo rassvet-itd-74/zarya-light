@@ -6,11 +6,13 @@ import {
   type ImportFormResult,
   type IssueTemplateResult,
   type MatrixReportResult,
+  type SubmitOperationResult,
 } from './ipcContract';
 import type {
   ImportFormPayload,
   IssueTemplatePayload,
   MatrixReportPayload,
+  SubmitOperationPayload,
   WorkerHealth,
   WorkerReply,
 } from './workerProtocol';
@@ -264,6 +266,71 @@ export async function handleImportForm(
 }
 
 /**
+ * Sending, from main's side.
+ *
+ * `confirm` is here rather than in the renderer for the same reason the file
+ * dialogs are: it is a main-process affordance, and a renderer's own `confirm()`
+ * is a thing the renderer can decide not to call. It is worth being precise about
+ * what that buys — this stops a **mis-click**, not a compromised renderer, which
+ * could invoke this channel with any reference it liked and would simply see its
+ * own choice named back at it.
+ */
+export interface SubmitOperationGateway {
+  /** True to proceed. Main owns the dialog; the renderer never sees one. */
+  confirm(operationRef: string): Promise<boolean>;
+  submitOperation(payload: SubmitOperationPayload): Promise<WorkerReply>;
+}
+
+/**
+ * Validates the one field, asks, then sends.
+ *
+ * The reference is checked for shape here and for **existence** in the worker,
+ * which is the only place that can check it. Both are needed: this boundary
+ * refuses a message that could not have come from the preload surface, and the
+ * worker refuses one that names nothing.
+ */
+export async function handleSubmitOperation(
+  gateway: SubmitOperationGateway,
+  args: readonly unknown[] = [],
+): Promise<SubmitOperationResult> {
+  const [input] = args;
+  if (args.length !== 1 || typeof input !== 'object' || input === null) {
+    throw new IpcPayloadError(
+      `${IPC_CHANNELS.submitOperation} expects one object argument`,
+    );
+  }
+  const { operationRef } = input as { operationRef?: unknown };
+  if (typeof operationRef !== 'string' || operationRef.trim().length === 0) {
+    throw new IpcPayloadError(
+      `${IPC_CHANNELS.submitOperation} requires a non-empty operationRef`,
+    );
+  }
+
+  // Asked **before** anything reaches the worker, so declining costs nothing and
+  // leaves no row behind.
+  if (!(await gateway.confirm(operationRef))) return { kind: 'DECLINED' };
+
+  const reply = await gateway.submitOperation({ operationRef });
+
+  switch (reply.kind) {
+    case 'submitted':
+      return {
+        kind: 'SENT',
+        operationRef: reply.operationRef,
+        partial: reply.partial,
+        attempts: reply.attempts,
+        ...(reply.message === undefined ? {} : { message: reply.message }),
+      };
+    case 'refused':
+      return { kind: 'REFUSED', code: reply.code, message: reply.message };
+    case 'failure':
+      return { kind: 'FAILED', message: reply.message };
+    default:
+      return { kind: 'FAILED', message: `the worker answered with ${reply.kind}` };
+  }
+}
+
+/**
  * A filename a member can recognise in a downloads folder.
  *
  * Lower-cased and hyphenated from the operation type rather than from a Russian
@@ -279,6 +346,7 @@ export interface RegisterIpcHandlersOptions {
   issuance: IssueTemplateGateway;
   matrixReport: MatrixReportGateway;
   importForm: ImportFormGateway;
+  submitOperation: SubmitOperationGateway;
   /** Receives the unsanitized error. Never the renderer. */
   onError?: (channel: string, error: unknown) => void;
 }
@@ -308,6 +376,7 @@ export function registerIpcHandlers({
   issuance,
   matrixReport,
   importForm,
+  submitOperation,
   onError = () => undefined,
 }: RegisterIpcHandlersOptions): void {
   ipcMain.handle(IPC_CHANNELS.getAppStatus, async (_event, ...args: unknown[]) =>
@@ -328,6 +397,12 @@ export function registerIpcHandlers({
 
   ipcMain.handle(IPC_CHANNELS.importForm, async (_event, ...args: unknown[]) =>
     await guarded(IPC_CHANNELS.importForm, onError, () => handleImportForm(importForm, args)),
+  );
+
+  ipcMain.handle(IPC_CHANNELS.submitOperation, async (_event, ...args: unknown[]) =>
+    await guarded(IPC_CHANNELS.submitOperation, onError, () =>
+      handleSubmitOperation(submitOperation, args),
+    ),
   );
 }
 

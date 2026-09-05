@@ -1,12 +1,10 @@
 import { type GovernanceIntent, type OperationType } from '../domain/intents/intent';
-import { buildIntent } from '../domain/intents/buildIntent';
 import { canonicalIdentity, voteDirectionOf } from '../domain/intents/operationIdentity';
-import type { IntentInput } from '../domain/intents/fields';
-import { matrixCoordinate } from '../domain/matrix/matrix';
 import type { FileSource } from '../domain/ports/FileSource';
 import type { MatrixReader } from '../domain/ports/MatrixReader';
 import type { OperationStore } from '../domain/ports/OperationStore';
 import type { ReturnedFormReader } from '../domain/ports/ReturnedFormReader';
+import { intentFromForm } from './intentFromForm';
 import type { ChainId, EvmAddress, OperationRef } from '../domain/primitives';
 
 /**
@@ -193,25 +191,22 @@ export async function importReturnedForm(
     );
   }
 
-  const resolved = await resolveFromChain(
+  // The same two steps submission runs again later, from the same stored bytes.
+  // Shared rather than duplicated because the scale resolution is the subtle part
+  // and two copies of it would drift.
+  const built = await intentFromForm(
     deps,
     binding.operationType,
     binding.input,
     binding.resolvedKeys,
   );
-  if (resolved.kind === 'UNAVAILABLE') {
-    return refused('CHAIN_UNAVAILABLE', resolved.message, []);
+  if (built.kind === 'UNAVAILABLE') {
+    return refused('CHAIN_UNAVAILABLE', built.message, []);
   }
-
-  const built = buildIntent(binding.operationType, resolved.input);
-  if (built.kind === 'PROBLEMS') {
+  if (built.kind === 'INVALID') {
     return refused(
       'INVALID_INTENT',
       'The values on this form do not make a valid operation.',
-      // A `FieldProblem` is keyed by **domain** key, not by field name. The two
-      // differ by the `zarya.input.` prefix and nothing else, so the caller can
-      // map back — but it is not this layer's job to, and inventing a code here
-      // would put a second vocabulary between the builder and the screen.
       built.problems.map((problem) => ({
         code: 'FIELD_INVALID',
         field: problem.field,
@@ -285,84 +280,6 @@ export async function importReturnedForm(
     // thing to a person, and neither can change the intent.
     warnings: [...binding.warnings, ...read.disclosures],
   };
-}
-
-type Resolution =
-  | { readonly kind: 'RESOLVED'; readonly input: IntentInput }
-  | { readonly kind: 'UNAVAILABLE'; readonly message: string };
-
-/**
- * Fills in the keys the schema says come from chain rather than from the form or
- * the record.
- *
- * The keys come from the form port, which knows the schema; they are empty for
- * ten of the eleven operations — and that is exactly why this iterates them
- * instead of testing for `CREATE_NUMERICAL_VALUE_VOTING`. A second resolved key
- * would otherwise need a change here, and the one place it must not be forgotten
- * is the one place a reader would not think to look.
- *
- * The coordinate comes from the member's own `x` and `y`, which is the whole
- * point of the design: the scale that produced the integer is never older than
- * the import. A cell that does not read is a **refusal**, never a default —
- * `addValue` takes no decimals argument, so a wrong scale is a valid transaction
- * storing a number off by a power of ten and nothing on chain would notice.
- */
-async function resolveFromChain(
-  deps: ImportFormDeps,
-  operationType: OperationType,
-  input: IntentInput,
-  keys: readonly string[],
-): Promise<Resolution> {
-  if (keys.length === 0) return { kind: 'RESOLVED', input };
-
-  const resolved: Record<string, string | undefined> = { ...input };
-
-  for (const key of keys) {
-    if (key !== 'decimals') {
-      // The schema grew a resolved key this function does not know how to read.
-      // A refusal rather than a silent omission: the alternative is `buildIntent`
-      // reporting a missing field a member never saw and cannot supply.
-      return {
-        kind: 'UNAVAILABLE',
-        message: `This application does not know how to recover ${key} for a ${operationType}.`,
-      };
-    }
-
-    const at = coordinateFrom(input);
-    if (at === undefined) {
-      // `x` and `y` are member-filled, so a malformed one is a validation
-      // problem rather than an outage. Left to `buildIntent`, which has the
-      // message for it.
-      return { kind: 'RESOLVED', input };
-    }
-
-    const cell = await deps.matrix.numericalCell(at);
-    if (cell === undefined) {
-      return {
-        kind: 'UNAVAILABLE',
-        message:
-          'The precision of the cell this form addresses could not be read from the chain, ' +
-          'and it is what the value means. Try again when the network is reachable.',
-      };
-    }
-    resolved[key] = String(cell.decimals);
-  }
-
-  return { kind: 'RESOLVED', input: resolved };
-}
-
-/** The member's coordinate, or `undefined` when it is not two integers. */
-function coordinateFrom(input: IntentInput): ReturnType<typeof matrixCoordinate> | undefined {
-  const x = input.x?.trim();
-  const y = input.y?.trim();
-  if (x === undefined || y === undefined || !/^\d+$/.test(x) || !/^\d+$/.test(y)) {
-    return undefined;
-  }
-  try {
-    return matrixCoordinate(BigInt(x), BigInt(y));
-  } catch {
-    return undefined;
-  }
 }
 
 const refused = (

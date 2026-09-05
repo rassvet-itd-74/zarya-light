@@ -336,6 +336,25 @@ const renderImportWarnings = (
 const clearImport = (): void => {
   el('import-fields').hidden = true;
   el('import-warnings').hidden = true;
+  armSubmit(undefined);
+};
+
+/**
+ * The operation the Send button would send, or `undefined` when there is none.
+ *
+ * Held here only so the button knows what to name. It is **not** what decides
+ * what gets sent: the reference travels to the worker, which re-reads the stored
+ * document and derives the transaction from that. A stale value here can send the
+ * wrong stored operation; it cannot send something that was never imported.
+ */
+let armedOperationRef: string | undefined;
+
+const armSubmit = (operationRef: string | undefined): void => {
+  armedOperationRef = operationRef;
+  const button = el('submit-operation') as HTMLButtonElement;
+  button.disabled = operationRef === undefined;
+  button.textContent =
+    operationRef === undefined ? 'Send imported operation' : `Send ${operationRef}`;
 };
 
 const importForm = async (): Promise<void> => {
@@ -352,8 +371,9 @@ const importForm = async (): Promise<void> => {
         showImportResult(
           'IMPORTED',
           `${result.operationType}, recorded as ${result.operationRef}. ` +
-            'Nothing has been submitted — there is no submission path yet.',
+            'Nothing has been sent. Check the values below before sending.',
         );
+        armSubmit(result.operationRef);
         const fields = el('import-fields');
         fields.hidden = false;
         setRows(
@@ -386,11 +406,77 @@ const importForm = async (): Promise<void> => {
   }
 };
 
+/**
+ * Sending, from the renderer's side.
+ *
+ * Almost nothing happens here, which is the design. This passes a reference;
+ * main asks the member to confirm; the worker derives and signs. The renderer
+ * cannot state what a transaction says, and a member reading this file should be
+ * able to see that in one screen.
+ */
+const submitOperation = async (): Promise<void> => {
+  const operationRef = armedOperationRef;
+  if (operationRef === undefined) return;
+
+  const button = el('submit-operation') as HTMLButtonElement;
+  button.disabled = true;
+  showImportResult('WORKING', 'Waiting for confirmation…');
+
+  try {
+    const result = await window.zarya.submitOperation({ operationRef });
+
+    switch (result.kind) {
+      case 'SENT': {
+        const hashes = result.attempts
+          .map((attempt) => `${attempt.hash} (nonce ${String(attempt.nonce)})`)
+          .join('; ');
+        showImportResult(
+          result.partial ? 'PARTIAL' : 'SENT',
+          result.partial
+            ? `Some of this operation was sent and then stopped: ${result.message ?? ''} ` +
+                `What did go out cannot be undone — ${hashes}`
+            : `Sent. ${hashes}. Nothing is confirmed yet; a receipt is stamped only once the ` +
+                'transaction is mined.',
+        );
+        // Deliberately not re-armed. The operation has been sent, and a second
+        // press would be a second transaction for the same governance action.
+        armSubmit(undefined);
+        break;
+      }
+      case 'DECLINED':
+        showImportResult('CANCELLED', 'Nothing was sent.');
+        armSubmit(operationRef);
+        break;
+      case 'REFUSED':
+        showImportResult('REFUSED', `${result.code}: ${result.message}`);
+        armSubmit(operationRef);
+        break;
+      case 'FAILED':
+        // The ambiguous one. A failure here may mean nothing was sent, or that a
+        // transaction left and the answer never came back — which is why this
+        // does not re-arm the button and says so.
+        showImportResult(
+          'FAILED',
+          `${result.message} If a transaction was already sent, pressing send again would ` +
+            'repeat it. Reconcile before retrying.',
+        );
+        break;
+    }
+  } catch (error) {
+    showImportResult(
+      'FAILED',
+      error instanceof Error ? error.message : 'the application could not send that operation',
+    );
+  }
+};
+
 select('operation-type').addEventListener('change', syncFields);
 select('organ-type').addEventListener('change', syncFields);
 el('issue').addEventListener('click', () => void issue());
 el('generate-report').addEventListener('click', () => void generateReport());
 el('import-form').addEventListener('click', () => void importForm());
+el('submit-operation').addEventListener('click', () => void submitOperation());
+armSubmit(undefined);
 syncFields();
 
 window.zarya.onWorkerHealth(renderHealth);

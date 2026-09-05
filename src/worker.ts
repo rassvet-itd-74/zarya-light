@@ -46,10 +46,17 @@ import {
   type ImportFormPayload,
   type IssueTemplatePayload,
   type MatrixReportPayload,
+  type SubmitOperationPayload,
   type WorkerReply,
   type WorkerRequest,
   isWorkerRequest,
 } from './adapters/electron/workerProtocol';
+import { ZaryaReceipts } from './adapters/chain/zaryaReceipts';
+import { PrivateKeySigner } from './adapters/chain/zaryaSigner';
+import { ZaryaWriteCallEncoder } from './adapters/chain/writeCallEncoder';
+import { SqliteTransactionStore } from './adapters/store/sqliteTransactionStore';
+import type { OperationRef } from './domain/primitives';
+import { submitImportedOperation } from './app/submitImportedOperation';
 import { ZaryaMatrixEvents } from './adapters/chain/matrixEvents';
 import { ZaryaMatrixReader } from './adapters/chain/matrixReader';
 import { ZaryaMatrixSnapshot } from './adapters/chain/matrixSnapshot';
@@ -395,6 +402,89 @@ const importForm = async (
   };
 };
 
+/**
+ * Sending, from the worker's side. **The only path in this application that
+ * broadcasts.**
+ *
+ * The payload is one `operationRef`. Everything that decides what a transaction
+ * says is recovered here — the record from the database, the member's answers
+ * from the document stored with it, the organ from the contract's own rendering,
+ * and the calldata from the ABI. Nothing a renderer could set reaches the chain.
+ *
+ * The signer is built per request rather than cached, and that is not caution
+ * about staleness: it means a process that never sends never holds key material
+ * in memory at all, and the object holding it becomes garbage the moment the
+ * reply is posted.
+ *
+ * An unconfigured wallet is a **refusal**, not a failure. The whole read, issue
+ * and import half of this application works without one, so a member who has not
+ * configured a key has not broken anything — they have reached the one action
+ * that needs it.
+ */
+const submit = async (
+  payload: SubmitOperationPayload,
+  requestId: string,
+): Promise<WorkerReply> => {
+  const chain = getChainContext();
+  const memberKey = chain.config.secretConfig.memberKey;
+  if (memberKey === undefined) {
+    return {
+      kind: 'refused',
+      requestId,
+      code: 'NO_SIGNER',
+      message:
+        'No member wallet is configured, so nothing can be signed. Set ZARYA_MEMBER_KEY and ' +
+        'restart the application.',
+    };
+  }
+
+  const address = chain.config.publicConfig.contractAddress;
+  const outcome = await submitImportedOperation(
+    {
+      signer: new PrivateKeySigner(memberKey, chain.config.secretConfig.rpcUrl),
+      receipts: new ZaryaReceipts(chain.client),
+      encoder: new ZaryaWriteCallEncoder(chain.organs),
+      transactions: new SqliteTransactionStore(getStore().db),
+      store: new SqliteOperationStore(getStore().db),
+      forms: new PdfReturnedFormReader(),
+      matrix: new ZaryaMatrixReader(chain.client, address),
+      ids: new CryptoIdGenerator(),
+      deployment: { chainId: chain.config.publicConfig.chainId, contractAddress: address },
+    },
+    { operationRef: payload.operationRef as OperationRef },
+  );
+
+  if (outcome.kind === 'NOT_SENT') {
+    const detail = outcome.detail.join(' ');
+    return {
+      kind: 'refused',
+      requestId,
+      code: outcome.code,
+      message: detail.length > 0 ? `${outcome.message} ${detail}` : outcome.message,
+    };
+  }
+  if (outcome.kind === 'REFUSED') {
+    return { kind: 'refused', requestId, code: outcome.code, message: outcome.message };
+  }
+
+  // `SUBMITTED` and `PARTIALLY_SUBMITTED` share a reply, because both mean bytes
+  // left this machine and the attempts have to be reported either way. Folding
+  // the partial case into a refusal would tell a member nothing happened when
+  // something already has, and nothing can undo it.
+  return {
+    kind: 'submitted',
+    requestId,
+    operationRef: payload.operationRef,
+    partial: outcome.kind === 'PARTIALLY_SUBMITTED',
+    attempts: outcome.attempts.map((attempt) => ({
+      attemptId: attempt.attemptId,
+      hash: attempt.hash,
+      nonce: attempt.nonce,
+    })),
+    ...(outcome.kind === 'PARTIALLY_SUBMITTED' ? { message: outcome.message } : {}),
+  };
+};
+
 const handle = async (request: WorkerRequest): Promise<WorkerReply> => {
   // Destructured before the switch narrows `request` away entirely, so the
   // exhaustiveness check below still has a name to report.
@@ -423,6 +513,9 @@ const handle = async (request: WorkerRequest): Promise<WorkerReply> => {
 
     case 'importForm':
       return await importForm(request.payload, requestId);
+
+    case 'submitOperation':
+      return await submit(request.payload, requestId);
   }
 
   // Exhaustiveness: adding a request kind without handling it fails to compile

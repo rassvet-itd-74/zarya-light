@@ -14,6 +14,7 @@ import { createUtilityProcessSpawner } from './adapters/electron/workerHost';
 import { WorkerSupervisor } from './adapters/electron/workerSupervisor';
 import type {
   ImportFormPayload,
+  SubmitOperationPayload,
   IssueTemplatePayload,
   MatrixReportPayload,
   WorkerHealth,
@@ -232,6 +233,55 @@ const importFormGateway = {
     await supervisor.request({ kind: 'importForm', payload }, { timeoutMs: IMPORT_TIMEOUT_MS }),
 };
 
+/**
+ * Sending, from main's side. The dialog here is not a save dialog — it is the
+ * asking.
+ *
+ * Hard rule 1 says a transaction is never broadcast unless explicitly asked, and
+ * this is where the asking happens: a modal that names the operation, says
+ * plainly what is about to occur, and defaults to the cancel button.
+ *
+ * **What it protects against, precisely.** A mis-click. It is not a defence
+ * against a compromised renderer, which could invoke the channel with any
+ * reference and would simply see its own choice named back — that boundary is
+ * held by the payload carrying nothing but a reference, and by the worker
+ * deriving everything else from the stored document.
+ *
+ * The timeout is the largest in the application. Submission signs, reads a nonce,
+ * and broadcasts — potentially three times for a threshold configuration — and
+ * each of those waits on a provider. A timeout that fired mid-send would leave a
+ * transaction in flight with nothing waiting for its hash, which is precisely the
+ * ambiguous state recovery-by-nonce exists to resolve and which is far better
+ * avoided than resolved.
+ */
+const SUBMIT_TIMEOUT_MS = 180_000;
+
+const submitOperationGateway = {
+  confirm: async (operationRef: string): Promise<boolean> => {
+    const parent = BrowserWindow.getAllWindows()[0];
+    const { response } = await dialog.showMessageBox(parent, {
+      type: 'warning',
+      title: 'Zarya',
+      message: 'Send this operation to Sepolia?',
+      detail:
+        `Operation ${operationRef}\n\n` +
+        'This signs and broadcasts a transaction from the configured member wallet. ' +
+        'A transaction cannot be recalled once it has been sent, and it costs Sepolia ETH ' +
+        'whether or not the contract accepts it.',
+      buttons: ['Cancel', 'Send'],
+      // Cancel is both the default and the escape action, so neither Enter nor
+      // Escape sends anything.
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    return response === 1;
+  },
+
+  submitOperation: async (payload: SubmitOperationPayload) =>
+    await supervisor.request({ kind: 'submitOperation', payload }, { timeoutMs: SUBMIT_TIMEOUT_MS }),
+};
+
 const createWindow = (): void => {
   const plan = buildWindowPlan({
     isDev,
@@ -281,6 +331,7 @@ app.on('ready', () => {
     issuance: issuanceGateway,
     matrixReport: matrixReportGateway,
     importForm: importFormGateway,
+    submitOperation: submitOperationGateway,
     onError: (channel, error) => {
       // The unsanitized error stops here. The renderer received a generic one.
       console.error(`[main] ${channel}:`, error);

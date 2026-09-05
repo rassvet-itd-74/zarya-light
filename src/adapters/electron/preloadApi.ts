@@ -2,6 +2,7 @@ import {
   IPC_CHANNELS,
   type AppStatus,
   type ImportFormResult,
+  type SubmitOperationResult,
   type IssueTemplateInput,
   type IssueTemplateResult,
   type MatrixReportResult,
@@ -45,6 +46,14 @@ export function createZaryaApi(ipc: RendererIpc): ZaryaDesktopApi {
     // that could name a path could name any path — this one gets *read*.
     importForm: async (): Promise<ImportFormResult> =>
       (await ipc.invoke(IPC_CHANNELS.importForm)) as ImportFormResult,
+
+    // The one call that can broadcast. It passes a reference and nothing else —
+    // see `ZaryaDesktopApi.submitOperation` for why that is the whole of the
+    // renderer's influence over what gets sent.
+    submitOperation: async (input: {
+      readonly operationRef: string;
+    }): Promise<SubmitOperationResult> =>
+      (await ipc.invoke(IPC_CHANNELS.submitOperation, input)) as SubmitOperationResult,
 
     onWorkerHealth: (listener: (health: WorkerHealth) => void): (() => void) => {
       const subscription = (_event: unknown, ...args: unknown[]): void => {

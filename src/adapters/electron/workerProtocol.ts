@@ -16,7 +16,7 @@ import type { NetworkStatusView } from '../chain/networkStatusView';
 export type { NetworkStatusView };
 
 /** Bumped whenever a request or reply shape changes. */
-export const WORKER_PROTOCOL_VERSION = 5;
+export const WORKER_PROTOCOL_VERSION = 6;
 
 /**
  * Liveness of the worker **process**. Not executor health: a healthy worker can
@@ -92,7 +92,28 @@ export type WorkerRequest =
       readonly kind: 'importForm';
       readonly requestId: string;
       readonly payload: ImportFormPayload;
+    }
+  | {
+      readonly kind: 'submitOperation';
+      readonly requestId: string;
+      readonly payload: SubmitOperationPayload;
     };
+
+/**
+ * What sending an operation needs from the UI: **which** one, and nothing else.
+ *
+ * This is the only message in the protocol that leads to a transaction, so what
+ * it does *not* carry is the important part. No intent, no calldata, no address,
+ * no amount, no signer. The renderer names a stored operation and the worker
+ * derives what that means by re-reading the document stored with it.
+ *
+ * A payload that could carry calldata would put the untrusted UI inside the
+ * allow-list the whole form pipeline exists to enforce — one layer below where
+ * anyone would think to look for a hole.
+ */
+export interface SubmitOperationPayload {
+  readonly operationRef: string;
+}
 
 /**
  * What an import needs from the UI: where the file is, and nothing else.
@@ -182,6 +203,29 @@ export type WorkerReply =
     }
   | {
       /**
+       * One or more transactions left this machine.
+       *
+       * `partial` is its own field rather than a second reply kind because the
+       * difference matters to a reader and not to a parser: a threshold
+       * configuration is three transactions with no atomicity across them, so
+       * some may have landed and then one failed. A caller must never present
+       * that as "nothing happened", which is why the attempts are listed either
+       * way and why the message survives beside them.
+       */
+      readonly kind: 'submitted';
+      readonly requestId: string;
+      readonly operationRef: string;
+      readonly partial: boolean;
+      readonly attempts: readonly {
+        readonly attemptId: string;
+        readonly hash: string;
+        readonly nonce: number;
+      }[];
+      /** Present only when `partial`: what stopped the rest. */
+      readonly message?: string;
+    }
+  | {
+      /**
        * The application declined, with a reason. **Not** a `failure`: a refused
        * issuance recorded nothing and wrote nothing, and the user can fix it —
        * where a failure is an outage or a bug they cannot.
@@ -224,6 +268,7 @@ const REQUEST_KINDS: ReadonlySet<string> = new Set([
   'issueTemplate',
   'generateMatrixReport',
   'importForm',
+  'submitOperation',
 ]);
 
 /**
@@ -255,8 +300,19 @@ export function isWorkerRequest(value: unknown): value is WorkerRequest {
   if (value.kind === 'issueTemplate') return isIssuePayload(value.payload);
   if (value.kind === 'generateMatrixReport') return isReportPayload(value.payload);
   if (value.kind === 'importForm') return isImportPayload(value.payload);
+  if (value.kind === 'submitOperation') return isSubmitPayload(value.payload);
   return true;
 }
+
+/**
+ * One reference and nothing else.
+ *
+ * The narrowest payload in the protocol, and deliberately so: this is the message
+ * that leads to a transaction, and the surface a malformed one could exploit is
+ * exactly the surface this guard describes.
+ */
+const isSubmitPayload = (value: unknown): boolean =>
+  isRecord(value) && typeof value.operationRef === 'string' && value.operationRef.length > 0;
 
 /** A source path and nothing else, so there is exactly one field to check. */
 const isImportPayload = (value: unknown): boolean =>
@@ -293,6 +349,23 @@ export function isWorkerReply(value: unknown): value is WorkerReply {
       typeof value.rows === 'number' &&
       typeof value.degradedRows === 'number' &&
       typeof value.empty === 'boolean'
+    );
+  }
+  if (value.kind === 'submitted') {
+    return (
+      typeof value.operationRef === 'string' &&
+      typeof value.partial === 'boolean' &&
+      Array.isArray(value.attempts) &&
+      value.attempts.every(
+        (attempt: unknown) =>
+          isRecord(attempt) &&
+          typeof attempt.attemptId === 'string' &&
+          // A hash is a string here for the same reason a block number is: it is
+          // displayed and compared, never used for arithmetic.
+          typeof attempt.hash === 'string' &&
+          Number.isSafeInteger(attempt.nonce),
+      ) &&
+      (value.message === undefined || typeof value.message === 'string')
     );
   }
   if (value.kind === 'imported') {

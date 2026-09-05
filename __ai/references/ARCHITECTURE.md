@@ -107,9 +107,11 @@ Driven ports — the domain declares these, adapters implement them.
 | `MatrixReportWriter` | render the coordinate reference PDF — landscape, no form fields, font embedded **whole** (subsetting dropped most of the Cyrillic; see `DECISIONS.md`). Takes the assembled model and nothing else, so no clock can reach the page | forms — *implemented* |
 | `OperationStore` | issued templates keyed by `operationRef`, with authoritative context | store |
 | `BatchStore` | batches and their items (no dependency edges — deferred 2026-09-06) | store |
-| `TransactionStore` | attempts, nonces, hashes, receipts, classified errors | store |
+| `TransactionStore` | attempts, nonces, hashes, receipts, classified errors | store — *implemented* |
 | `CursorStore` | discovery block cursor, keyed by chain + address + projection; `commit` never moves backwards | store — *in memory until Phase 5* |
-| `Signer` | sign; never exposes key material | secrets |
+| `Signer` | sign and broadcast one call, returning the hash and the nonce the provider used; never exposes key material | chain — *implemented* |
+| `ReceiptReader` | what a hash did, and a signer's pending nonce; `undefined` for "could not read", never a plausible negative | chain — *implemented* |
+| `WriteCallEncoder` | a typed call into calldata, resolving the organ against the contract's own rendering. Never throws: a mismatch and an outage have different retry behaviour | chain — *implemented* |
 | `FileSink` | write bytes to an already-chosen path. **Choosing** is a save dialog and belongs to main, so it is not on this port — which is what keeps the issuance ordering testable without Electron | platform — *implemented* |
 | `IdGenerator` | `operationRef` creation | platform — *implemented* |
 

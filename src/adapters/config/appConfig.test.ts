@@ -51,7 +51,7 @@ describe('loadConfig', () => {
 describe('the public/secret split', () => {
   const env = {
     ZARYA_RPC_URL: 'https://sepolia.example.com/v2/PROJECT-KEY-DO-NOT-LEAK',
-    ZARYA_MEMBER_KEY: '0xdeadbeef',
+    ZARYA_MEMBER_KEY: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
     ZARYA_EXECUTOR_KEY: '  ',
   };
 
@@ -66,7 +66,7 @@ describe('the public/secret split', () => {
     expect(publicConfig.memberSignerConfigured).toBe(true);
     // Whitespace is not a configured key.
     expect(publicConfig.executorSignerConfigured).toBe(false);
-    expect(JSON.stringify(publicConfig)).not.toContain('0xdeadbeef');
+    expect(JSON.stringify(publicConfig)).not.toContain('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
   });
 
   it('redacts the secret config however it is serialized', () => {

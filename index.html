@@ -200,12 +200,20 @@
         Reads a form back and shows what this application understood from it. The
         values it authored are recovered from its own record, never from the
         file — so what you see below is what a transaction would carry.
-        Nothing is sent: there is no submission path yet.
+        Importing sends nothing.
       </p>
       <button id="import-form" type="button">Choose a form and import…</button>
       <p id="import-result" class="result" hidden></p>
       <dl id="import-fields" hidden></dl>
       <ul id="import-warnings" hidden></ul>
+
+      <p>
+        Sending signs a transaction with the configured member wallet and
+        broadcasts it to Sepolia. It costs Sepolia ETH whether or not the
+        contract accepts it, and it cannot be recalled. Read the values above
+        first — they are what the transaction will carry.
+      </p>
+      <button id="submit-operation" type="button" disabled>Send imported operation</button>
     </section>
 
     <script type="module" src="/src/renderer.ts"></script>

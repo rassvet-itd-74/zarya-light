@@ -21,6 +21,7 @@ export const IPC_CHANNELS = {
   generateMatrixReport: 'zarya:generate-matrix-report',
   /** Renderer → main, invoke/handle. Opens a file dialog, then imports what it names. */
   importForm: 'zarya:import-form',
+  submitOperation: 'zarya:submit-operation',
   /** Main → renderer, one-way push. */
   workerHealth: 'zarya:worker-health',
 } as const;
@@ -126,6 +127,37 @@ export type ImportFormResult =
   | { readonly kind: 'REFUSED'; readonly code: string; readonly message: string }
   | { readonly kind: 'FAILED'; readonly message: string };
 
+/**
+ * What sending an operation tells the UI.
+ *
+ * `SENT` carries every attempt, and `partial` says whether the rest of a
+ * multi-call operation followed. A threshold configuration is three transactions
+ * with no atomicity across them, so "some of it happened" is a real outcome and
+ * not an error state — presenting it as a failure would tell a member nothing
+ * was done when an organ is already half configured.
+ *
+ * `DECLINED` is the user answering no at the confirmation. Distinct from
+ * `REFUSED`, which is the application declining, and from `CANCELLED`, which
+ * other calls use for a dismissed file dialog — a member who read what was about
+ * to be sent and said no has done something deliberate.
+ */
+export type SubmitOperationResult =
+  | {
+      readonly kind: 'SENT';
+      readonly operationRef: string;
+      readonly partial: boolean;
+      readonly attempts: readonly {
+        readonly attemptId: string;
+        readonly hash: string;
+        readonly nonce: number;
+      }[];
+      /** Present only when `partial`: what stopped the rest. */
+      readonly message?: string;
+    }
+  | { readonly kind: 'DECLINED' }
+  | { readonly kind: 'REFUSED'; readonly code: string; readonly message: string }
+  | { readonly kind: 'FAILED'; readonly message: string };
+
 /** The object exposed as `window.zarya`. Nothing else reaches the renderer. */
 export interface ZaryaDesktopApi {
   getAppStatus(): Promise<AppStatus>;
@@ -155,6 +187,21 @@ export interface ZaryaDesktopApi {
    * and the file is chosen in main.
    */
   importForm(): Promise<ImportFormResult>;
+  /**
+   * Sends an imported operation. **The only call here that broadcasts.**
+   *
+   * Takes an `operationRef` and nothing else. It names *which* stored operation
+   * to send; it cannot influence *what* that operation is, because the worker
+   * derives that by re-reading the document stored with the record. A renderer
+   * that could pass calldata, an address or an amount would be inside the form
+   * pipeline's allow-list.
+   *
+   * Main asks for confirmation before anything is signed. That is a guard
+   * against a mis-click, not against a compromised renderer — a renderer that
+   * wanted to send could call this with any reference it liked, and the
+   * confirmation would name that one.
+   */
+  submitOperation(input: { readonly operationRef: string }): Promise<SubmitOperationResult>;
   /** Subscribes to worker health pushes; returns the unsubscribe function. */
   onWorkerHealth(listener: (health: WorkerHealth) => void): () => void;
 }
@@ -168,6 +215,7 @@ export const ZARYA_API_KEYS = [
   'issueTemplate',
   'generateMatrixReport',
   'importForm',
+  'submitOperation',
   'onWorkerHealth',
 ] as const;
 

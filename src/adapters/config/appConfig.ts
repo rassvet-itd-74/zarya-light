@@ -56,16 +56,28 @@ const REDACTED = '[redacted]';
 /**
  * Main/worker only. Never a field on a DTO, never an argument to a log call.
  *
- * Today it carries the RPC URL alone. Private key material is Phase 6's, along
- * with the `Signer` port — but the redaction machinery belongs here from the
- * start, because the moment a key lands in this object an unguarded
- * `console.log(config)` is the leak.
+ * **It now carries key material.** The redaction below was written before there
+ * was anything worth redacting, on the reasoning that the moment a key landed
+ * here an unguarded `console.log(config)` would be the leak. That moment is
+ * 2026-09-06, and the three overrides are what stop it.
+ *
+ * `memberKey` is the wallet a member's own governance actions are signed with.
+ * It is absent unless `ZARYA_MEMBER_KEY` is set, and its absence is a normal
+ * state: the whole read, issue and import half of this application works without
+ * one, and only sending needs it.
+ *
+ * The executor key is deliberately **not** here yet. It belongs to Phase 7 and
+ * hard rule 3 constrains what it may do, so it arrives with the thing that
+ * enforces that rather than ahead of it.
  */
 export class SecretConfig {
   readonly rpcUrl: string;
+  /** `undefined` when no member wallet is configured. Not an error. */
+  readonly memberKey: `0x${string}` | undefined;
 
-  constructor(rpcUrl: string) {
+  constructor(rpcUrl: string, memberKey?: `0x${string}`) {
     this.rpcUrl = rpcUrl;
+    this.memberKey = memberKey;
   }
 
   toString(): string {
@@ -212,9 +224,23 @@ export function loadConfig({ env = process.env, appVersion }: LoadConfigOptions)
     deploymentBlock = parsed;
   }
 
-  // Presence, not value. Nothing in this function ever copies key material.
+  // Presence, not value. Nothing that leaves this function copies key material.
   const configured = (value: string | undefined): boolean =>
     value !== undefined && value.trim().length > 0;
+
+  // Validated here so a malformed key is a startup message rather than a failure
+  // at the moment a member presses send. The value is never echoed, not even
+  // truncated: a prefix of a private key is still key material.
+  let memberKey: `0x${string}` | undefined;
+  const rawMemberKey = env.ZARYA_MEMBER_KEY?.trim();
+  if (rawMemberKey !== undefined && rawMemberKey.length > 0) {
+    if (!/^0x[0-9a-fA-F]{64}$/.test(rawMemberKey)) {
+      throw new ConfigError(
+        'ZARYA_MEMBER_KEY is not a 32-byte hex private key (0x followed by 64 hex characters)',
+      );
+    }
+    memberKey = rawMemberKey as `0x${string}`;
+  }
 
   return {
     publicConfig: {
@@ -227,6 +253,6 @@ export function loadConfig({ env = process.env, appVersion }: LoadConfigOptions)
       memberSignerConfigured: configured(env.ZARYA_MEMBER_KEY),
       executorSignerConfigured: configured(env.ZARYA_EXECUTOR_KEY),
     },
-    secretConfig: new SecretConfig(rpcUrl),
+    secretConfig: new SecretConfig(rpcUrl, memberKey),
   };
 }

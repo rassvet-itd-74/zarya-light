@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import type { GetAppStatusDeps, WorkerProbe } from '../../app/getAppStatus';
 import { loadConfig } from '../config/appConfig';
 import { IPC_CHANNELS } from './ipcContract';
+import type { WorkerReply } from './workerProtocol';
 import {
   IpcPayloadError,
   assertNoPayload,
   handleGetAppStatus,
+  handleSubmitOperation,
   pushWorkerHealth,
   registerIpcHandlers,
 } from './ipcHandlers';
@@ -14,7 +16,7 @@ const RPC_WITH_KEY = 'https://sepolia.example.com/v2/PROJECT-KEY-DO-NOT-LEAK';
 
 const deps = (worker: Partial<WorkerProbe> = {}): GetAppStatusDeps => ({
   publicConfig: loadConfig({
-    env: { ZARYA_RPC_URL: RPC_WITH_KEY, ZARYA_MEMBER_KEY: '0xdeadbeef' },
+    env: { ZARYA_RPC_URL: RPC_WITH_KEY, ZARYA_MEMBER_KEY: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' },
     appVersion: '0.0.1-test',
   }).publicConfig,
   worker: {
@@ -60,7 +62,7 @@ describe('handleGetAppStatus', () => {
     const status = await handleGetAppStatus(deps());
     const serialized = JSON.stringify(status);
     expect(serialized).not.toContain('PROJECT-KEY-DO-NOT-LEAK');
-    expect(serialized).not.toContain('0xdeadbeef');
+    expect(serialized).not.toContain('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
     expect(status.rpcHost).toBe('sepolia.example.com');
     expect(status.memberSignerConfigured).toBe(true);
   });
@@ -139,6 +141,18 @@ describe('registerIpcHandlers', () => {
     };
   };
 
+  const stubSubmit = () => ({
+    // Declines, so registration tests can never reach a send path even by
+    // accident. A stub that confirmed would make this file the one place in the
+    // suite where a broadcast is one wrong wire away.
+    confirm: async () => false,
+    submitOperation: async () => ({
+      kind: 'failure' as const,
+      requestId: 'r1',
+      message: 'not used here',
+    }),
+  });
+
   it('registers exactly the channels in the contract', () => {
     const { handlers, ipcMain } = fakeIpcMain();
     registerIpcHandlers({
@@ -147,12 +161,14 @@ describe('registerIpcHandlers', () => {
       issuance: stubIssuance(),
       matrixReport: stubMatrixReport(),
       importForm: stubImportForm(),
+      submitOperation: stubSubmit(),
     });
     expect([...handlers.keys()]).toEqual([
       IPC_CHANNELS.getAppStatus,
       IPC_CHANNELS.issueTemplate,
       IPC_CHANNELS.generateMatrixReport,
       IPC_CHANNELS.importForm,
+      IPC_CHANNELS.submitOperation,
     ]);
   });
 
@@ -171,6 +187,7 @@ describe('registerIpcHandlers', () => {
       issuance: stubIssuance(),
       matrixReport: stubMatrixReport(),
       importForm: stubImportForm(),
+      submitOperation: stubSubmit(),
       onError,
     });
 
@@ -189,6 +206,7 @@ describe('registerIpcHandlers', () => {
       issuance: stubIssuance(),
       matrixReport: stubMatrixReport(),
       importForm: stubImportForm(),
+      submitOperation: stubSubmit(),
     });
 
     const handler = handlers.get(IPC_CHANNELS.getAppStatus);
@@ -223,5 +241,125 @@ describe('pushWorkerHealth', () => {
     expect(() => pushWorkerHealth([vanishing, live], 'HEALTHY')).not.toThrow();
     // And the windows after it still get their push.
     expect(live.send).toHaveBeenCalledWith(IPC_CHANNELS.workerHealth, 'HEALTHY');
+  });
+});
+
+describe('handleSubmitOperation', () => {
+  /**
+   * The confirmation is the asking hard rule 1 requires, so the test that
+   * matters most here is the negative one: **a member who says no must not have
+   * reached the worker.** Everything else in this block is ordinary mapping.
+   */
+  const gateway = (over: Partial<{ confirm: boolean; reply: WorkerReply }> = {}) => {
+    const submitted: unknown[] = [];
+    return {
+      submitted,
+      gateway: {
+        confirm: async () => over.confirm ?? true,
+        submitOperation: async (payload: unknown) => {
+          submitted.push(payload);
+          return (
+            over.reply ?? {
+              kind: 'submitted' as const,
+              requestId: 'r1',
+              operationRef: 'op-1',
+              partial: false,
+              attempts: [{ attemptId: 'a1', hash: '0xabc', nonce: 4 }],
+            }
+          );
+        },
+      },
+    };
+  };
+
+  it('sends nothing when the member declines', async () => {
+    const { gateway: g, submitted } = gateway({ confirm: false });
+
+    const result = await handleSubmitOperation(g, [{ operationRef: 'op-1' }]);
+
+    expect(result).toEqual({ kind: 'DECLINED' });
+    // The whole point: not merely a DECLINED result, but no request at all.
+    expect(submitted).toEqual([]);
+  });
+
+  it('passes the reference and nothing else to the worker', async () => {
+    const { gateway: g, submitted } = gateway();
+
+    await handleSubmitOperation(g, [
+      { operationRef: 'op-1', data: '0xdeadbeef', to: '0xevil' },
+    ]);
+
+    // Rebuilt rather than forwarded, so a field nobody validated cannot ride
+    // along into the one message that leads to a transaction.
+    expect(submitted).toEqual([{ operationRef: 'op-1' }]);
+  });
+
+  it('reports what was sent', async () => {
+    const { gateway: g } = gateway();
+
+    expect(await handleSubmitOperation(g, [{ operationRef: 'op-1' }])).toEqual({
+      kind: 'SENT',
+      operationRef: 'op-1',
+      partial: false,
+      attempts: [{ attemptId: 'a1', hash: '0xabc', nonce: 4 }],
+    });
+  });
+
+  it('keeps a partial send a send, with its reason', async () => {
+    // A threshold configuration is three transactions with no atomicity across
+    // them. Presenting this as a failure would tell a member nothing happened
+    // while an organ is already half configured.
+    const { gateway: g } = gateway({
+      reply: {
+        kind: 'submitted',
+        requestId: 'r1',
+        operationRef: 'op-1',
+        partial: true,
+        attempts: [{ attemptId: 'a1', hash: '0xabc', nonce: 4 }],
+        message: 'setMinimumApprovalPercentage: the provider did not answer',
+      },
+    });
+
+    const result = await handleSubmitOperation(g, [{ operationRef: 'op-1' }]);
+
+    expect(result).toMatchObject({ kind: 'SENT', partial: true });
+    expect(result.kind === 'SENT' && result.message).toContain('did not answer');
+  });
+
+  it('refuses a payload that could not have come from the preload surface', async () => {
+    const { gateway: g, submitted } = gateway();
+
+    await expect(handleSubmitOperation(g, [])).rejects.toBeInstanceOf(IpcPayloadError);
+    await expect(handleSubmitOperation(g, ['op-1'])).rejects.toBeInstanceOf(IpcPayloadError);
+    await expect(handleSubmitOperation(g, [{ operationRef: '   ' }])).rejects.toBeInstanceOf(
+      IpcPayloadError,
+    );
+    await expect(handleSubmitOperation(g, [{ operationRef: 7 }])).rejects.toBeInstanceOf(
+      IpcPayloadError,
+    );
+    // Rejected before the dialog, so a malformed message cannot even raise one.
+    expect(submitted).toEqual([]);
+  });
+
+  it('passes a refusal through with its code', async () => {
+    const { gateway: g } = gateway({
+      reply: { kind: 'refused', requestId: 'r1', code: 'NO_SIGNER', message: 'no wallet' },
+    });
+
+    expect(await handleSubmitOperation(g, [{ operationRef: 'op-1' }])).toEqual({
+      kind: 'REFUSED',
+      code: 'NO_SIGNER',
+      message: 'no wallet',
+    });
+  });
+
+  it('treats a reply of the wrong kind as a failure rather than trusting it', async () => {
+    const { gateway: g } = gateway({
+      reply: { kind: 'pong', requestId: 'r1', protocolVersion: 1, uptimeSeconds: 1, schemaVersion: null },
+    });
+
+    expect(await handleSubmitOperation(g, [{ operationRef: 'op-1' }])).toMatchObject({
+      kind: 'FAILED',
+    });
   });
 });

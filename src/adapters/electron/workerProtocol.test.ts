@@ -36,11 +36,12 @@ const reply = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('the protocol version', () => {
-  it('was bumped for the import request', () => {
+  it('was bumped for the submit request', () => {
     // Pinned so that adding a request or reply shape without bumping it fails
     // here. The status readout displays this, and it is how a stale worker is
-    // recognised at a glance.
-    expect(WORKER_PROTOCOL_VERSION).toBe(5);
+    // recognised at a glance — which matters more now that one of the shapes
+    // leads to a transaction.
+    expect(WORKER_PROTOCOL_VERSION).toBe(6);
   });
 });
 
