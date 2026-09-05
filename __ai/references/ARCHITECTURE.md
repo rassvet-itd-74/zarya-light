@@ -106,7 +106,7 @@ Driven ports — the domain declares these, adapters implement them.
 | `ReceiptStamper` | flatten the form, then stamp the transaction's facts onto the page | forms |
 | `MatrixReportWriter` | render the coordinate reference PDF — landscape, no form fields, font embedded **whole** (subsetting dropped most of the Cyrillic; see `DECISIONS.md`). Takes the assembled model and nothing else, so no clock can reach the page | forms — *implemented* |
 | `OperationStore` | issued templates keyed by `operationRef`, with authoritative context | store |
-| `BatchStore` | batches, items, dependency edges | store |
+| `BatchStore` | batches and their items (no dependency edges — deferred 2026-09-06) | store |
 | `TransactionStore` | attempts, nonces, hashes, receipts, classified errors | store |
 | `CursorStore` | discovery block cursor, keyed by chain + address + projection; `commit` never moves backwards | store — *in memory until Phase 5* |
 | `Signer` | sign; never exposes key material | secrets |

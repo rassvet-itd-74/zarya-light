@@ -282,20 +282,52 @@ Owed downstream: **Phase 9's stamp trigger produces a drawn document rather than
 - **A secret was leaking, and the comment claiming otherwise is why.** `PrivateKeySigner` said `JSON.stringify(signer)` yielded `{}`; it yielded two kilobytes including the RPC URL with its API key. `private` is erased at runtime. Fixed at the root — `hideTransportUrl` makes `transport.url` non-enumerable at construction, covering all twelve classes that hold a client — and recorded in `INVARIANTS.md` under Secrets.
 - **Still not wired.** `submitOperation` and `stampOperationReceipt` remain reachable from nothing. That stays a deliberate decision rather than a default.
 
+## The remaining plan, rescoped 2026-09-06
+
+Asked for directly, after an estimate of 13–18 slices. Three changes, and the reasoning matters more than the numbers because the first one is a **capability being dropped**, not a reordering.
+
+**Wiring comes before building.** About nine thousand lines are currently reachable only from tests. Every defect this project has actually hit — the font subsetting that made three days of matrix reports unreadable, the hint descenders sliced by a field box, the worker never built for Node, the startup error present since Phase 1 — was found by running the application, never by the suite. Each phase stacked on unwired code compounds untested surface and makes the eventual defect more expensive to reach.
+
+**The batch engine is cut down to bulk import.** It was the largest remaining phase and rests on an assumption nothing supports: that governance operations depend on one another. The contract has no such relation, and no requirement has ever named one. A dependency DAG, cycle detection, `WAITING_FOR_DEPENDENCY` and `WAITING_FOR_ONCHAIN_CONDITION` are therefore machinery for a case that has never been described. **If the party does describe one, this decision is wrong and the DAG comes back** — that is the condition to watch for, and it is cheaper to add later than to carry unused.
+
+What survives the cut is everything that earns its keep without dependencies: validate every file before the first write, isolate an invalid item, allow `PARTIAL`, and resume after a crash.
+
+**The UI is built plain and deliberately so.** Phase 9 carried most of the schedule risk, and the gap between "functional" and "designed" is several slices. Plain can be raised later cheaply; the reverse is not true.
+
+Two smaller ones: replacement-by-fee ships as *surfaced and resolved by hand* — one wallet, low contention, and a fee bump is its own feature with its own tests. And most of Phase 10's end-to-end work stops being construction once the UI is wired incrementally; it becomes verification that was happening anyway.
+
+Estimated **9–12 slices**, down from 13–18. What is explicitly **not** cut: the executor's two suppression states (the contract makes them mandatory), the hostile-PDF fixtures at the trust boundary, and the manual verification nobody has done.
+
+## Phase 6 — remaining
+
+**Slice 5: wire the write path.** `submitOperation` and `stampOperationReceipt` reach the UI. This is the first way the application can broadcast, so it is also where an explicit confirmation belongs — hard rule 1 says a transaction is never sent unasked, and a button is the asking.
+
+**Slice 6: stuck detection.** Surface a transaction that has been `PENDING` too long, with re-checking. Replacement-by-fee is deliberately **not** in it: same nonce, explicit fee bump, its own tests, and no evidence yet that Sepolia contention needs it.
+
 ## Phase 7 — executive reconciler
 
 Discovery via the `VotingCreated` cursor; chain-time deadline checks; enqueue `executeVoting(votingId)` only. Startup, periodic, manual `Run now`, and reconnect all call one `reconcile()`.
 
-## Phase 8 — batch engine
+Cheaper than it looks: `VotingDiscovery` and the persisted cursor already exist from Phases 2 and 5. What is missing is the job, its states, and the two suppressions the contract forces — `InsufficientVotes` is terminal forever, and an *approved* voting can be permanently unexecutable too. Without both, discovery re-offers a dead voting on every pass.
 
-Batch as a first-class persisted object; validate the whole batch before the first write; partial submission; dependency DAG with cycle detection; resume and cancel.
+## Phase 8 — bulk import
+
+**Rescoped from "batch engine" on 2026-09-06.** A batch is still a persisted object with a stable id, per-item records, and its own states — that is what makes resume possible and it is not a loop around a variable.
+
+In: parse and validate every file before any write; per-item isolation so an invalid form does not block a valid one; duplicate and conflict detection through the three existing signals (file hash, `operationRef`, semantic identity); `PARTIAL` as a normal terminal state; resume and cancel; one receipt directory per batch.
+
+Out, until a requirement asks for it: dependency edges, the DAG, cycle detection, and the two waiting states.
 
 ## Phase 9 — UI
 
-Form template buttons; form import and review including tamper disclosure; audit trail; privileged operation preview; executive status and `Run now`; error detail without secret exposure.
+Form template buttons; form import and review including any disclosure the parser raises; audit trail; privileged operation preview; executive status and `Run now`; error detail without secret exposure.
+
+**Functional and plain.** No design system, no theming; legibility and correct labels only. The wording is the party's and is already centralized, so raising the finish later touches layout and not language.
 
 Per-organ and per-voting eligibility thresholds **cannot be displayed** — no getter exists. Do not design UI that assumes they can.
 
 ## Phase 10 — hardening
 
 Deterministic local E2E; eligibility snapshot regression; Chairman cross-organ tests; approval boundary and zero-vote tests; process-kill recovery; hostile-PDF fixtures; opt-in Sepolia smoke test; security review.
+
+Smaller than it reads if Phase 9 is wired incrementally: the journeys become verification of paths a person has already walked, rather than the first time anything has been driven end to end.

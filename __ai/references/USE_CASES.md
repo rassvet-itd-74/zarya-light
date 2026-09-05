@@ -43,8 +43,8 @@ The printable coordinate index a voter consults to learn which `(x, y)` to write
 | 5 | Semantic duplicate | Different files, same logical operation — detected by operation identity plus chain preflight. `hasVoted` is the final protection |
 | 6 | Unknown schema version | Rejected with a clear message. Never parsed on a best-effort basis |
 | 7 | Unknown or misspelled field name | Rejected. Never fuzzy-matched to the nearest known field |
-| 8 | Tampered app-authored field | The file's `votingId`/`contract`/`organ` disagree with the record for its `operationRef`. Surfaced as a tamper warning; the database values are used and the file's are never read for value |
-| 9 | Missing `operationRef` | Treated as unbound: full schema validation plus chain preflight, with no tamper check available |
+| 8 | App-authored field present at all | **Changed 2026-09-06.** A form carries no `zarya.context.*` or `zarya.receipt.*` widget, so one appearing means the file was edited by hand: refused as `RETIRED_FIELD`, not imported with a warning. The tamper *comparison* it replaced is gone with the fields it compared |
+| 9 | Missing `operationRef` | Treated as unbound: full schema validation plus chain preflight. Nothing app-authored can be recovered |
 | 10 | `operationRef` unknown or already completed | Rejected or shown as already processed. Never submitted blindly |
 | 11 | Hostile PDF | Embedded JavaScript, launch or URI action, embedded file, external reference, compression bomb, or corrupted xref — rejected without executing or fetching anything |
 | 12 | XFA present | Rejected. Never choose between XFA and AcroForm values |
@@ -78,9 +78,9 @@ Additional criteria:
 | --- | --- | --- |
 | 1 | Bulk voting | Many `castVote` intents; one intent per transaction |
 | 2 | Mixed batch | Proposals, votes, and privileged configuration together |
-| 3 | Dependency | A later operation may need an earlier voting's ID. Symbolic references only if the form schema defines them |
-| 4 | Failed dependency | Dependents blocked; unrelated items still processable |
-| 5 | Long-lived dependency | May wait days. `WAITING_FOR_ONCHAIN_CONDITION` survives restarts |
+| ~~3~~ | ~~Dependency~~ | **Deferred 2026-09-06.** No governance operation is known to require another to finalize first, and the form schema defines no symbolic reference. Reinstate with rows 4 and 5 if one is described |
+| ~~4~~ | ~~Failed dependency~~ | Deferred with row 3 |
+| ~~5~~ | ~~Long-lived dependency~~ | Deferred with row 3. `WAITING_FOR_ONCHAIN_CONDITION` is not implemented |
 | 6 | Partial submission | Confirmed items are never rolled back |
 | 7 | Cancel | Stops only unsent work; mined transactions remain final |
 | 8 | Resume | Restart or re-import reconciles and continues rather than replaying |

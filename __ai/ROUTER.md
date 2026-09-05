@@ -20,7 +20,7 @@ Source-of-truth precedence is in the root `CLAUDE.md`, which is always in contex
 
 ## Reading order for cross-domain work
 
-**Form-driven governance action** (the main pipeline) — `zarya-pdf-forms` → `zarya-intents` → `zarya-chain` → `zarya-transactions` → `zarya-testing`. Add `zarya-batch-engine` when more than one form is imported at once. Do not load executor rules; this is not post-deadline finalization.
+**Form-driven governance action** (the main pipeline) — `zarya-pdf-forms` → `zarya-intents` → `zarya-chain` → `zarya-transactions` → `zarya-testing`. Add `zarya-batch-engine` when more than one form is imported at once — reading its Scope note first, since inter-operation dependencies were deferred out of it on 2026-09-06. Do not load executor rules; this is not post-deadline finalization.
 
 **Template issuance from a UI button** — `zarya-pdf-forms` → `zarya-electron-architecture` → `zarya-persistence`. Issuance persists the operation before handing the file over, and needs no signer.
 

@@ -51,7 +51,6 @@ NOT_STARTED
 READY
 BLOCKED
 ALREADY_COMPLETED
-WAITING_FOR_DEPENDENCY
 QUEUED
 SIGNING
 SIGNED
@@ -117,5 +116,5 @@ Health is not the same as job state.
 - `PENDING -> FAILED` requires evidence; RPC loss alone yields unknown/pending-reconcile, not permanent failure.
 - `READY -> ALREADY_COMPLETED` is valid after a chain re-check.
 - A form-driven `castVote` can become `ALREADY_COMPLETED` if the member already voted, even if this local file was never processed.
-- A returned form whose app-authored fields diverge from its record is `VALID` only after the divergence is disclosed. Tampering is a disclosure event, not a parse failure, because the file's copies are never read for value.
+- ~~A returned form whose app-authored fields diverge from its record is `VALID` only after the divergence is disclosed.~~ **Superseded 2026-09-06.** A form carries no copy of an app-authored value to diverge — the context block is printed page text. A file that has one has had a field added by hand and is `REJECTED`, not disclosed.
 - Restart may move stale local states forward or backward only after reconciliation evidence.

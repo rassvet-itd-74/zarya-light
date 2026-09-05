@@ -98,6 +98,8 @@ Accepted costs, recorded rather than buried:
 
 ## Bulk behavior
 
+**Narrowed 2026-09-06 to bulk import.** Inter-operation dependencies — the DAG, cycle detection, and the two waiting states — are deferred until a requirement describes an operation that must wait for another to finalize. The contract declares no such relation and none has been asked for, so it was machinery for a case that does not exist. It was also the largest remaining phase. The condition that reverses this is written in the `zarya-batch-engine` skill's Scope note.
+
 - A user may import one file, many files, or a directory.
 - Parse and structurally validate the **entire** batch before the first write transaction.
 - Invalid forms do not invalidate independent valid forms. Partial submission is allowed, and `PARTIAL` is a normal terminal state.
