@@ -27,10 +27,42 @@ export function createZaryaPublicClient({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   retryCount = DEFAULT_RETRY_COUNT,
 }: PublicClientOptions) {
-  return createPublicClient({
-    chain: sepolia,
-    transport: http(rpcUrl, { timeout: timeoutMs, retryCount }),
-  });
+  return hideTransportUrl(
+    createPublicClient({
+      chain: sepolia,
+      transport: http(rpcUrl, { timeout: timeoutMs, retryCount }),
+    }),
+  );
+}
+
+/**
+ * Makes a viem client's transport URL non-enumerable, so it stops travelling
+ * into logs.
+ *
+ * **Found by testing the signer, on 2026-09-06.** A client keeps the URL it was
+ * built with on `transport.url`, and it is an ordinary enumerable property — so
+ * `JSON.stringify` and `util.inspect` on *anything holding a client* print it in
+ * full. Twelve classes in this adapter hold one. An API key in an error report
+ * is the kind of leak nobody notices until the key is rotated for other reasons.
+ *
+ * Non-enumerable rather than deleted, because viem reads it: the property still
+ * resolves for every caller that names it, and only the enumerating routes stop
+ * seeing it. `JSON.stringify` skips it, `console.log` skips it, `structuredClone`
+ * skips it; `inspect(x, { showHidden: true })` still shows it, which is the
+ * deliberate escape hatch for someone actually debugging a transport.
+ *
+ * This is a narrowing, not a guarantee. A caller that reads `transport.url` and
+ * logs it defeats it, and nothing here can stop that.
+ */
+export function hideTransportUrl<T>(client: T): T {
+  const transport = (client as { transport?: Record<string, unknown> }).transport;
+  if (transport === undefined || !Object.hasOwn(transport, 'url')) return client;
+  const descriptor = Object.getOwnPropertyDescriptor(transport, 'url');
+  // A getter or a non-configurable property is left alone rather than replaced:
+  // guessing at viem's internals would be worse than the leak.
+  if (descriptor?.configurable !== true || descriptor.get !== undefined) return client;
+  Object.defineProperty(transport, 'url', { ...descriptor, enumerable: false });
+  return client;
 }
 
 /**

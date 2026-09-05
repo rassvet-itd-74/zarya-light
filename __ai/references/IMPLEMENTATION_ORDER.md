@@ -273,6 +273,15 @@ Asked for directly: make the fields only the application fills non-editable — 
 
 Owed downstream: **Phase 9's stamp trigger produces a drawn document rather than a filled one**, so the UI hands back a file that cannot be re-imported at all rather than one whose fields are populated.
 
+### 2026-09-06 — slice 4: the chain adapters get tests
+
+`PrivateKeySigner` and `ZaryaReceipts` had been listed as unverified in three consecutive worklogs. Taken before any UI wiring, because wiring a button to untested adapters is backwards.
+
+- **The first test in the repository that sends a transaction**, against a local anvil forking Sepolia. Every other fork test says "nothing here signs or broadcasts" and still does; this one cannot, because nonce assignment and hash derivation are properties of a node's response. Nothing reaches Sepolia.
+- **It proves the premise recovery rests on:** a reverting call throws at gas estimation *without consuming a nonce*, so `reconcileTransactions` treating a free nonce as proof that nothing landed is sound. That had never been checked against a node.
+- **A secret was leaking, and the comment claiming otherwise is why.** `PrivateKeySigner` said `JSON.stringify(signer)` yielded `{}`; it yielded two kilobytes including the RPC URL with its API key. `private` is erased at runtime. Fixed at the root — `hideTransportUrl` makes `transport.url` non-enumerable at construction, covering all twelve classes that hold a client — and recorded in `INVARIANTS.md` under Secrets.
+- **Still not wired.** `submitOperation` and `stampOperationReceipt` remain reachable from nothing. That stays a deliberate decision rather than a default.
+
 ## Phase 7 — executive reconciler
 
 Discovery via the `VotingCreated` cursor; chain-time deadline checks; enqueue `executeVoting(votingId)` only. Startup, periodic, manual `Run now`, and reconnect all call one `reconcile()`.

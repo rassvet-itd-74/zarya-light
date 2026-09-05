@@ -3,6 +3,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import type { Signer, SignerIdentity, SignedSubmission, UnsignedCall } from '../../domain/ports/Signer';
 import { type ChainId, type EvmAddress, chainId, evmAddress } from '../../domain/primitives';
+import { hideTransportUrl } from './publicClient';
 
 /**
  * `Signer` over a viem wallet client.
@@ -11,9 +12,24 @@ import { type ChainId, type EvmAddress, chainId, evmAddress } from '../../domain
  *
  * It is turned into an account in the constructor and the string is not kept.
  * There is no getter, no field holding it, and nothing here logs, serializes or
- * returns it — hard rule 2 as code rather than as a convention. The class is
- * also `toJSON`-hostile by having nothing to serialize; an accidental
- * `JSON.stringify(signer)` yields `{}` rather than a key.
+ * returns it — hard rule 2 as code rather than as a convention.
+ *
+ * ## What this comment used to claim, and why it was wrong
+ *
+ * It said the class was "`toJSON`-hostile by having nothing to serialize", so
+ * that `JSON.stringify(signer)` yielded `{}`. That was false: TypeScript's
+ * `private` is erased at runtime, and the real output was two kilobytes across
+ * four fields — **including the RPC URL with its API key**, which
+ * `PublicClientOptions` documents as a secret that is never logged.
+ *
+ * The key itself was never in it. But a comment telling a reader that logging a
+ * signer is safe is worse than no comment, because it is the reason someone
+ * would do it. Found on 2026-09-06 by writing the test this comment had been
+ * standing in for.
+ *
+ * Now: {@link hideTransportUrl} takes the URL out of every enumerating route,
+ * and `toJSON` below makes the original claim true in a more useful form — a
+ * serialized signer is its identity and nothing else.
  *
  * This runs in the **worker** and only there. Main does not construct one and
  * the renderer cannot reach one.
@@ -35,18 +51,34 @@ export class PrivateKeySigner implements Signer {
 
   constructor(privateKey: `0x${string}`, rpcUrl: string) {
     this.account = privateKeyToAccount(privateKey);
-    this.wallet = createWalletClient({
-      account: this.account,
-      chain: sepolia,
-      transport: http(rpcUrl),
-    });
-    this.reader = createPublicClient({ chain: sepolia, transport: http(rpcUrl) });
+    this.wallet = hideTransportUrl(
+      createWalletClient({
+        account: this.account,
+        chain: sepolia,
+        transport: http(rpcUrl),
+      }),
+    );
+    this.reader = hideTransportUrl(
+      createPublicClient({ chain: sepolia, transport: http(rpcUrl) }),
+    );
     this.network = chainId(sepolia.id);
     // The key parameter goes out of scope here and is referenced nowhere else.
   }
 
   identity(): SignerIdentity {
     return { address: evmAddress(this.account.address) as EvmAddress, chainId: this.network };
+  }
+
+  /**
+   * What a serializer gets: the identity, and nothing else.
+   *
+   * Covers `JSON.stringify` and anything built on it. It is not the only
+   * defence — `hideTransportUrl` handles `util.inspect` and structured clone,
+   * which do not consult `toJSON` — and neither is a substitute for not logging
+   * a signer in the first place.
+   */
+  toJSON(): SignerIdentity {
+    return this.identity();
   }
 
   async submit(call: UnsignedCall): Promise<SignedSubmission> {

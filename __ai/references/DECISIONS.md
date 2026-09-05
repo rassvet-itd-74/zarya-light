@@ -69,6 +69,8 @@ Accepted costs, recorded rather than buried:
 
 ## Receipts
 
+- **2026-09-06.** A viem client's `transport.url` is made non-enumerable at construction (`hideTransportUrl`), and `PrivateKeySigner` gained a `toJSON` returning only its identity. Both close accidental-logging routes for the provider API key; neither is a substitute for not logging a client.
+
 - When a transaction confirms, the returned form is stamped: flattened first, then a mark drawn onto the last page carrying all six facts from the transaction record.
 - **Superseded 2026-09-06.** The receipt used to be six AcroForm fields present in every template and empty at issuance, filled at stamp time. It is now composed graphics: hard blue lines from `src/assets/receipt-stamp.svg` plus drawn text, applied over the page. Two reasons — six empty shaded boxes on every issued form were six boxes a member had to be told not to fill in, and field rotation is quantized to 90° steps, so nothing that reads as a stamp was achievable with fields.
 - The stamp **overprints**. Nothing is reserved for it and the template is not laid out around it. Its interior is an opaque ground so the six facts stay readable over whatever they cover; the frame lands directly on page content.

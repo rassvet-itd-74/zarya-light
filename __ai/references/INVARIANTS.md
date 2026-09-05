@@ -63,6 +63,8 @@ After a transaction confirms, the app stamps the returned form into a receipt: t
 ## Secrets
 
 - Never commit or log private keys, seed phrases, decrypted secret material, or auth tokens.
+- **The RPC URL is one of those tokens.** Every provider this client will meet puts its API key in the URL path, and a viem client keeps that URL on `transport.url`. It was an ordinary enumerable property until 2026-09-06, so `JSON.stringify` or `console.log` on *anything holding a client* printed the key in full — twelve classes in the chain adapter hold one. `hideTransportUrl` in `publicClient.ts` makes it non-enumerable at construction; it stays readable to anything that names it, and to `inspect(x, { showHidden: true })`. That narrows the accidental routes and closes none of the deliberate ones: a caller that reads the URL and logs it still leaks it.
+- **A `private` field is not a secrecy mechanism.** TypeScript erases it, so it hides nothing from a serializer. `PrivateKeySigner` carried a comment claiming the opposite for three days. Where an object must not serialize, give it a `toJSON`.
 - Never store keys in renderer-accessible storage.
 - If using Electron `safeStorage`, persist only encrypted blobs and handle unavailable encryption safely.
 - Persist raw signed transactions only if an explicit, reviewed outbox design requires it.
