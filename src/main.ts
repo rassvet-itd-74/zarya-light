@@ -72,19 +72,12 @@ try {
 }
 
 /**
- * The member wallet: created once, encrypted by the operating system, and never
- * configured by hand.
+ * The member wallet: created once, encrypted by the OS, never configured by
+ * hand. It lives here because `safeStorage` is main-only.
  *
- * It lives in main because `safeStorage` does — Electron declares it in the
- * `Main` namespace and not in `Utility`, so the worker cannot decrypt anything.
- * Main therefore decrypts, and hands the key to the worker over the message port
- * on every worker start.
- *
- * **There is no backup.** The encryption is bound to this operating-system
- * account, so a reinstalled machine or a lost profile leaves the wallet
- * unrecoverable — and an unrecoverable governance wallet is an address that can
- * never act again. Recorded in `INVARIANTS.md` as an open product decision
- * rather than left for a member to discover.
+ * **There is no backup.** The encryption is bound to this OS account, so a lost
+ * profile is an address that can never act again — an open product decision,
+ * recorded in `INVARIANTS.md`.
  */
 const keyStore = new SafeStorageKeyStore(safeStorage, keyFileAt(app.getPath('userData')));
 

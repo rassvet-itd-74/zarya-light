@@ -20,35 +20,17 @@ import {
 import type { AxisEntry, CoordinateIndex } from './matrixIndex';
 
 /**
- * The printable matrix reference, assembled.
+ * The read model behind the coordinate reference: which `(x, y)` exist and what
+ * is in them, because the contract cannot be asked what coordinates there are.
  *
- * This is the read model behind the one document a voter consults *before*
- * filling anything in: it says which `(x, y)` exist and what is in them, because
- * a form asks for coordinates and the contract cannot be asked what coordinates
- * there are.
+ * **No degradation is silent.** A failed read becomes a visible marker on its
+ * row and the coordinates survive it — a sheet that dropped a row would have a
+ * voter conclude a cell does not exist. Nothing readable at all is a separate
+ * outcome: an outage, which must not print like an empty matrix.
  *
- * Domain rather than adapter, and the split is load-bearing. Which cells appear,
- * in what order, with which fields, and what is said when a read fails are all
- * decisions about what the document *claims* — testable here against fake
- * readers. Turning the model into ink is the `MatrixReportWriter`'s problem.
- *
- * ## Every degradation is on the page, and none of them is silent
- *
- * A reference sheet that quietly dropped a row would be worse than one that
- * failed, because a voter would read a complete-looking page and conclude a cell
- * does not exist. So a failed read becomes a visible marker on the row it
- * belongs to, and the coordinates — the thing the voter actually needs — survive
- * every failure below them. The one total failure is **nothing readable at all**:
- * there was work to do and not one read answered, which is an outage rather than
- * an empty matrix, and the two must not print the same.
- *
- * ## Staleness is a correctness property here, not a disclaimer
- *
- * Someone will type coordinates from a month-old printout. Two things make that
- * safe rather than merely warned about: every page carries the block and chain
- * timestamp the reads were pinned to, and preflight re-validates coordinates at
- * submission, so a stale coordinate produces a clear refusal rather than a wrong
- * transaction. The second is why the first can be a fact rather than a promise.
+ * Staleness is safe rather than warned about because preflight re-validates
+ * coordinates at submission, so a month-old printout produces a refusal rather
+ * than a wrong transaction.
  */
 
 /** A field whose read did not answer. Rendered as unavailable, never as absent. */

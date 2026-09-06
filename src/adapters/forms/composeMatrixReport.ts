@@ -30,24 +30,15 @@ import {
 } from './reportLayout';
 
 /**
- * Laying the report out, as data rather than as ink.
+ * The report's layout as data, so it can be asserted on.
  *
- * Split from the renderer because with an embedded custom font `drawText` writes
- * **glyph identifiers**, not characters — so once a string is in a PDF content
- * stream there is no way to assert that it is the string that was meant without
- * a full text extractor. Every interesting property of this document is about
- * *what it says and where*: that the staleness stamp is on every page, that a
- * coordinate survives a failed read, that a hash is shown rather than a guessed
- * label, that nothing lands outside the margins. All of those are checkable here
- * and effectively uncheckable one layer down.
+ * Split from the renderer because with an embedded font `drawText` writes
+ * **glyph identifiers**, not characters — every property worth testing (the
+ * stamp on every page, a coordinate surviving a failed read, nothing outside the
+ * margins) is checkable here and effectively uncheckable one layer down.
  *
- * So this module decides the layout and the wording, and the renderer's only job
- * is to turn a list of positioned strings into a page. There is nothing to
- * decide left in it.
- *
- * Measurement is injected because it is the one thing composition cannot know:
- * how wide «Расходы» is at 7.5pt is a property of PT Sans. Truncation is
- * measured rather than counted for exactly that reason.
+ * Measurement is injected: how wide «Расходы» is at 7.5pt is a property of PT
+ * Sans, which is why truncation is measured rather than counted.
  */
 
 /** How wide `text` is, in the face and size it will be drawn at. */
@@ -338,19 +329,12 @@ class Composer {
   // ------------------------------------------------------------------- cells
 
   /**
-   * The populated cells, grouped by matrix and then by column.
+   * Populated cells, grouped by matrix then column, with the theme as a heading
+   * rather than on every row — repeating it costs ~165pt a line.
    *
-   * The theme is printed once as the heading over its column's rows rather than
-   * on every one. It is constant down the column, and repeating it would spend
-   * ~165pt of every line restating it — the width that pays for the author and
-   * the timestamp being legible.
-   *
-   * **This relies on the model's rows being sorted by `x`**, which
-   * `assembleMatrixReport` guarantees. Grouping is done by watching `x` change
-   * rather than by bucketing, so unsorted rows would emit a fresh group heading
-   * and a fresh set of column headers per row — roughly four times the paper for
-   * the same content. Cheap to depend on and expensive to get wrong, so there is
-   * a test that a column's rows produce exactly one heading.
+   * **Relies on rows being sorted by `x`**, which `assembleMatrixReport`
+   * guarantees: grouping watches `x` change rather than bucketing, so unsorted
+   * rows would emit a heading per row and roughly four times the paper.
    */
   private cells(): void {
     this.heading(labelText(REPORT_SECTIONS.cells));

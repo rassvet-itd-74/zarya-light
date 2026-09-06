@@ -1,14 +1,9 @@
 /**
- * The main ↔ worker message protocol.
+ * The main ↔ worker message protocol. Types and pure guards only — main, the
+ * worker, the preload and the renderer all import it, so it pulls in nothing.
  *
- * Types and pure guards only: this module is imported by the main process, by
- * the worker, and — for its `WorkerHealth` type — by the preload and renderer,
- * so it must pull in nothing at all.
- *
- * Every message is validated on arrival at both ends. The worker is a child of
- * our own main process rather than untrusted input, but a message that fails to
- * match is evidence of a version skew between a stale build and a fresh one, and
- * a clear rejection beats a `TypeError` three frames deep.
+ * Validated at both ends: a message that fails to match means a version skew
+ * between a stale build and a fresh one.
  */
 
 import type { NetworkStatusView } from '../chain/networkStatusView';
@@ -41,17 +36,11 @@ export function isWorkerHealth(value: unknown): value is WorkerHealth {
 }
 
 /**
- * What a template issuance needs from the UI.
+ * The destination is chosen by a save dialog in main and travels inwards, so a
+ * 330 KB document never crosses the port.
  *
- * The **destination path is chosen in main**, by a save dialog, and travels
- * inwards — so the bytes of a 330 KB document never cross the message port and
- * the worker owns both the record and the file. The renderer never sees a path it
- * did not get from that dialog.
- *
- * The organ arrives as a **subject code**, which is what a member reads off a
- * document, and becomes an ordinal only through the region table. There is no
- * numeric route from this message to a call argument, which is the point: the
- * two differ for 50 of 98 regions.
+ * The organ arrives as a **subject code** and becomes an ordinal only through
+ * the region table — the two differ for 50 of 98 regions.
  */
 export interface IssueTemplatePayload {
   readonly operationType: string;
@@ -105,58 +94,35 @@ export type WorkerRequest =
     };
 
 /**
- * The member wallet's key, travelling from main to the worker exactly once per
- * worker start.
+ * **The only message that carries a secret**, sent once per worker start.
  *
- * **This is the only message in the protocol that carries a secret**, and every
- * choice about it is a consequence of that.
+ * It travels because `safeStorage` is main-only (Electron declares it in `Main`,
+ * not `Utility`) while signing lives in the worker. Not through the environment:
+ * that is inherited by child processes and readable from outside on several
+ * platforms.
  *
- * *Why it travels at all.* `safeStorage` is a main-process API — Electron
- * declares it in `Main` and not in `Utility` — so a `utilityProcess` cannot
- * decrypt anything. Signing lives in the worker with the store and the chain
- * client. One of those two facts has to give, and moving the key is cheaper than
- * moving the queue.
- *
- * *Why not the environment.* The RPC URL is passed that way at fork, and a key
- * is not the same thing: an environment is inherited by any child a process
- * spawns and is readable from outside the process on several platforms. A
- * message is delivered once, to one recipient, and leaves nothing behind.
- *
- * *Where it must never go.* Not to the renderer, not to a log line, not to the
- * database (hard rule 2). The worker holds it in a module-local and hands it to
- * a signer built per request.
+ * Never to the renderer, a log, or the database (hard rule 2).
  */
 export interface MemberKeyPayload {
   readonly privateKey: string;
 }
 
 /**
- * What sending an operation needs from the UI: **which** one, and nothing else.
+ * Which operation to send, and nothing else — no intent, calldata, address,
+ * amount or signer. The worker derives all of that from the stored document.
  *
- * This is the only message in the protocol that leads to a transaction, so what
- * it does *not* carry is the important part. No intent, no calldata, no address,
- * no amount, no signer. The renderer names a stored operation and the worker
- * derives what that means by re-reading the document stored with it.
- *
- * A payload that could carry calldata would put the untrusted UI inside the
- * allow-list the whole form pipeline exists to enforce — one layer below where
- * anyone would think to look for a hole.
+ * A payload that could carry calldata would put the untrusted UI inside the form
+ * pipeline's allow-list, below where anyone would look for a hole.
  */
 export interface SubmitOperationPayload {
   readonly operationRef: string;
 }
 
 /**
- * What an import needs from the UI: where the file is, and nothing else.
- *
- * The path travels **inwards** only, exactly as issuance's destination does, and
- * it comes from an open dialog in main. A renderer that could name a path could
- * name any path, and this one is read.
- *
- * Nothing else crosses because nothing else may: which operation the form
- * belongs to is the file's to state and the record's to confirm, and a caller
- * that could assert an `operationRef` here would be supplying the app-authored
- * half from outside the record (hard rule 4).
+ * Where the file is, and nothing else. The path comes from an open dialog in
+ * main — a renderer that could name a path could name any path, and this one is
+ * read. Which operation the form belongs to is the file's to state and the
+ * record's to confirm (hard rule 4).
  */
 export interface ImportFormPayload {
   readonly sourcePath: string;

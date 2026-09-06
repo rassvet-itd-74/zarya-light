@@ -4,53 +4,21 @@ import { appearanceTextOf } from './fieldAppearance';
 import { type HazardCode, findCompressionBomb, findFileHazards } from './pdfHazards';
 
 /**
- * PDF bytes to field values, or a structural rejection.
+ * PDF bytes to field values, or a structural rejection. The only module that
+ * touches a PDF library.
  *
- * This is the outermost layer of the form pipeline and the only one that touches
- * a PDF library. Its contract is narrow on purpose:
+ * It **never throws** — every failure is a rejection value — never runs or
+ * fetches anything, and produces only field names and values, so nothing
+ * downstream can be steered by page content or an action.
  *
- * - it **never throws** — every failure is a rejection value, because a caller
- *   deciding whether to import a file must not have to distinguish an exception
- *   from an answer;
- * - it **never runs anything** in the file, fetches anything, or writes
- *   anything;
- * - it produces **only field names and values**, so nothing downstream can be
- *   steered by page content, an action, or an embedded file.
+ * Vocabulary is not its business: it reports names the schema does not define,
+ * because `assembleFormInput` can only refuse what it is shown.
  *
- * Vocabulary is not its business. It reports every field it can read, including
- * names the schema does not define, because `assembleFormInput` is what judges
- * a name and it can only refuse what it is shown.
- *
- * ## Why pdf-lib
- *
- * Verified by probing 1.17.1 rather than by reading its README:
- *
- * | Requirement | Observed |
- * | --- | --- |
- * | never executes PDF JavaScript | `/OpenAction` with `/JS` survives a load as inert data; the package has no interpreter, and `eval`/`new Function` appear nowhere in it |
- * | never fetches a remote resource | every `fetch(` in the source is inside a JSDoc example telling callers to load bytes themselves; zero runtime occurrences |
- * | reads and writes AcroForm names and values | round-tripped, including a Cyrillic value and a value stored as a hex string |
- * | fails loudly on a malformed file | throws on garbage, on an empty buffer, and on a truncated document |
- *
- * The maintained fork `@cantoo/pdf-lib` was rejected: it pulls in an HTML parser
- * at `>=1.5.9` — an unpinned major range — for features this project does not
- * use, and that is attack surface on the one boundary that parses hostile input.
- * pdf-lib 1.17.1 has four narrow dependencies and roughly 25 times the usage.
- *
- * ## Two places it does not meet the constraint, and what covers them
- *
- * **A corrupted `startxref` offset still loads.** pdf-lib recovers by scanning
- * for objects rather than failing, which is the "guessing" `zarya-pdf-forms`
- * warns about. What makes that tolerable is that a recovered document is judged
- * by exactly the same rules as any other: the schema version, the field names,
- * and the operation record all still have to agree, and the app-authored values
- * come from the database either way.
- *
- * **String decoding blows the stack on multi-megabyte values.** A 3 MB field
- * value throws `RangeError: Maximum call stack size exceeded` during `load`.
- * That is caught here and reported as unreadable, and {@link MAX_FILE_BYTES} is
- * the reason it stays rare rather than routine — the cap exists for this, not
- * for tidiness.
+ * Two pdf-lib behaviours it cannot prevent (`DECISIONS.md` has the evidence):
+ * a corrupted `startxref` still loads by scanning, and a multi-megabyte field
+ * value blows the stack during `load`. The first is tolerable because a
+ * recovered document is judged by the same rules as any other; the second is
+ * caught here, and {@link MAX_FILE_BYTES} exists for it.
  */
 
 /**

@@ -36,45 +36,19 @@ import {
 } from './templateLayout';
 
 /**
- * Template issuance: an operation to a pre-filled AcroForm PDF.
+ * An operation to a pre-filled AcroForm PDF. Nothing here signs, reads a chain,
+ * or writes to disk — it returns bytes, which is what keeps issuance free of a
+ * signer.
  *
- * The opposite direction from the parser, and it has to agree with it exactly —
- * both read {@link templateFieldNames}, so a field the parser expects and the
- * issuer omits is a compile-time shared constant rather than a discovered bug.
- * The test that matters is that the output passes this application's own
- * ingestion checks (`USE_CASES.md`, issuance row 5).
+ * Assets are **injected, not imported**: Vite's `?inline` resolves to a data URL
+ * in a build and a path string under vitest, so an issuer importing its own font
+ * would be untestable against the real file.
  *
- * Nothing here signs, reads a chain, or writes to disk. It returns bytes, and
- * whoever asked for them decides where they go — which is also what keeps
- * issuance free of a signer (`INVARIANTS.md`: template generation must never
- * require one).
- *
- * ## Assets are injected, not imported
- *
- * The font and the logo arrive as bytes. That is not ceremony: Vite's `?inline`
- * — the pattern `main.ts` uses for the window icon — resolves to a **data URL
- * in a build and to a path string under vitest**, so an issuer that imported
- * its own font would be untestable against the real file. The composition root
- * owns that question; this module owns the document.
- *
- * ## Why the fonts are embedded, and why they are NOT subset
- *
- * pdf-lib's standard fonts are WinAnsi and physically cannot encode Cyrillic —
- * `WinAnsi cannot encode "С" (0x0421)`, observed. So PT Sans is embedded.
- *
- * Subsetting would cost 11 KB instead of ~322 KB, and it is **rejected**. A
- * subset contains only the glyphs this file draws — its own labels — and a PDF
- * viewer regenerates a field's appearance from the font named in that field's
- * `/DA` when someone types into it. A member typing a theme whose letters are
- * not among the labels' letters would then see blanks or boxes where their own
- * text should be. The stored value would still be correct and the application
- * would still work, which is what makes it the worse failure: the form looks
- * broken and the data is fine.
- *
- * That risk is **reasoned, not observed** — confirming it needs a real viewer,
- * which nothing here has. The safe option costs bytes; the risky one costs a
- * member the ability to read their own form, so the bytes win until someone
- * checks with Acrobat.
+ * The font is embedded **whole**. pdf-lib's standard fonts cannot encode
+ * Cyrillic, and a subset contains only the glyphs this file draws — a member
+ * typing a theme whose letters are not among the labels' would see blanks where
+ * their own text should be, while the stored value stayed correct. Reasoned
+ * rather than observed for forms; observed on the report (`DECISIONS.md`).
  */
 
 export interface TemplateAssets {

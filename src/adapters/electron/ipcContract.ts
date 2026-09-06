@@ -70,17 +70,9 @@ export type IssueTemplateResult =
   | { readonly kind: 'FAILED'; readonly message: string };
 
 /**
- * What a finished matrix report tells the UI.
- *
- * The counts are here so the panel can say something truthful about a document
- * the user cannot see from the app. `degradedRows` in particular: a report can
- * be written *and* incomplete, and a row whose fields did not read is marked on
- * the page — so the UI has to be able to point at it rather than reporting an
- * unqualified success.
- *
- * `blockNumber` is a decimal string for the same reason it is one in the worker
- * protocol: a `bigint` does not survive the structured clone, and nothing here
- * does arithmetic on it.
+ * A report can be written *and* incomplete, so `degradedRows` lets the UI say so
+ * rather than report an unqualified success. `blockNumber` is a decimal string
+ * because a `bigint` does not survive the structured clone.
  */
 export type MatrixReportResult =
   | {
@@ -99,17 +91,10 @@ export type MatrixReportResult =
   | { readonly kind: 'FAILED'; readonly message: string };
 
 /**
- * What a finished import tells the UI.
- *
- * `fields` is the intent flattened to strings, and it is what a member checks
- * before anything is submitted — the form is untrusted, so seeing what the
- * application actually understood is the point of the screen rather than a
- * courtesy.
- *
- * `warnings` is tamper evidence and must be shown even though the import
- * succeeded: a context field edited in the file, or a field whose appearance
- * disagreed with its value. Neither can change the intent, which is exactly why
- * neither may be silently dropped.
+ * `fields` is the intent flattened to strings — what a member checks before
+ * anything is sent, since the form itself is untrusted. `warnings` is tamper
+ * evidence and is shown even on success; neither can change the intent, which is
+ * why neither may be dropped.
  */
 export type ImportFormResult =
   | {
@@ -128,18 +113,12 @@ export type ImportFormResult =
   | { readonly kind: 'FAILED'; readonly message: string };
 
 /**
- * What sending an operation tells the UI.
+ * `partial` is a real outcome, not an error: a threshold configuration is three
+ * transactions with no atomicity, so presenting it as a failure would say
+ * nothing happened while an organ is already half configured.
  *
- * `SENT` carries every attempt, and `partial` says whether the rest of a
- * multi-call operation followed. A threshold configuration is three transactions
- * with no atomicity across them, so "some of it happened" is a real outcome and
- * not an error state — presenting it as a failure would tell a member nothing
- * was done when an organ is already half configured.
- *
- * `DECLINED` is the user answering no at the confirmation. Distinct from
- * `REFUSED`, which is the application declining, and from `CANCELLED`, which
- * other calls use for a dismissed file dialog — a member who read what was about
- * to be sent and said no has done something deliberate.
+ * `DECLINED` is the member saying no — distinct from `REFUSED`, the application
+ * declining.
  */
 export type SubmitOperationResult =
   | {
@@ -188,18 +167,11 @@ export interface ZaryaDesktopApi {
    */
   importForm(): Promise<ImportFormResult>;
   /**
-   * Sends an imported operation. **The only call here that broadcasts.**
+   * **The only call here that broadcasts.** An `operationRef` and nothing else:
+   * it names which stored operation to send, not what that operation is.
    *
-   * Takes an `operationRef` and nothing else. It names *which* stored operation
-   * to send; it cannot influence *what* that operation is, because the worker
-   * derives that by re-reading the document stored with the record. A renderer
-   * that could pass calldata, an address or an amount would be inside the form
-   * pipeline's allow-list.
-   *
-   * Main asks for confirmation before anything is signed. That is a guard
-   * against a mis-click, not against a compromised renderer — a renderer that
-   * wanted to send could call this with any reference it liked, and the
-   * confirmation would name that one.
+   * Main confirms first. That guards a mis-click, not a compromised renderer —
+   * which could call this with any reference and see its own choice named back.
    */
   submitOperation(input: { readonly operationRef: string }): Promise<SubmitOperationResult>;
   /** Subscribes to worker health pushes; returns the unsubscribe function. */

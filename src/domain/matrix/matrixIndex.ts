@@ -2,47 +2,23 @@ import type { Bytes32, EvmAddress } from '../primitives';
 import { type MatrixCoordinate, type MatrixKind, MATRIX_KINDS, coordinateKey } from './matrix';
 
 /**
- * Which coordinates exist, projected from the event stream.
+ * Which coordinates exist, projected from events — the contract has no cell
+ * enumeration, and every read is `(x, y)`-addressed. The projection is complete
+ * rather than a sample because matrix state changes only through a voting.
  *
- * The contract **cannot be asked what the matrix contains** — there is no
- * dimension getter and no cell enumeration, and every read is `(x, y)`-addressed,
- * so a coordinate has to be known before it can be read (`CONTRACT.md`, "Not
- * exposed"). What makes a projection sufficient rather than a guess is that
- * matrix state changes *only* through a successful voting, and every such change
- * is observable. So the event stream is a complete index, not a sample.
+ * **Two routes, and the second is gated.** `ValueAdded` and `CategoryAdded` fire
+ * from inside `_executeApprovedSuggestion`, so they are their own evidence.
+ * Decimals, themes and statements emit nothing on application, so they are
+ * *creation* events joined to `VotingFinalized(success = true)`. Ungated, the
+ * index would list coordinates that were only proposed.
  *
- * ## Two routes, and the second one is gated
- *
- * **Applied changes** — `ValueAdded` and `CategoryAdded` — fire from inside
- * `_executeApprovedSuggestion`, so their presence *is* the evidence that a voting
- * passed and its mutation landed. They need no gating.
- *
- * **Everything else** emits nothing on application. `Matricies.setDecimals`,
- * `setTheme` and `setStatement` are silent, so a decimals, theme or statement
- * change is observable only as a *creation* event joined to
- * `VotingFinalized(success = true)` for the same `votingId`. Ungated, the index
- * would list coordinates and axis labels that were merely **proposed** — and a
- * voter transcribing one would fill in a form that fails preflight for a cell
- * that never existed.
- *
- * ## Application order is finalization order, not creation order
- *
- * This is the rule that is easy to get backwards. A theme proposed in block 10
- * and executed in block 900 overwrites one proposed in block 20 and executed in
- * block 500 — because `setTheme` runs inside `executeVoting`, not inside
- * `createThemeVoting`. So a "last one wins" fold has to be ordered by the
- * **finalization** log's position, and this module keeps unmatched proposals
- * across windows precisely so that a creation and its finalization can be
- * thousands of blocks apart.
- *
- * ## What this module deliberately does not decide
+ * **Order is finalization order, not creation order** — `setTheme` runs inside
+ * `executeVoting`. Unmatched proposals are kept across windows because a
+ * creation and its finalization can be thousands of blocks apart.
  *
  * `ValueAdded` carries no `isCategorical` (`Matricies.sol:45`), so a coordinate
- * learned that way is recorded as **unattributed** and stays that way here. Which
- * matrix it belongs to is decided by reading the cells at those coordinates and
- * applying `attributeValue` — a chain read, and not this fold's business. The
- * other two routes need no inference: a category can only exist in the
- * categorical matrix, and `decimals` only in the numerical one.
+ * from that route stays **unattributed** here; deciding which matrix it belongs
+ * to needs a chain read.
  */
 
 /**

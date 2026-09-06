@@ -2,38 +2,21 @@ import { OPERATION_TYPES, type OperationType } from '../../domain/intents/intent
 import { RU_WORDING } from './formLabels.ru';
 
 /**
- * Every piece of printed text this application draws, in one module.
+ * Every printed string this application draws — forms and the matrix report — in
+ * one table, so the party fills in one file and one check proves PT Sans covers
+ * all of it.
  *
- * Both documents, not just the forms. The matrix reference is a different shape
- * of page with a different geometry, and its wording still belongs here: one
- * table means the party fills in **one** file, one `pendingLabels()` lists
- * everything still unworded, and one font-coverage check proves PT Sans can draw
- * all of it. A second parallel pipeline for the report would be a second thing to
- * forget.
+ * Russian only. Nothing here is translated by this codebase: governance wording
+ * is the party's, and a label that means something slightly different is a
+ * member filling in the wrong thing.
  *
- * The forms and the report are Russian-only. Nothing here is generated,
- * inferred, or translated by this codebase: governance wording is the party's,
- * and a label that says something slightly different from what the party means
- * is a member filling in the wrong thing.
+ * {@link SLOT_ENGLISH} lists every slot; `formLabels.ru.ts` holds the Russian
+ * and is regenerated wholesale by `npm run wording:apply`. An unworded slot
+ * renders in square brackets — never blank, because a missing label is worse
+ * than an obvious placeholder.
  *
- * ## One flat table of slots, and the Russian in a generated file beside it
- *
- * {@link SLOT_ENGLISH} lists every slot exactly once, keyed by the same string
- * the fill-in file uses. `formLabels.ru.ts` holds the Russian and is
- * **regenerated wholesale** by `npm run wording:apply` from `wording.ru.txt` —
- * so applying the party's wording is one deterministic step rather than 62 hand
- * edits, and a typo on either side is caught by a test rather than becoming a
- * slot that is silently pending forever.
- *
- * A slot with no Russian yet renders in square brackets: impossible to mistake
- * for finished wording, and never blank, because a missing label on a printed
- * form is worse than an obvious placeholder — a member cannot tell the field is
- * unexplained.
- *
- * The **stored** values of option groups are not labels and are not here:
- * `FOR`, `AGAINST`, `CATEGORICAL` and `NUMERICAL` are the AcroForm export
- * values the parser reads, and they stay as they are whatever gets printed
- * beside them.
+ * Option **export values** (`FOR`, `AGAINST`, `CATEGORICAL`, `NUMERICAL`) are
+ * not labels and are not here.
  */
 
 export type Label =

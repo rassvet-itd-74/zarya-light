@@ -1,14 +1,9 @@
 /**
- * The background worker process.
+ * The background worker: chain reads, forms, the transaction queue,
+ * reconciliation. It may be killed at any moment and holds no
+ * correctness-critical state in memory.
  *
- * Everything long-running or failure-prone belongs here: chain reads, form
- * generation and parsing (Phase 4), the transaction queue (Phase 6), and
- * reconciliation (Phase 7). It holds no correctness-critical state in memory —
- * it may be killed and restarted at any moment, and the supervisor's restart
- * hook re-runs reconciliation rather than resuming a timer.
- *
- * This is where chain access lives, and where it stays: the renderer cannot
- * reach a provider, and neither can the main process.
+ * Chain access lives here and nowhere else.
  */
 
 import type { ParentPort } from 'electron';
@@ -132,20 +127,12 @@ const checkNetwork = async (): Promise<NetworkStatusView> =>
   toNetworkStatusView(await getChainContext().guard.verify());
 
 /**
- * The local database, opened once, in **this** process and nowhere else.
+ * The database, opened once in **this** process. A second handle in main would
+ * mean two processes writing one file.
  *
- * `ARCHITECTURE.md` puts the queue, reconciliation and form work in the worker,
- * so a second handle in main would mean two processes writing one file for no
- * gain. Status reaches the UI over this protocol instead.
- *
- * The directory comes from `ZARYA_USER_DATA`, because `app.getPath('userData')`
- * is a main-process call and a `utilityProcess` cannot make it. Passed in the
- * environment for the same reason the RPC URL is: a value that arrives once at
- * fork time cannot be swapped by a later message.
- *
- * Opened lazily and remembered as a *failure* as well as a success — a database
- * that cannot be opened is not going to open on the next request either, and
- * retrying per request would turn one bad path into a loop of identical errors.
+ * The directory comes from `ZARYA_USER_DATA` — `app.getPath` is a main-process
+ * call. Failures are memoized: a path that will not open will not open on the
+ * next request either.
  */
 let store: DatabaseHandle | undefined;
 let storeError: string | undefined;
@@ -189,19 +176,12 @@ const schemaVersion = (): number | null => {
 };
 
 /**
- * A message payload into the use case's request, or a refusal.
+ * The **second** validation: main checked shape, this checks meaning against the
+ * tables that own it. A wrong subject code is a perfectly well-shaped string.
  *
- * This is the **second** validation of this payload — main validated it on
- * arrival from the renderer — and the two check different things. Main checks
- * shape: could this have come from the preload surface we shipped. This checks
- * *meaning* against the tables that own it: is that a real operation type, is
- * that a real subject code. `INVARIANTS.md` asks for both, and neither is
- * redundant, because a wrong subject code is a perfectly well-shaped string.
- *
- * The region conversion is the one worth watching. A subject code becomes an
- * **ordinal** only through `regionBySubjectCode`, so there is no numeric route
- * from this message to a call argument — the two differ for 50 of 98 regions and
- * a wrong one addresses a different real region rather than failing.
+ * A subject code becomes an ordinal only through `regionBySubjectCode`. The two
+ * differ for 50 of 98 regions, and a wrong one addresses a different real region
+ * rather than failing.
  */
 type IssuePlan =
   | { readonly kind: 'PLAN'; readonly request: IssueTemplateRequest }
@@ -286,22 +266,11 @@ const issue = async (payload: IssueTemplatePayload, requestId: string): Promise<
 };
 
 /**
- * The matrix reference report, from the worker's side.
+ * Nothing to validate: a report is not addressed, so the payload is a
+ * destination and everything else is read here.
  *
- * Almost nothing to validate, and that is a property of the document rather than
- * an omission: a report is not addressed. There is no operation type, no organ
- * and no coordinate range a caller could get wrong — the payload is a
- * destination, and everything that decides what the page says is read here from
- * the chain and the configuration.
- *
- * The two chain dependencies are built per request. The snapshot is pinned to a
- * block, so an instance outlives its own validity the moment the report using it
- * is finished, and `ZaryaMatrixEvents` is built alongside it for symmetry rather
- * than cached — it holds nothing but a client and an address.
- *
- * `loadTemplateAssets()` is the same call issuance makes, and the fonts are the
- * reason: the report prints Cyrillic organ labels and axis text, so PT Sans has
- * to be embedded here exactly as it is in a form.
+ * The snapshot is built per request because it is pinned to a block — reusing
+ * one would date a second report with the first one's block.
  */
 const report = async (
   payload: MatrixReportPayload,
@@ -343,16 +312,8 @@ const report = async (
 };
 
 /**
- * A returned form, from the worker's side.
- *
- * Like the report, almost nothing to validate: the payload is a path, and every
- * value that decides anything is recovered here — from the file for the
- * member-filled half, from the local record for the app-authored half, and from
- * the chain for the one key the schema resolves.
- *
- * `ZaryaMatrixReader` and not the report's pinned snapshot: an import asks what
- * is true **now**, because the scale it recovers is about to produce a number a
- * transaction will carry.
+ * `ZaryaMatrixReader`, not the report's pinned snapshot: an import asks what is
+ * true **now**, because the scale it recovers becomes a number in a transaction.
  */
 const importForm = async (
   payload: ImportFormPayload,
@@ -444,23 +405,13 @@ const acceptMemberKey = (payload: MemberKeyPayload, requestId: string): WorkerRe
 };
 
 /**
- * Sending, from the worker's side. **The only path in this application that
- * broadcasts.**
+ * **The only path in this application that broadcasts.**
  *
- * The payload is one `operationRef`. Everything that decides what a transaction
- * says is recovered here — the record from the database, the member's answers
- * from the document stored with it, the organ from the contract's own rendering,
- * and the calldata from the ABI. Nothing a renderer could set reaches the chain.
+ * The payload is one `operationRef`; everything a transaction says is recovered
+ * here. Nothing a renderer could set reaches the chain.
  *
- * The signer is built per request rather than cached, and that is not caution
- * about staleness: it means a process that never sends never holds key material
- * in memory at all, and the object holding it becomes garbage the moment the
- * reply is posted.
- *
- * An unconfigured wallet is a **refusal**, not a failure. The whole read, issue
- * and import half of this application works without one, so a member who has not
- * configured a key has not broken anything — they have reached the one action
- * that needs it.
+ * The signer is built per request, so the object holding key material is garbage
+ * as soon as the reply is posted. No wallet is a refusal, not a failure.
  */
 const submit = async (
   payload: SubmitOperationPayload,
@@ -570,19 +521,11 @@ const handle = async (request: WorkerRequest): Promise<WorkerReply> => {
 };
 
 /**
- * Opened at startup rather than at first use, and the throw is deliberately
- * dropped.
+ * Opened at startup, and the throw dropped on purpose. Lazily, a bad path stayed
+ * invisible until a member had already chosen where to save a form.
  *
- * Lazily was the first version, and a real run showed why it is worse: the
- * database is not touched until something needs it, so a wrong path or a
- * corrupted file stays invisible until a member has already chosen where to save
- * a form. Opening here means the log says what happened at start, and `getStore`
- * has already memoized the failure — so the first request still answers with the
- * reason instead of retrying a path that will not work.
- *
- * Not fatal. A worker that cannot record can still answer `ping` and
- * `checkNetwork`, and reporting a schema version of `null` in the status readout
- * is more use to whoever has to fix it than a process that exits.
+ * Not fatal: a worker that cannot record still answers `ping` and
+ * `checkNetwork`, and reports a `null` schema version.
  */
 try {
   getStore();

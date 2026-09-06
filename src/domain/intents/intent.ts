@@ -4,31 +4,15 @@ import type { EvmAddress } from '../primitives';
 import type { VotingId } from '../voting/voting';
 
 /**
- * Everything a governance document is allowed to ask for.
+ * Everything a governance document is allowed to ask for — closed and
+ * allow-listed. No target address, no calldata, no method name from a field: a
+ * document picks one of eleven operations, it cannot name a function.
  *
- * The union is **closed and allow-listed**, and that is the whole security
- * property: a returned PDF is a claim, not a fact (`INVARIANTS.md`, "Form trust
- * boundary"), so the only thing standing between a hostile file and a
- * transaction is that there is no representable intent for anything outside this
- * list. There is deliberately no `CallContract`, no target address, no calldata,
- * no ABI signature and no method name taken from a field — a document cannot
- * name a function, only pick one of eleven operations this client already knows
- * how to perform.
- *
- * `ExecuteVoting` is **not here**, and its absence is enforcement rather than an
- * omission: the executor derives it from chain state and a document must never
- * be able to trigger an irreversible mechanical action. Nothing in the form
+ * `ExecuteVoting` is absent by enforcement (hard rule 3). Nothing in the form
  * pipeline can construct it because it does not exist as an intent.
  *
- * ## What an intent is and is not
- *
- * An intent says *what is being asked*. It never says who may ask it — that is
- * `AuthorizationRule` in `domain/preflight/`, evaluated against chain reads, and
- * finally by Solidity. A validated intent is not an authorized one.
- *
- * It also carries no field names. The `zarya.input.*` schema belongs to
- * `adapters/forms/`, which maps names to the domain vocabulary here, so the
- * domain cannot read a form and the form cannot invent a domain concept.
+ * An intent says what is asked, never who may ask it — that is
+ * `AuthorizationRule`, and finally Solidity.
  */
 
 /**
@@ -68,16 +52,9 @@ export const isOperationType = (value: string): value is OperationType =>
 export type DurationSeconds = number;
 
 /**
- * Which voting a vote is about.
- *
- * A single-arm union today, on purpose. A later batch item may need to name a
- * voting an earlier item is about to create, and the honest representation of
- * that is a second arm — `{ kind: 'OPERATION'; operationRef }` — not an
- * unresolved string smuggled into `votingId`. It is not added yet because the
- * form schema has no field to carry it (`zarya-intents`: do not implement
- * symbolic references before the schema defines them), and adding the arm later
- * is a compile error at every consumer, which is exactly the review this
- * deserves.
+ * Which voting a vote is about. A single arm on purpose: a symbolic reference
+ * would be a second arm, not a string smuggled into `votingId`, and the form
+ * schema has no field to carry one.
  */
 export type VotingRef = { readonly kind: 'ID'; readonly votingId: VotingId };
 
@@ -181,21 +158,11 @@ export interface CreateNumericalValueVotingIntent extends Proposal {
   /** Already scaled by {@link decimals}. The contract stores a bare `uint64`. */
   readonly value: bigint;
   /**
-   * The scale `value` was produced with, carried so the intent is
-   * self-describing.
+   * The scale `value` was produced with. The contract does not take it — it is
+   * stored per cell — which is why it travels.
    *
-   * The contract does not take it — it is stored per cell — which is exactly why
-   * it has to travel. It is read from that cell at **import**, for the
-   * coordinate the form supplied (`FIELD_PLAN`'s `resolved` category), so the
-   * long staleness window is already gone: a form filled in a week after it was
-   * issued is scaled by the precision the cell holds when it comes back, not by
-   * one recorded when it went out.
-   *
-   * What remains is import → mined. A decimals voting executing in that gap
-   * leaves this integer scaled by the old precision and nothing on chain can
-   * notice. **No check compares this field today** — it is here so that one can,
-   * at submission, once a submission path exists. Do not read the presence of
-   * this field as evidence the comparison happens.
+   * **No check compares this field today.** It exists so one can, at submission.
+   * Do not read its presence as evidence the comparison happens.
    */
   readonly decimals: number;
   readonly valueAuthor: EvmAddress;
@@ -214,22 +181,13 @@ export interface CastVoteIntent {
 }
 
 /**
- * All three thresholds, as one intent, because they are not independent.
+ * All three thresholds as one intent, because they are not independent: an organ
+ * whose `approvalPercentageBase` is zero falls back to `simpleMajority` entirely
+ * (`Zarya.sol:496-504`), so setting only a quorum succeeds and changes nothing —
+ * and no getter can read back that it did nothing.
  *
- * An organ whose `approvalPercentageBase` is zero falls back to `simpleMajority`
- * **in its entirety** (`Zarya.sol:496-504`), so a form that sets only a quorum
- * produces a transaction that succeeds and changes nothing observable — and
- * nothing can read back that it did nothing, because no eligibility getter
- * exists. Modelling these as three intents would make that silent failure the
- * default outcome. See "The approval base doubles as an enable flag" in
- * `CONTRACT_DEFECTS.md`.
- *
- * It is the one intent that is not one transaction. The three setters have no
- * multicall, so it expands to three calls; the ordering that makes that as safe
- * as it can be belongs to the dispatcher.
- *
- * Values are **basis points**, preserved as the contract states them and never
- * normalized to percent.
+ * The one intent that is not one transaction: three setters, no multicall.
+ * Values are **basis points**, never normalized to percent.
  */
 export interface ConfigureOrganThresholdsIntent {
   readonly type: 'CONFIGURE_ORGAN_THRESHOLDS';

@@ -20,18 +20,12 @@ import type {
 /**
  * The receiving side of the IPC boundary.
  *
- * Two rules are enforced here rather than trusted:
+ * **Payloads are validated on arrival** — a compromised renderer talks to
+ * `ipcRenderer` directly, so renderer-side validation is UX and this is the
+ * trust boundary. **Errors are sanitized on the way out**: only messages we
+ * authored cross, since `ipcMain.handle` otherwise serializes the stack.
  *
- * - **Payloads are validated on arrival.** The preload surface makes a malformed
- *   call awkward, not impossible — a compromised renderer talks to `ipcRenderer`
- *   directly. Renderer-side validation is UX; this is the trust boundary.
- * - **Errors are sanitized on the way out.** An error thrown inside
- *   `ipcMain.handle` is serialized to the renderer with its message and stack.
- *   Only messages we authored cross; anything else becomes a generic failure and
- *   the real error goes to the main-process reporter.
- *
- * Handler bodies are exported separately from registration so they can be tested
- * without an `ipcMain`.
+ * Handler bodies are exported separately so they test without an `ipcMain`.
  */
 
 export class IpcPayloadError extends Error {
@@ -413,21 +407,14 @@ export interface HealthPushTarget {
 }
 
 /**
- * Pushes worker health to every live window. Destroyed windows are skipped
- * rather than guarded against by the caller: health changes arrive
- * asynchronously and a window can close between the change and the push.
+ * Pushes worker health to every live window.
  *
- * ## `isDestroyed()` is not enough, which a real run showed
+ * **`isDestroyed()` is not enough**, observed in a real run: a window can report
+ * itself alive while its render frame is gone, and `send` then throws `Render
+ * frame was disposed before WebFrameMain could be accessed`.
  *
- * A window can report itself alive while its **render frame** is already gone,
- * and `send` then throws `Render frame was disposed before WebFrameMain could be
- * accessed`. It happens at both ends of a window's life: the worker reports
- * `HEALTHY` before the first frame has committed, and again on the way out.
- *
- * The throw is swallowed because this push is **best-effort UI**, not a delivery
- * guarantee — the renderer reads the same health from `getAppStatus` whenever it
- * refreshes, so a missed push costs nothing and a thrown one would propagate out
- * of a supervisor event handler with no caller to catch it.
+ * The throw is swallowed — this is best-effort UI, and the renderer reads the
+ * same health from `getAppStatus` on every refresh.
  */
 export function pushWorkerHealth(
   targets: readonly HealthPushTarget[],
