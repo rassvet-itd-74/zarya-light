@@ -23,12 +23,13 @@ the same stored bytes. Import keeps its refusal order untouched.
 is `ORGAN_UNREADABLE` → `ORGAN_UNAVAILABLE`, which keeps retryable and terminal
 apart.
 
-**`SecretConfig`** — carries `memberKey`, validated at load. First key material in
-the application.
+**`domain/ports/MemberKeyStore.ts`** and
+**`adapters/platform/safeStorageKeyStore.ts`** (new) — the wallet is generated,
+encrypted and stored once. `SecretConfig` holds no key material at all.
 
 **Protocol, IPC, preload, main, renderer, `index.html`** — a `submitOperation`
-request at protocol version 6, a channel, a confirmation dialog in main, and a
-Send button that arms only after an import.
+request and a `useMemberKey` request at protocol version 7, a channel, a
+confirmation dialog in main, and a Send button that arms only after an import.
 
 ## Decisions
 
