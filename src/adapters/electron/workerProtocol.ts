@@ -16,7 +16,7 @@ import type { NetworkStatusView } from '../chain/networkStatusView';
 export type { NetworkStatusView };
 
 /** Bumped whenever a request or reply shape changes. */
-export const WORKER_PROTOCOL_VERSION = 6;
+export const WORKER_PROTOCOL_VERSION = 7;
 
 /**
  * Liveness of the worker **process**. Not executor health: a healthy worker can
@@ -97,7 +97,38 @@ export type WorkerRequest =
       readonly kind: 'submitOperation';
       readonly requestId: string;
       readonly payload: SubmitOperationPayload;
+    }
+  | {
+      readonly kind: 'useMemberKey';
+      readonly requestId: string;
+      readonly payload: MemberKeyPayload;
     };
+
+/**
+ * The member wallet's key, travelling from main to the worker exactly once per
+ * worker start.
+ *
+ * **This is the only message in the protocol that carries a secret**, and every
+ * choice about it is a consequence of that.
+ *
+ * *Why it travels at all.* `safeStorage` is a main-process API — Electron
+ * declares it in `Main` and not in `Utility` — so a `utilityProcess` cannot
+ * decrypt anything. Signing lives in the worker with the store and the chain
+ * client. One of those two facts has to give, and moving the key is cheaper than
+ * moving the queue.
+ *
+ * *Why not the environment.* The RPC URL is passed that way at fork, and a key
+ * is not the same thing: an environment is inherited by any child a process
+ * spawns and is readable from outside the process on several platforms. A
+ * message is delivered once, to one recipient, and leaves nothing behind.
+ *
+ * *Where it must never go.* Not to the renderer, not to a log line, not to the
+ * database (hard rule 2). The worker holds it in a module-local and hands it to
+ * a signer built per request.
+ */
+export interface MemberKeyPayload {
+  readonly privateKey: string;
+}
 
 /**
  * What sending an operation needs from the UI: **which** one, and nothing else.
@@ -236,6 +267,17 @@ export type WorkerReply =
       readonly message: string;
     }
   | {
+      /**
+       * The worker has a wallet and will sign with this address.
+       *
+       * The **address** comes back, never the key. It is what the status readout
+       * shows and what a member funds.
+       */
+      readonly kind: 'signerReady';
+      readonly requestId: string;
+      readonly address: string;
+    }
+  | {
       readonly kind: 'failure';
       readonly requestId: string;
       /** Safe for display: never a stack trace, never a configuration value. */
@@ -269,6 +311,7 @@ const REQUEST_KINDS: ReadonlySet<string> = new Set([
   'generateMatrixReport',
   'importForm',
   'submitOperation',
+  'useMemberKey',
 ]);
 
 /**
@@ -301,8 +344,20 @@ export function isWorkerRequest(value: unknown): value is WorkerRequest {
   if (value.kind === 'generateMatrixReport') return isReportPayload(value.payload);
   if (value.kind === 'importForm') return isImportPayload(value.payload);
   if (value.kind === 'submitOperation') return isSubmitPayload(value.payload);
+  if (value.kind === 'useMemberKey') return isMemberKeyPayload(value.payload);
   return true;
 }
+
+/**
+ * Shape only, and the shape is checked rather than the value.
+ *
+ * A guard that validated the key would have to look at it, and the one place
+ * this message is allowed to be examined is the signer that uses it. The worker
+ * discovers a malformed key by failing to build an account, which is a refusal a
+ * member can be told about without anything being echoed.
+ */
+const isMemberKeyPayload = (value: unknown): boolean =>
+  isRecord(value) && typeof value.privateKey === 'string' && value.privateKey.length > 0;
 
 /**
  * One reference and nothing else.
@@ -350,6 +405,9 @@ export function isWorkerReply(value: unknown): value is WorkerReply {
       typeof value.degradedRows === 'number' &&
       typeof value.empty === 'boolean'
     );
+  }
+  if (value.kind === 'signerReady') {
+    return typeof value.address === 'string' && value.address.length > 0;
   }
   if (value.kind === 'submitted') {
     return (

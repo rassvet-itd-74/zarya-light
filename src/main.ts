@@ -1,4 +1,4 @@
-import { BrowserWindow, app, dialog, ipcMain, nativeImage } from 'electron';
+import { BrowserWindow, app, dialog, ipcMain, nativeImage, safeStorage } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 // Inlined as a data URL at build time, so the icon resolves identically in dev
@@ -19,6 +19,10 @@ import type {
   MatrixReportPayload,
   WorkerHealth,
 } from './adapters/electron/workerProtocol';
+import {
+  SafeStorageKeyStore,
+  keyFileAt,
+} from './adapters/platform/safeStorageKeyStore';
 import type { WorkerProbe } from './app/getAppStatus';
 
 /**
@@ -67,6 +71,51 @@ try {
   throw error;
 }
 
+/**
+ * The member wallet: created once, encrypted by the operating system, and never
+ * configured by hand.
+ *
+ * It lives in main because `safeStorage` does — Electron declares it in the
+ * `Main` namespace and not in `Utility`, so the worker cannot decrypt anything.
+ * Main therefore decrypts, and hands the key to the worker over the message port
+ * on every worker start.
+ *
+ * **There is no backup.** The encryption is bound to this operating-system
+ * account, so a reinstalled machine or a lost profile leaves the wallet
+ * unrecoverable — and an unrecoverable governance wallet is an address that can
+ * never act again. Recorded in `INVARIANTS.md` as an open product decision
+ * rather than left for a member to discover.
+ */
+const keyStore = new SafeStorageKeyStore(safeStorage, keyFileAt(app.getPath('userData')));
+
+/**
+ * Hands the worker the key, on every start.
+ *
+ * On the supervisor's restart hook rather than once at boot: a worker that
+ * crashed and came back has no key, and one that signed with a stale value would
+ * be worse than one that refuses. The address is logged; the key never is.
+ */
+const provisionSigner = (): void => {
+  const key = keyStore.unlock();
+  if (key === undefined) {
+    console.warn('[main] no member wallet available — sending is unavailable');
+    return;
+  }
+  void supervisor
+    .request({ kind: 'useMemberKey', payload: { privateKey: key } })
+    .then((reply) => {
+      console.log(
+        reply.kind === 'signerReady'
+          ? `[main] worker will sign as ${reply.address}`
+          : '[main] the worker rejected the member wallet',
+      );
+    })
+    .catch(() => {
+      // Never echoes the request: it contains the key.
+      console.error('[main] could not provision the worker with the member wallet');
+    });
+};
+
 const supervisor = new WorkerSupervisor({
   spawn: createUtilityProcessSpawner({
     appVersion: config.publicConfig.appVersion,
@@ -77,6 +126,7 @@ const supervisor = new WorkerSupervisor({
     // Phase 7 wires reconcile() here. Every trigger — startup, restart,
     // reconnect, and the UI's Run now — must converge on that one path.
     console.log(`[main] worker started (${reason})`);
+    provisionSigner();
   },
   onError: (error) => {
     console.error('[main] worker supervisor:', error.message);
@@ -322,6 +372,17 @@ const createWindow = (): void => {
 };
 
 app.on('ready', () => {
+  // Before the worker starts, so the first provisioning has something to send.
+  // `safeStorage` is only reliable after `ready`, which is why this is not at
+  // module load.
+  void keyStore.ensure().then((state) => {
+    console.log(
+      state.address === undefined
+        ? `[main] member wallet unavailable: ${state.message ?? state.status}`
+        : `[main] member wallet ${state.status}: ${state.address}`,
+    );
+  });
+
   // utilityProcess.fork is only legal after `ready`.
   supervisor.start('initial');
 

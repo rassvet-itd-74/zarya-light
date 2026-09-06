@@ -64,7 +64,9 @@ describe('handleGetAppStatus', () => {
     expect(serialized).not.toContain('PROJECT-KEY-DO-NOT-LEAK');
     expect(serialized).not.toContain('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
     expect(status.rpcHost).toBe('sepolia.example.com');
-    expect(status.memberSignerConfigured).toBe(true);
+    // False regardless of the environment: the wallet is generated and stored
+    // encrypted, so configuration has nothing to say about it.
+    expect(status.memberSignerConfigured).toBe(false);
   });
 
   it('reports an unanswering worker as unknown, not as zero', async () => {

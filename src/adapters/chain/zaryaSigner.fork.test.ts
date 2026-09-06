@@ -83,7 +83,16 @@ describe.skipIf(RPC_URL === undefined)('the signer against a Sepolia fork', () =
 
   it('produces a receipt the reader can resolve, with the block’s own time', async () => {
     const submission = await signer.submit({ to: SINK, data: '0x' });
-    const outcome = await receipts.outcome(submission.hash);
+    // Polled rather than read once. `outcome` answers `undefined` for a read it
+    // could not complete as well as for one that is not mined yet — that is the
+    // adapter's whole contract — so a single read makes this assertion
+    // load-sensitive. It failed exactly that way under a full parallel suite
+    // while passing alone. Reconciliation polls for the same reason.
+    let outcome;
+    for (let attempt = 0; attempt < 20 && outcome === undefined; attempt += 1) {
+      outcome = await receipts.outcome(submission.hash);
+      if (outcome === undefined) await new Promise((resolve) => setTimeout(resolve, 250));
+    }
 
     expect(outcome).toMatchObject({ status: 'SUCCESS' });
     expect(Number(outcome?.blockNumber)).toBeGreaterThan(0);

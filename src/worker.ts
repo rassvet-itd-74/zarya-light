@@ -46,11 +46,13 @@ import {
   type ImportFormPayload,
   type IssueTemplatePayload,
   type MatrixReportPayload,
+  type MemberKeyPayload,
   type SubmitOperationPayload,
   type WorkerReply,
   type WorkerRequest,
   isWorkerRequest,
 } from './adapters/electron/workerProtocol';
+import { privateKeyToAccount } from 'viem/accounts';
 import { ZaryaReceipts } from './adapters/chain/zaryaReceipts';
 import { PrivateKeySigner } from './adapters/chain/zaryaSigner';
 import { ZaryaWriteCallEncoder } from './adapters/chain/writeCallEncoder';
@@ -403,6 +405,45 @@ const importForm = async (
 };
 
 /**
+ * The member wallet's key, held for this worker's lifetime and nowhere else.
+ *
+ * Main decrypts it — `safeStorage` exists only there — and sends it once per
+ * worker start. It lives in this module-local, is handed to a signer built per
+ * request, and is never written, logged, replied with, or stored.
+ *
+ * A restarted worker has no key until main provisions it again, which is
+ * correct: the supervisor re-runs that hook, and a worker that came back without
+ * one must refuse to sign rather than sign with something stale.
+ */
+let memberKey: `0x${string}` | undefined;
+
+/**
+ * Accepts the key and answers with the **address**.
+ *
+ * The address is derived here rather than trusted from the message, so the reply
+ * is a statement about the key the worker actually holds. Deriving it is also the
+ * validation: a malformed key fails here, at startup, instead of at the moment a
+ * member presses send.
+ */
+const acceptMemberKey = (payload: MemberKeyPayload, requestId: string): WorkerReply => {
+  try {
+    const account = privateKeyToAccount(payload.privateKey as `0x${string}`);
+    memberKey = payload.privateKey as `0x${string}`;
+    return { kind: 'signerReady', requestId, address: account.address };
+  } catch {
+    // The message is never echoed — it is the key. Nothing about its content
+    // reaches this string.
+    memberKey = undefined;
+    return {
+      kind: 'refused',
+      requestId,
+      code: 'UNUSABLE_KEY',
+      message: 'The member wallet this application holds is not a usable signing key.',
+    };
+  }
+};
+
+/**
  * Sending, from the worker's side. **The only path in this application that
  * broadcasts.**
  *
@@ -426,15 +467,15 @@ const submit = async (
   requestId: string,
 ): Promise<WorkerReply> => {
   const chain = getChainContext();
-  const memberKey = chain.config.secretConfig.memberKey;
   if (memberKey === undefined) {
     return {
       kind: 'refused',
       requestId,
       code: 'NO_SIGNER',
       message:
-        'No member wallet is configured, so nothing can be signed. Set ZARYA_MEMBER_KEY and ' +
-        'restart the application.',
+        'This worker holds no member wallet, so nothing can be signed. If the application just ' +
+        'restarted, wait for it to finish starting; if secure storage is unavailable on this ' +
+        'system, no wallet could be created.',
     };
   }
 
@@ -516,6 +557,9 @@ const handle = async (request: WorkerRequest): Promise<WorkerReply> => {
 
     case 'submitOperation':
       return await submit(request.payload, requestId);
+
+    case 'useMemberKey':
+      return acceptMemberKey(request.payload, requestId);
   }
 
   // Exhaustiveness: adding a request kind without handling it fails to compile

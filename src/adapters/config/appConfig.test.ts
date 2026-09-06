@@ -61,12 +61,16 @@ describe('the public/secret split', () => {
     expect(JSON.stringify(publicConfig)).not.toContain('PROJECT-KEY-DO-NOT-LEAK');
   });
 
-  it('reports whether signers are configured, never their values', () => {
-    const { publicConfig } = load(env);
-    expect(publicConfig.memberSignerConfigured).toBe(true);
-    // Whitespace is not a configured key.
+  it('holds no key material, however the environment is set', () => {
+    // Changed 2026-09-06: the member wallet is generated and stored encrypted by
+    // the operating system, not configured. So a key in the environment is not a
+    // supported route and must not become one by accident — this asserts the
+    // value is ignored entirely rather than merely unreported.
+    const { publicConfig, secretConfig } = load(env);
+    expect(publicConfig.memberSignerConfigured).toBe(false);
     expect(publicConfig.executorSignerConfigured).toBe(false);
     expect(JSON.stringify(publicConfig)).not.toContain('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
+    expect(Object.values(secretConfig)).not.toContain('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
   });
 
   it('redacts the secret config however it is serialized', () => {
